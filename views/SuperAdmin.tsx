@@ -1,0 +1,2630 @@
+
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+    getSaasCompanies, 
+    getSaasBranches, 
+    getSaasGlobalConfig,
+    createSaasCompany,
+    createInitialHoldingUser,
+    updateSaasCompany,
+    deleteSaasCompany,
+    createSaasBranch,
+    updateSaasBranch,
+    createInitialBranchUser,
+    addGlobalCatalogItem,
+    softDeleteGlobalItem,
+    updateGlobalCatalogItem,
+    uploadGlobalAsset,
+    uploadBranchAsset,
+    uploadCompanyAsset,
+    updateSaasGlobalConfig
+} from '../services/saasService';
+import { searchClient } from '../services/clientService';
+import { 
+    SaasCompany, 
+    SaasBranch, 
+    SaasGlobalConfig,
+    UserRole,
+    InvoiceType
+} from '../types';
+import { 
+    Building, Globe, Loader2, X, Save, Palette, 
+    LogIn, LogOut, Video, Trash2, Upload, LayoutGrid, Plus, ShieldCheck, PlayCircle, ImageIcon, Check, ChevronDown, ChevronUp, CreditCard, WashingMachine, Tag, Layers, Key, ShieldAlert, Store, ArrowRight, AlertTriangle, Building2, MapPin, Hash, Sparkles,
+    Phone, FileText, Smartphone, MessageCircle, Settings2, Info, Printer, Youtube, Play, Edit, Zap, Search, Percent, CircleDollarSign, Copy, RefreshCcw, RotateCcw, Settings, Menu, Bot, Droplets, Link, Database, Code, Shield, KeyRound, Clock, UserPlus, Camera,
+    Terminal, CheckCircle2, Users, FileCheck
+} from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
+
+const LATAM_CODES = [
+  { code: '+51', name: 'Perú', iso: 'pe' },
+  { code: '+52', name: 'México', iso: 'mx' },
+  { code: '+54', name: 'Argentina', iso: 'ar' },
+  { code: '+56', name: 'Chile', iso: 'cl' },
+  { code: '+57', name: 'Colombia', iso: 'co' },
+  { code: '+591', name: 'Bolivia', iso: 'bo' },
+  { code: '+593', name: 'Ecuador', iso: 'ec' },
+  { code: '+506', name: 'Costa Rica', iso: 'cr' },
+  { code: '+507', name: 'Panamá', iso: 'pa' },
+  { code: '+58', name: 'Venezuela', iso: 've' },
+  { code: '+502', name: 'Guatemala', iso: 'gt' },
+  { code: '+504', name: 'Honduras', iso: 'hn' },
+  { code: '+505', name: 'Nicaragua', iso: 'ni' },
+  { code: '+503', name: 'El Salvador', iso: 'sv' },
+  { code: '+595', name: 'Paraguay', iso: 'py' },
+  { code: '+598', name: 'Uruguay', iso: 'uy' },
+  { code: '+1', name: 'Rep. Dominicana', iso: 'do' }
+].sort((a, b) => a.name.localeCompare(b.name));
+
+const AccordionItem: React.FC<{ 
+    id: string; 
+    title: string; 
+    icon: React.ReactNode; 
+    isOpen: boolean; 
+    onToggle: () => void; 
+    children: React.ReactNode 
+}> = ({ title, icon, isOpen, onToggle, children }) => {
+    return (
+        <div className="bg-slate-900/50 border border-white/5 rounded-[2rem] overflow-hidden transition-all text-slate-200">
+            <button 
+                onClick={onToggle}
+                className="w-full px-8 py-6 flex items-center justify-between hover:bg-white/5 transition-colors"
+            >
+                <div className="flex items-center gap-4">
+                    <div className="text-indigo-400">{icon}</div>
+                    <span className="font-bold text-sm uppercase tracking-widest">{title}</span>
+                </div>
+                {isOpen ? <ChevronUp size={20} className="text-slate-500" /> : <ChevronDown size={20} className="text-slate-500" />}
+            </button>
+            {isOpen && (
+                <div className="px-8 pb-8 animate-in slide-in-from-top-2 duration-300">
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const SystemLogsView: React.FC = () => {
+    const [logs, setLogs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchLogs = async () => {
+        setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('logs_sistema')
+                .select('*, sucursales(nombre_sucursal)')
+                .order('fecha', { ascending: false })
+                .limit(100);
+            if (error) throw error;
+            setLogs(data || []);
+        } catch (e) {
+            console.error("Error fetching logs:", e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLogs();
+    }, []);
+
+    return (
+        <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="flex justify-between items-end">
+                <div>
+                    <h2 className="text-3xl md:text-4xl font-bold uppercase tracking-tight text-white">Logs del Sistema</h2>
+                    <p className="text-slate-500 text-sm font-medium mt-1 uppercase">Monitoreo de errores y actividad crítica.</p>
+                </div>
+                <button 
+                    onClick={fetchLogs}
+                    className="bg-white/5 hover:bg-white/10 text-white px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-all"
+                >
+                    <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Actualizar
+                </button>
+            </div>
+
+            <div className="bg-slate-900/50 border border-white/5 rounded-[2.5rem] overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-white/5">
+                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Fecha</th>
+                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Sucursal</th>
+                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Mensaje</th>
+                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Detalles</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {loading && logs.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-20 text-center">
+                                        <Loader2 className="animate-spin mx-auto text-indigo-500 mb-4" size={32} />
+                                        <p className="text-[10px] font-bold uppercase text-slate-500 tracking-widest">Cargando bitácora...</p>
+                                    </td>
+                                </tr>
+                            ) : logs.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-20 text-center">
+                                        <CheckCircle2 size={32} className="mx-auto text-slate-700 mb-4" />
+                                        <p className="text-[10px] font-bold uppercase text-slate-500 tracking-widest">No hay logs registrados</p>
+                                    </td>
+                                </tr>
+                            ) : (
+                                logs.map(log => (
+                                    <tr key={log.id} className="hover:bg-white/5 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-[10px] font-mono text-indigo-400">{new Date(log.fecha).toLocaleString()}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-[10px] font-bold uppercase text-white">{log.sucursales?.nombre_sucursal || 'SISTEMA'}</div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="text-[10px] text-slate-300 max-w-md truncate" title={log.mensaje}>{log.mensaje}</div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {log.detalles ? (
+                                                <button 
+                                                    onClick={() => alert(JSON.stringify(log.detalles, null, 2))}
+                                                    className="text-[9px] font-bold uppercase bg-indigo-600/20 text-indigo-400 px-2 py-1 rounded-lg hover:bg-indigo-600 hover:text-white transition-all"
+                                                >
+                                                    Ver JSON
+                                                </button>
+                                            ) : (
+                                                <span className="text-[9px] text-slate-600">-</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const UsersListView: React.FC = () => {
+    const [users, setUsers] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+    const [syncData, setSyncData] = useState({ uid: '', name: '', username: '', role: UserRole.OWNER, holdingId: '', companyName: '' });
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [editingUser, setEditingUser] = useState<any>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [updateLoading, setUpdateLoading] = useState(false);
+
+    const fetchUsers = async () => {
+        setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('usuarios_login')
+                .select('*')
+                .order('fecha_registro', { ascending: false });
+            if (error) throw error;
+            setUsers(data || []);
+        } catch (err) {
+            console.error("Error al obtener usuarios:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const handleSyncUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSyncing(true);
+        try {
+            const { error } = await supabase.rpc('crear_usuario_sucursal', {
+                p_auth_user_id: syncData.uid,
+                p_empresa_holding_id: syncData.holdingId || null,
+                p_sucursal_id: null,
+                p_username: syncData.username,
+                p_nombre_completo: syncData.name,
+                p_rol: syncData.role,
+                p_password_hash: 'SYNCED_USER',
+                p_nombre_empresa: syncData.companyName
+            });
+
+            if (error) throw error;
+            
+            alert("Usuario sincronizado correctamente en usuarios_login");
+            setIsSyncModalOpen(false);
+            setSyncData({ uid: '', name: '', username: '', role: UserRole.OWNER, holdingId: '', companyName: '' });
+            fetchUsers();
+        } catch (err: any) {
+            console.error("Error al sincronizar:", err);
+            alert("Error: " + (err.message || "Error desconocido"));
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handleUpdateUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingUser) return;
+        setUpdateLoading(true);
+        try {
+            const { error } = await supabase
+                .from('usuarios_login')
+                .update({
+                    nombre_completo: editingUser.nombre_completo,
+                    rol: editingUser.rol,
+                    activo: editingUser.activo,
+                    nombre_empresa: editingUser.nombre_empresa,
+                    empresa_holding_id: editingUser.empresa_holding_id || null
+                })
+                .eq('id', editingUser.id);
+
+            if (error) throw error;
+            
+            alert("Usuario actualizado correctamente");
+            setIsEditModalOpen(false);
+            setEditingUser(null);
+            fetchUsers();
+        } catch (err: any) {
+            console.error("Error al actualizar:", err);
+            alert("Error: " + (err.message || "Error desconocido"));
+        } finally {
+            setUpdateLoading(false);
+        }
+    };
+
+    const handleDeleteUser = async (id: string, username: string) => {
+        if (!confirm(`¿Está seguro de eliminar el acceso de '${username}'? (Solo se eliminará de usuarios_pos, no de Auth)`)) return;
+        try {
+            const { error } = await supabase
+                .from('usuarios_login')
+                .delete()
+                .eq('id', id);
+            if (error) throw error;
+            fetchUsers();
+        } catch (err) {
+            console.error("Error al eliminar:", err);
+        }
+    };
+
+    const filteredUsers = users.filter(u => 
+        u.nombre_completo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.nombre_empresa?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Users className="text-indigo-400" />
+                        Accesos al Sistema
+                    </h3>
+                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">Todos los usuarios registrados (Login + Role)</p>
+                </div>
+                <div className="flex gap-4 w-full md:w-auto">
+                    <button 
+                        onClick={() => setIsSyncModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-bold uppercase transition-all shadow-lg shadow-indigo-600/20"
+                    >
+                        <UserPlus size={16} />
+                        Sincronizar Auth
+                    </button>
+                    <div className="relative flex-1 md:w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input 
+                            type="text" 
+                            placeholder="Buscar por nombre, usuario o empresa..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full bg-slate-900 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white outline-none focus:border-indigo-500 transition-all"
+                        />
+                    </div>
+                    <button 
+                        onClick={fetchUsers}
+                        className="p-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors"
+                        title="Actualizar lista"
+                    >
+                        <RefreshCcw size={18} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Modal de Sincronización */}
+            {isSyncModalOpen && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl">
+                        <div className="p-8 border-b border-white/5 flex justify-between items-center">
+                            <h3 className="text-xl font-bold uppercase tracking-tight text-white flex items-center gap-3">
+                                <Database className="text-indigo-400" /> Sincronizar Usuario
+                            </h3>
+                            <button onClick={() => setIsSyncModalOpen(false)} className="text-slate-500 hover:text-white"><X size={24} /></button>
+                        </div>
+                        <form onSubmit={handleSyncUser} className="p-8 space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">UID de Auth (Copiar de tabla de arriba)</label>
+                                <input required value={syncData.uid} onChange={e => setSyncData({...syncData, uid: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs font-mono outline-none focus:border-indigo-500" placeholder="00000000-0000-..." />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Completo</label>
+                                <input required value={syncData.name} onChange={e => setSyncData({...syncData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500" placeholder="LAVA FLASH" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre de Usuario (Login)</label>
+                                <input required value={syncData.username} onChange={e => setSyncData({...syncData, username: e.target.value.toLowerCase()})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500" placeholder="lavaflash" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre de la Empresa</label>
+                                <input required value={syncData.companyName} onChange={e => setSyncData({...syncData, companyName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500" placeholder="LAVA FLASH CORP" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">ID del Holding (Opcional)</label>
+                                <input value={syncData.holdingId} onChange={e => setSyncData({...syncData, holdingId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500 font-mono" placeholder="uuid del holding..." />
+                            </div>
+                            <div className="pt-4">
+                                <button 
+                                    disabled={isSyncing}
+                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                >
+                                    {isSyncing ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+                                    Sincronizar ahora
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Edición */}
+            {isEditModalOpen && editingUser && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl">
+                        <div className="p-8 border-b border-white/5 flex justify-between items-center">
+                            <h3 className="text-xl font-bold uppercase tracking-tight text-white flex items-center gap-3">
+                                <Edit className="text-indigo-400" /> Editar Acceso
+                            </h3>
+                            <button onClick={() => setIsEditModalOpen(false)} className="text-slate-500 hover:text-white"><X size={24} /></button>
+                        </div>
+                        <form onSubmit={handleUpdateUser} className="p-8 space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Completo</label>
+                                <input required value={editingUser.nombre_completo} onChange={e => setEditingUser({...editingUser, nombre_completo: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Rol del Sistema</label>
+                                <select 
+                                    value={editingUser.rol} 
+                                    onChange={e => setEditingUser({...editingUser, rol: e.target.value as any})}
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                                >
+                                    {Object.values(UserRole).map(r => <option key={r} value={r} className="bg-slate-900 text-white uppercase">{r}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre de la Empresa</label>
+                                <input value={editingUser.nombre_empresa || ''} onChange={e => setEditingUser({...editingUser, nombre_empresa: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">ID del Holding</label>
+                                <input value={editingUser.empresa_holding_id || ''} onChange={e => setEditingUser({...editingUser, empresa_holding_id: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500 font-mono" />
+                            </div>
+                            <div className="flex items-center gap-3 pt-2">
+                                <button 
+                                    type="button"
+                                    onClick={() => setEditingUser({...editingUser, activo: !editingUser.activo})}
+                                    className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase transition-all ${editingUser.activo ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30' : 'bg-rose-500/10 text-rose-500 border border-rose-500/30'}`}
+                                >
+                                    {editingUser.activo ? 'Usuario Activo' : 'Usuario Inactivo'}
+                                </button>
+                            </div>
+                            <div className="pt-4">
+                                <button 
+                                    disabled={updateLoading}
+                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                >
+                                    {updateLoading ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                                    Guardar Cambios
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            <div className="overflow-x-auto border border-white/5 rounded-3xl">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-white/5">
+                            <th className="p-4 text-[10px] font-bold text-slate-500 uppercase">Usuario / Nombre</th>
+                            <th className="p-4 text-[10px] font-bold text-slate-500 uppercase">Rol</th>
+                            <th className="p-4 text-[10px] font-bold text-slate-500 uppercase">Empresa / Holding</th>
+                            <th className="p-4 text-[10px] font-bold text-slate-500 uppercase">Registro</th>
+                            <th className="p-4 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
+                            <th className="p-4 text-[10px] font-bold text-slate-500 uppercase">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {loading ? (
+                            <tr>
+                                <td colSpan={6} className="p-12 text-center">
+                                    <Loader2 className="animate-spin text-indigo-500 mx-auto" size={32} />
+                                    <p className="text-xs text-slate-500 mt-4 font-bold uppercase">Cargando usuarios...</p>
+                                </td>
+                            </tr>
+                        ) : filteredUsers.length === 0 ? (
+                            <tr>
+                                <td colSpan={6} className="p-12 text-center text-slate-500 text-xs font-bold uppercase italic">
+                                    No se encontraron usuarios
+                                </td>
+                            </tr>
+                        ) : (
+                            filteredUsers.map((user) => (
+                                <tr key={user.id} className="hover:bg-white/5 transition-colors">
+                                    <td className="p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs">
+                                                {user.nombre_completo?.charAt(0) || 'U'}
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-white">{user.nombre_completo}</p>
+                                                <p className="text-[10px] text-slate-500 font-mono">{user.username}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="p-4">
+                                        <span className={`text-[9px] font-bold px-2 py-1 rounded-lg uppercase tracking-tight ${
+                                            user.rol === UserRole.SAAS_MASTER ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' :
+                                            user.rol === UserRole.OWNER ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                            'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                                        }`}>
+                                            {user.rol || 'USUARIO'}
+                                        </span>
+                                    </td>
+                                    <td className="p-4">
+                                        <div className="flex flex-col gap-1">
+                                            <p className="text-xs text-white font-medium">{user.nombre_empresa || '---'}</p>
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">ID: {user.empresa_holding_id?.substring(0,8) || 'GLOBAL'}</p>
+                                        </div>
+                                    </td>
+                                    <td className="p-4">
+                                        <div className="flex flex-col text-[10px] text-slate-500">
+                                            <span className="font-bold flex items-center gap-1"><Clock size={10} /> {new Date(user.fecha_registro).toLocaleDateString()}</span>
+                                            <span>{new Date(user.fecha_registro).toLocaleTimeString()}</span>
+                                        </div>
+                                    </td>
+                                    <td className="p-4">
+                                        <span className={`w-2 h-2 rounded-full inline-block ${user.activo ? 'bg-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-rose-500 opacity-50'}`} title={user.activo ? 'Activo' : 'Inactivo'} />
+                                    </td>
+                                    <td className="p-4">
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => { setEditingUser(user); setIsEditModalOpen(true); }}
+                                                className="p-2 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-all"
+                                                title="Editar"
+                                            >
+                                                <Edit size={16} />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDeleteUser(user.id, user.username)}
+                                                className="p-2 hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 rounded-lg transition-all"
+                                                title="Eliminar"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: SaasBranch, isMasterBypass: boolean) => void }> = ({ onLogout, onSelectTenant }) => {
+    const [view, setView] = useState<'ACCOUNTS' | 'GLOBAL' | 'SETTINGS' | 'LOGS' | 'USERS'>('ACCOUNTS');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [activeAccordion, setActiveAccordion] = useState<string | null>('APIS_MAESTRAS');
+    const [companies, setCompanies] = useState<SaasCompany[]>([]);
+    const [companiesTotal, setCompaniesTotal] = useState(0);
+    const [companiesPage, setCompaniesPage] = useState(1);
+    const [branches, setBranches] = useState<SaasBranch[]>([]);
+    const [branchesTotal, setBranchesTotal] = useState(0);
+    const [branchesPage, setBranchesPage] = useState(1);
+    const [loading, setLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isUploadingAsset, setIsUploadingAsset] = useState(false);
+    const [isSearchingRuc, setIsSearchingRuc] = useState(false);
+
+    const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+    const [isEditingCompany, setIsEditingCompany] = useState(false);
+    const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
+    const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
+    const [isEditingBranch, setIsEditingBranch] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [companyToDelete, setCompanyToDelete] = useState<{ id: string, name: string } | null>(null);
+    const [editingBranchId, setEditingBranchId] = useState<string | null>(null);
+    const [selectedCompany, setSelectedCompany] = useState<SaasCompany | null>(null);
+    const [branchModalTab, setBranchModalTab] = useState<'GENERAL' | 'SUNAT' | 'WHATSAPP' | 'PRINT' | 'MODULOS' | 'USUARIO' | 'FISCAL'>('GENERAL');
+    
+    // Initial User State
+    const [brUserFullname, setBrUserFullname] = useState('');
+    const [brUsername, setBrUsername] = useState('');
+    const [brUserPassword, setBrUserPassword] = useState('');
+    const [brDocEnforceEnabled, setBrDocEnforceEnabled] = useState(false);
+    const [brDocEnforceThreshold, setBrDocEnforceThreshold] = useState('700');
+    const [globalConfig, setGlobalConfig] = useState<SaasGlobalConfig | null>(null);
+    const [globalIdentityToken, setGlobalIdentityToken] = useState('');
+    const [globalBannerCobro, setGlobalBannerCobro] = useState('');
+    const [globalWaSaas, setGlobalWaSaas] = useState('');
+    const [globalWaCodPais, setGlobalWaCodPais] = useState('+51');
+    const [globalUrlBot, setGlobalUrlBot] = useState('');
+    const [globalInstanciaBot, setGlobalInstanciaBot] = useState('');
+    const [globalApiKeyBot, setGlobalApiKeyBot] = useState('');
+
+    const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
+    const countryDropdownRef = useRef<HTMLDivElement>(null);
+
+    const [catalogItem, setCatalogItem] = useState({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA' });
+    const [newVideo, setNewVideo] = useState({ title: '', url: '' });
+    const [compName, setCompName] = useState('');
+    const [compRuc, setCompRuc] = useState('');
+    const [compOwner, setCompOwner] = useState('');
+    const [compPhone, setCompPhone] = useState('');
+    const [compEmail, setCompEmail] = useState('');
+    const [compPassword, setCompPassword] = useState('');
+    const [compLogoUrl, setCompLogoUrl] = useState('');
+    const [compFaviconUrl, setCompFaviconUrl] = useState('');
+    const [compPrimaryColor, setCompPrimaryColor] = useState('#4f46e5');
+    const [compSecondaryColor, setCompSecondaryColor] = useState('#0f172a');
+    const [compIsActive, setCompIsActive] = useState(true);
+
+    const [brName, setBrName] = useState('');
+    const [brRazonSocial, setBrRazonSocial] = useState('');
+    const [brRuc, setBrRuc] = useState('');
+    const [brAddress, setBrAddress] = useState('');
+    const [brPhone, setBrPhone] = useState('');
+    const [brSlug, setBrSlug] = useState('');
+    const [brModoSunat, setBrModoSunat] = useState('0'); 
+    const [brSunatUrl, setBrSunatUrl] = useState('https://apisu.sysventa.com/API_SUNAT/post.php');
+    const [brSolUser, setBrSolUser] = useState('MODDATOS');
+    const [brSolPass, setBrSolPass] = useState('moddatos');
+    const [brSerieBoleta, setBrSerieBoleta] = useState('B001');
+    const [brSerieFactura, setBrSerieFactura] = useState('F001');
+    const [brSerieNv, setBrSerieNv] = useState('NV01');
+    const [brSerieNcF, setBrSerieNcF] = useState('FC01');
+    const [brSerieNcB, setBrSerieNcB] = useState('BC01');
+    const [brNombreComercial, setBrNombreComercial] = useState('');
+    const [brUbigeo, setBrUbigeo] = useState('');
+    const [brUrbanizacion, setBrUrbanizacion] = useState('');
+    const [brDistrito, setBrDistrito] = useState('');
+    const [brProvincia, setBrProvincia] = useState('');
+    const [brDepartamento, setBrDepartamento] = useState('');
+    const [brWaInstance, setBrWaInstance] = useState('');
+    const [brWaToken, setBrWaToken] = useState('');
+    const [brWaName, setBrWaName] = useState('');
+    const [brYapeId, setBrYapeId] = useState('');
+    const [brOrderZeros, setBrOrderZeros] = useState('7');
+    const [brUseSuffix, setBrUseSuffix] = useState(false);
+    const [brSuffixChar, setBrSuffixChar] = useState('A');
+    const [brSuffixPos, setBrSuffixPos] = useState('AFTER');
+    const [brPuntosEq, setBrPuntosEq] = useState('10');
+    const [brCobranza, setBrCobranza] = useState(false);
+    const [brColorPrimary, setBrColorPrimary] = useState('#0054A6');
+    const [brColorSecondary, setBrColorSecondary] = useState('#10B981');
+    const [brLogoUrl, setBrLogoUrl] = useState('');
+    const [brFaviconUrl, setBrFaviconUrl] = useState('');
+    const [brIsActive, setBrIsActive] = useState(true);
+    const [brPorcentajeIgv, setBrPorcentajeIgv] = useState('18.00');
+    const [brMonedaSimbolo, setBrMonedaSimbolo] = useState('S/');
+    const [brUseOrderReset, setBrUseOrderReset] = useState(false);
+    const [brLimiteReconteo, setBrLimiteReconteo] = useState('10000');
+    const [brModulosConfig, setBrModulosConfig] = useState<Record<string, boolean>>({});
+    const [editingCatalogId, setEditingCatalogId] = useState<string | null>(null);
+    const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
+    const [isCatalogDeleteModalOpen, setIsCatalogDeleteModalOpen] = useState(false);
+    const [catalogItemToDelete, setCatalogItemToDelete] = useState<any>(null);
+    const [currentCatalogModule, setCurrentCatalogModule] = useState<string>('');
+
+    const AVAILABLE_MODULES = [
+        { id: 'view:dashboard', label: 'Dashboard', category: 'BÁSICO' },
+        { id: 'view:pos', label: 'Nueva Venta', category: 'BÁSICO' },
+        { id: 'view:orders', label: 'Mis Órdenes', category: 'BÁSICO' },
+        { id: 'view:inventory', label: 'Servicios', category: 'BÁSICO' },
+        { id: 'view:clients', label: 'Clientes', category: 'BÁSICO' },
+        { id: 'view:expenses', label: 'Egresos', category: 'BÁSICO' },
+        { id: 'view:reports', label: 'Reportes', category: 'BÁSICO' },
+        { id: 'view:settings', label: 'Ajustes', category: 'BÁSICO' },
+        { id: 'view:agenda', label: 'Agenda / Calendario', category: 'PREMIUM' },
+        { id: 'view:operations', label: 'Operación Lavado', category: 'PREMIUM' },
+        { id: 'view:yape', label: 'Monitor Yape', category: 'PREMIUM' },
+        { id: 'view:machines', label: 'Control de Máquinas', category: 'PREMIUM' },
+        { id: 'view:callcenter', label: 'Call Center', category: 'PREMIUM' },
+        { id: 'view:delivery', label: 'Delivery / Logística', category: 'PREMIUM' },
+        { id: 'view:supplies', label: 'Control de Insumos', category: 'PREMIUM' },
+        { id: 'view:purchases', label: 'Gestión de Compras', category: 'PREMIUM' },
+        { id: 'view:package_inventory', label: 'Inventario Paquetes', category: 'PREMIUM' },
+        { id: 'view:loyalty', label: 'Fidelización', category: 'PREMIUM' },
+        { id: 'view:bonus_points', label: 'Puntos Bonus', category: 'PREMIUM' },
+        { id: 'view:promotions', label: 'Promociones', category: 'PREMIUM' },
+        { id: 'view:wa_campaign', label: 'Campañas WhatsApp', category: 'PREMIUM' },
+        { id: 'view:modificaciones', label: 'Modificar Operaciones', category: 'BÁSICO' },
+        { id: 'DEV_CONFIG', label: 'Config. Developer', category: 'PREMIUM' }
+    ];
+
+    const [showDiagnostics, setShowDiagnostics] = useState(false);
+    const [sessionInfo, setSessionInfo] = useState<any>(null);
+
+    useEffect(() => {
+        loadData();
+    }, [companiesPage, branchesPage]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (countryDropdownRef.current && !countryDropdownRef.current.contains(event.target as Node)) {
+                setIsCountryDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const loadData = async (isRetry = false) => {
+        // Solo mostramos el loader de pantalla completa si no tenemos datos previos
+        if (!isRetry && companies.length === 0) setLoading(true);
+        
+        const timeoutId = setTimeout(() => {
+            if (loading) {
+                console.warn("⚠️ loadData en SuperAdmin tardando demasiado (60s)...");
+                setLoading(false);
+            }
+        }, 60000);
+
+        try {
+            console.log(`⏳ [SuperAdmin] Cargando datos (Intento: ${isRetry ? 'Auto-Reintento' : 'Inicial'})...`);
+            const [cRes, bRes, g] = await Promise.all([
+                getSaasCompanies(companiesPage), 
+                getSaasBranches(undefined, branchesPage), 
+                getSaasGlobalConfig()
+            ]);
+            
+            setCompanies(cRes.companies || []);
+            setCompaniesTotal(cRes.total || 0);
+            setBranches(bRes.branches || []);
+            setBranchesTotal(bRes.total || 0);
+            setGlobalConfig(g);
+            
+            // Eliminamos el auto-reintento agresivo que causaba bucles infinitos si la DB estaba lenta
+            if (cRes.companies.length === 0 && view === 'ACCOUNTS') {
+                console.log("ℹ️ No se encontraron empresas en la consulta inicial.");
+            }
+
+            if (g) {
+                localStorage.setItem('sislav_global_config', JSON.stringify(g));
+                setGlobalIdentityToken(g.apiToken || '');
+                setGlobalBannerCobro(g.bannerCobro || '');
+                setGlobalWaSaas(g.whatsapp_saas?.toString() || '');
+                setGlobalWaCodPais(g.whatsapp_cod_pais || '+51');
+                setGlobalUrlBot(g.url_bot || '');
+                setGlobalInstanciaBot(g.instancia_bot || '');
+                setGlobalApiKeyBot(g.apikey_bot || '');
+            }
+        } catch (e) { 
+            console.error("❌ Error cargando datos en SuperAdmin:", e); 
+        } finally { 
+            clearTimeout(timeoutId);
+            setLoading(false); 
+        }
+    };
+
+    const resetBranchForm = () => {
+        setBrName(''); setBrRazonSocial(''); setBrRuc(''); setBrAddress(''); setBrPhone('');
+        setBrSlug(''); setBrModoSunat('0'); setBrSunatUrl('https://apisu.sysventa.com/API_SUNAT/post.php');
+        setBrSolUser('MODDATOS'); setBrSolPass('moddatos');
+        setBrSerieBoleta('B001'); setBrSerieFactura('F001'); setBrSerieNv('NV01');
+        setBrSerieNcF('FC01'); setBrSerieNcB('BC01');
+        setBrNombreComercial(''); setBrUbigeo(''); setBrUrbanizacion('');
+        setBrDistrito(''); setBrProvincia(''); setBrDepartamento('');
+        setBrWaInstance(''); setBrWaToken(''); setBrWaName('');
+        setBrYapeId(''); setBrOrderZeros('7'); setBrUseSuffix(false);
+        setBrSuffixChar('A'); setBrSuffixPos('AFTER'); setBrPuntosEq('10');
+        setBrCobranza(false); setBrColorPrimary('#0054A6'); setBrColorSecondary('#10B981');
+        setBrLogoUrl(''); setBrFaviconUrl(''); setBrIsActive(true);
+        setBrPorcentajeIgv('18.00'); setBrMonedaSimbolo('S/');
+        setBrUseOrderReset(false); setBrLimiteReconteo('10000');
+        setBrModulosConfig({});
+        setBrDocEnforceEnabled(false);
+        setBrDocEnforceThreshold('700');
+        setIsEditingBranch(false);
+        setEditingBranchId(null);
+        setBrUserFullname(''); setBrUsername(''); setBrUserPassword('');
+    };
+
+    const handleEditBranch = (branch: SaasBranch) => {
+        setBrName(branch.name);
+        setBrRazonSocial(branch.razonSocial || '');
+        setBrRuc(branch.ruc);
+        setBrAddress(branch.address);
+        setBrPhone(branch.phone || '');
+        setBrSlug(branch.slug);
+        setBrIsActive(branch.isActive);
+        setBrCobranza(branch.cobranza || false);
+        setBrColorPrimary(branch.primaryColor);
+        setBrColorSecondary(branch.secondaryColor);
+        setBrLogoUrl(branch.logoUrl || '');
+        setBrFaviconUrl(branch.faviconUrl || '');
+        setBrPorcentajeIgv(String(branch.porcentajeIgv ?? 18.00));
+        setBrMonedaSimbolo(branch.moneda_simbolo ?? 'S/');
+        setBrUseOrderReset(branch.use_order_reset || false);
+        setBrLimiteReconteo(String(branch.limite_reconteo || 10000));
+        setBrModulosConfig((branch as any).modulos_config || {});
+        setBrDocEnforceEnabled((branch as any).doc_enforce_enabled || false);
+        setBrDocEnforceThreshold(String((branch as any).doc_enforce_threshold || 700));
+        
+        const rawBranch = branches.find(b => b.id === branch.id) as any;
+        if (rawBranch) {
+            setBrModoSunat(rawBranch.modo_sunat || '0');
+            setBrSunatUrl(rawBranch.sunat_url || 'https://apisu.sysventa.com/API_SUNAT/post.php');
+            setBrSolUser(rawBranch.sol_user || 'MODDATOS');
+            setBrSolPass(rawBranch.sol_pass || 'moddatos');
+            setBrSerieBoleta(rawBranch.serie_boleta || 'B001');
+            setBrSerieFactura(rawBranch.serie_factura || 'F001');
+            setBrSerieNv(rawBranch.serie_nv || 'NV01');
+            setBrSerieNcF(rawBranch.serie_nc_factura || 'FC01');
+            setBrSerieNcB(rawBranch.serie_nc_boleta || 'BC01');
+            setBrNombreComercial(rawBranch.nombre_comercial || '');
+            setBrUbigeo(rawBranch.ubigeo || '');
+            setBrUrbanizacion(rawBranch.urbanizacion || '');
+            setBrDistrito(rawBranch.distrito || '');
+            setBrProvincia(rawBranch.provincia || '');
+            setBrDepartamento(rawBranch.departamento || '');
+            setBrWaInstance(rawBranch.whatsapp_instance || '');
+            setBrWaToken(rawBranch.whatsapp_token || '');
+            setBrWaName(rawBranch.whatsapp_instance_name || '');
+            setBrYapeId(rawBranch.yape_tenant_id || '');
+            setBrOrderZeros(String(rawBranch.order_zeros_count || 7));
+            setBrUseSuffix(rawBranch.use_order_suffix || false);
+            setBrSuffixChar(rawBranch.prefijo_sufijo || rawBranch.order_current_suffix || 'A');
+            setBrSuffixPos(rawBranch.order_suffix_position || 'AFTER');
+            setBrPuntosEq(String(rawBranch.puntos_equivalencia || 10));
+            setBrCobranza(rawBranch.cobranza || false);
+        }
+
+        setIsEditingBranch(true);
+        setEditingBranchId(branch.id);
+        setBranchModalTab('GENERAL');
+        setIsBranchModalOpen(true);
+    };
+
+    const toggleModule = (moduleId: string) => {
+        setBrModulosConfig(prev => ({
+            ...prev,
+            [moduleId]: !prev[moduleId]
+        }));
+    };
+
+    const handleCopyUrl = (slug: string) => {
+        const url = `${window.location.origin}/?s=${slug}`;
+        navigator.clipboard.writeText(url).then(() => {
+            alert("URL de acceso directo copiada al portapapeles:\n" + url);
+        }).catch(() => {
+            alert("No se pudo copiar automáticamente. URL:\n" + url);
+        });
+    };
+
+    const handleCopyOwnerUrl = (companyId: string) => {
+        const url = `${window.location.origin}/?o=${companyId}`;
+        navigator.clipboard.writeText(url).then(() => {
+            alert("URL de acceso para Dueño copiada (Formato Seguro):\n" + url);
+        }).catch(() => {
+            alert("No se pudo copiar automáticamente. URL:\n" + url);
+        });
+    };
+
+    const handleCopyId = (id: string, label: string) => {
+        navigator.clipboard.writeText(id).then(() => {
+            alert(`${label} copiado al portapapeles:\n${id}`);
+        }).catch(() => {
+            alert(`No se pudo copiar automáticamente. ${label}:\n${id}`);
+        });
+    };
+
+    const handleSearchBranchRuc = async () => {
+        if (!brRuc || isSearchingRuc || !globalIdentityToken) return;
+        setIsSearchingRuc(true);
+        try {
+            const docType = brRuc.length === 11 ? 'RUC' : 'DNI';
+            const result = await searchClient(docType, brRuc, globalIdentityToken);
+            if (result) {
+                if (result.name) {
+                    const nameUpper = result.name.toUpperCase();
+                    setBrRazonSocial(nameUpper);
+                    setBrName(nameUpper);
+                    setBrNombreComercial(nameUpper);
+                }
+                if (result.address) setBrAddress(result.address.toUpperCase());
+                if (result.ubigeo) setBrUbigeo(result.ubigeo);
+                if (result.urbanizacion) setBrUrbanizacion(result.urbanizacion.toUpperCase());
+                if (result.distrito) setBrDistrito(result.distrito.toUpperCase());
+                if (result.provincia) setBrProvincia(result.provincia.toUpperCase());
+                if (result.departamento) setBrDepartamento(result.departamento.toUpperCase());
+            }
+        } catch (e) {
+            console.error("Error al consultar API de identidad:", e);
+        } finally {
+            setIsSearchingRuc(false);
+        }
+    };
+
+    const handleSearchCompanyRuc = async () => {
+        if (!compRuc || isSearchingRuc || !globalIdentityToken) return;
+        setIsSearchingRuc(true);
+        try {
+            const docType = compRuc.length === 11 ? 'RUC' : 'DNI';
+            const result = await searchClient(docType, compRuc, globalIdentityToken);
+            if (result) {
+                if (result.name) setCompName(result.name.toUpperCase());
+            }
+        } catch (e) {
+            console.error("Error al consultar API de identidad:", e);
+        } finally {
+            setIsSearchingRuc(false);
+        }
+    };
+
+    const handleBranchAssetUpload = async (field: 'LOGO' | 'FAVICON', e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && selectedCompany && brSlug) {
+            setIsSaving(true);
+            try {
+                const url = await uploadBranchAsset(file, selectedCompany.name, brSlug, field);
+                if (field === 'LOGO') setBrLogoUrl(url);
+                else setBrFaviconUrl(url);
+            } catch (err) {
+                alert("Error subiendo imagen de la sede.");
+            } finally {
+                setIsSaving(false);
+            }
+        }
+    };
+
+    const handleCompanyAssetUpload = async (field: 'LOGO' | 'FAVICON', e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Si no hay nombre, usamos el RUC o un identificador temporal para la carpeta
+        const identifier = compName.trim() || compRuc.trim() || 'nueva_empresa';
+        
+        setIsUploadingAsset(true);
+        try {
+            const url = await uploadCompanyAsset(file, identifier, field);
+            if (field === 'LOGO') setCompLogoUrl(url);
+            else setCompFaviconUrl(url);
+        } catch (err: any) {
+            console.error(`Error subiendo ${field}:`, err);
+            alert(`Error subiendo ${field.toLowerCase()} de la empresa: ${err.message || 'Error desconocido'}`);
+        } finally {
+            setIsUploadingAsset(false);
+        }
+    };
+
+    const handleEditCompany = (company: SaasCompany) => {
+        setIsEditingCompany(true);
+        setEditingCompanyId(company.id);
+        setCompName(company.name);
+        setCompRuc(company.ruc);
+        setCompOwner(company.ownerName);
+        setCompPhone(company.phone);
+        setCompEmail(company.email || '');
+        setCompLogoUrl(company.logoUrl || '');
+        setCompFaviconUrl(company.faviconUrl || '');
+        setCompPrimaryColor(company.primaryColor || '#4f46e5');
+        setCompSecondaryColor(company.secondaryColor || '#0f172a');
+        setCompIsActive(company.isActive);
+        setCompPassword(''); // No mostramos la contraseña actual por seguridad
+        setIsCompanyModalOpen(true);
+    };
+
+    const resetCompanyForm = () => {
+        setIsEditingCompany(false);
+        setEditingCompanyId(null);
+        setCompName(''); 
+        setCompRuc(''); 
+        setCompOwner(''); 
+        setCompPhone(''); 
+        setCompEmail(''); 
+        setCompPassword('');
+        setCompLogoUrl('');
+        setCompFaviconUrl('');
+        setCompPrimaryColor('#4f46e5');
+        setCompSecondaryColor('#0f172a');
+        setCompIsActive(true);
+    };
+
+    const handleSaveCompany = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (!compRuc || !compName || !compEmail) {
+            alert("Por favor complete los campos obligatorios (RUC, Nombre, Correo).");
+            return;
+        }
+
+        if (!isEditingCompany && !compPassword) {
+            alert("Debe asignar una contraseña para la nueva empresa.");
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const companyData = { 
+                name: compName, 
+                ruc: compRuc, 
+                ownerName: compOwner, 
+                phone: compPhone, 
+                email: compEmail, 
+                password: compPassword,
+                logoUrl: compLogoUrl,
+                faviconUrl: compFaviconUrl,
+                primaryColor: compPrimaryColor,
+                secondaryColor: compSecondaryColor,
+                isActive: compIsActive
+            };
+            
+            if (isEditingCompany && editingCompanyId) {
+                await updateSaasCompany(editingCompanyId, companyData);
+            } else {
+                // 1. Crear la empresa en la tabla
+                const newCompany = await createSaasCompany(companyData);
+                
+                // 2. Intentar crear el usuario en Auth (opcional si falla no bloquea la creación de la empresa)
+                if (compEmail && compPassword) {
+                    try {
+                        console.log("👤 Creando usuario administrador inicial...");
+                        await createInitialHoldingUser({
+                            email: compEmail,
+                            password: compPassword,
+                            username: compEmail.split('@')[0], // Usamos la parte antes del @ como username
+                            name: compOwner,
+                            empresaHoldingId: newCompany.id,
+                            holdingName: compName
+                        });
+                        console.log("✅ Usuario administrador creado con éxito.");
+                    } catch (authErr: any) {
+                        console.error("❌ Error en Auth al crear usuario inicial:", authErr);
+                        const errorDetail = authErr.message || JSON.stringify(authErr);
+                        if (errorDetail.includes('already registered') || authErr.code === 'email_exists') {
+                            alert("La empresa se creó correctamente, pero el correo ya existe en el sistema. El dueño deberá usar sus credenciales existentes.");
+                        } else if (errorDetail.includes('rate limit')) {
+                            alert("Error: Límite de correos alcanzado. Por favor, desactive 'Confirm Email' en Supabase -> Authentication -> Providers -> Email.");
+                        } else {
+                            alert(`Empresa creada, pero hubo un problema al registrar el acceso: ${errorDetail}`);
+                        }
+                    }
+                }
+            }
+            
+            setIsCompanyModalOpen(false);
+            resetCompanyForm();
+            await loadData();
+            alert(isEditingCompany ? "Empresa actualizada con éxito." : "Empresa creada con éxito.");
+        } catch (e: any) { 
+            console.error("Error detallado al guardar empresa:", e);
+            let msg = e.message || 'Error desconocido';
+            if (e.code === '23505') { // Postgres Unique Violation
+                if (msg.includes('ruc')) msg = "El RUC ya está registrado para otra empresa.";
+                else if (msg.includes('correo_login')) msg = "El correo ya está registrado para otra empresa.";
+                else msg = "Ya existe un registro con estos datos únicos.";
+            }
+            alert(isEditingCompany ? `Error al actualizar empresa: ${msg}` : `Error al crear empresa: ${msg}`); 
+        } finally { 
+            setIsSaving(false); 
+        }
+    };
+
+    const handleDeleteCompany = (id: string, name: string) => {
+        setCompanyToDelete({ id, name });
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDeleteCompany = async () => {
+        if (!companyToDelete) return;
+        
+        setIsSaving(true);
+        try {
+            await deleteSaasCompany(companyToDelete.id);
+            await loadData();
+            setIsDeleteModalOpen(false);
+            setCompanyToDelete(null);
+            // Usamos un alert simple para confirmar éxito, o podríamos hacer un toast
+            alert("Empresa eliminada correctamente.");
+        } catch (e: any) {
+            console.error("Error al eliminar empresa:", e);
+            alert(`Error al eliminar: ${e.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const generateUniqueSlug = (name: string) => {
+        const cleanName = name.toLowerCase()
+            .trim()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/\s+/g, '_')
+            .replace(/[^a-z0-9_]/g, '');
+        const randomStr = Math.random().toString(36).substring(2, 7);
+        return `${cleanName}_${randomStr}`;
+    };
+
+    const handleSaveBranch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        const branchData = { 
+            empresaId: selectedCompany?.id,
+            name: brName,
+            razonSocial: brRazonSocial,
+            slug: isEditingBranch ? brSlug : generateUniqueSlug(brName),
+            ruc: brRuc,
+            address: brAddress || '-',
+            phone: brPhone || null,
+            modo_sunat: brModoSunat,
+            sunat_url: brSunatUrl,
+            sol_user: brSolUser,
+            sol_pass: brSolPass,
+            serie_boleta: brSerieBoleta,
+            serie_factura: brSerieFactura,
+            serie_nv: brSerieNv,
+            serie_nc_factura: brSerieNcF,
+            serie_nc_boleta: brSerieNcB,
+            nombre_comercial: brNombreComercial,
+            ubigeo: brUbigeo,
+            urbanizacion: brUrbanizacion,
+            distrito: brDistrito,
+            provincia: brProvincia,
+            departamento: brDepartamento,
+            whatsapp_instance: brWaInstance,
+            whatsapp_token: brWaToken,
+            whatsapp_instance_name: brWaName,
+            yape_tenant_id: brYapeId,
+            order_zeros_count: brOrderZeros,
+            use_order_suffix: brUseSuffix,
+            order_current_suffix: brSuffixChar,
+            prefijo_sufijo: brSuffixChar,
+            order_suffix_position: brSuffixPos,
+            use_order_reset: brUseOrderReset,
+            limite_reconteo: brLimiteReconteo,
+            doc_enforce_enabled: brDocEnforceEnabled,
+            doc_enforce_threshold: brDocEnforceThreshold,
+            puntos_equivalencia: parseFloat(brPuntosEq),
+            cobranza: brCobranza,
+            color_primario: brColorPrimary,
+            color_secundario: brColorSecondary,
+            url_logo: brLogoUrl,
+            url_favicon: brFaviconUrl,
+            isActive: brIsActive,
+            porcentaje_igv: parseFloat(brPorcentajeIgv),
+            moneda_simbolo: brMonedaSimbolo,
+            modulos_config: brModulosConfig
+        };
+
+        try {
+            if (isEditingBranch && editingBranchId) {
+                await updateSaasBranch(editingBranchId, branchData);
+            } else {
+                const newBranch = await createSaasBranch(branchData);
+                
+                // Si se llenaron los datos del usuario inicial, crearlo
+                if (brUsername && brUserPassword && brUserFullname) {
+                    await createInitialBranchUser({
+                        username: brUsername,
+                        password: brUserPassword,
+                        name: brUserFullname,
+                        sucursalId: newBranch.id,
+                        empresaId: selectedCompany?.id,
+                        holdingName: selectedCompany?.name
+                    });
+                }
+            }
+            setIsBranchModalOpen(false);
+            resetBranchForm();
+            await loadData();
+        } catch (e: any) { 
+            console.error("Save Error:", e);
+            alert("Error al guardar sucursal."); 
+        } finally { 
+            setIsSaving(false); 
+        }
+    };
+
+    const handleAddItem = async () => {
+        const modulo = currentCatalogModule;
+        if (!catalogItem.nombre) { alert("Ingrese el nombre del recurso."); return; }
+        setIsSaving(true);
+        try {
+            if (editingCatalogId) {
+                await updateGlobalCatalogItem(editingCatalogId, modulo, catalogItem);
+                setEditingCatalogId(null);
+                alert("Recurso actualizado correctamente.");
+            } else {
+                await addGlobalCatalogItem({ ...catalogItem, modulo });
+            }
+            setCatalogItem({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA' });
+            setIsCatalogModalOpen(false);
+            await loadData();
+        } catch (e) { alert("Error al guardar."); } finally { setIsSaving(false); }
+    };
+
+    const confirmDeleteCatalogItem = async () => {
+        if (!catalogItemToDelete) return;
+        setIsSaving(true);
+        try {
+            await softDeleteGlobalItem(catalogItemToDelete.id, currentCatalogModule);
+            setIsCatalogDeleteModalOpen(false);
+            setCatalogItemToDelete(null);
+            await loadData();
+        } catch (e) { 
+            alert("Error al eliminar."); 
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDeleteCatalogItem = (item: any, modulo: string) => {
+        setCatalogItemToDelete(item);
+        setCurrentCatalogModule(modulo);
+        setIsCatalogDeleteModalOpen(true);
+    };
+
+    const startEditingCatalogItem = (item: any, modulo: string) => {
+        setEditingCatalogId(item.id);
+        setCurrentCatalogModule(modulo);
+        setCatalogItem({
+            nombre: modulo === 'VIDEO' ? item.title : item.nombre,
+            url: modulo === 'COLOR' ? item.url_imagen : (modulo === 'VIDEO' ? item.youtubeUrl : item.url),
+            hex: item.hex || '#FFFFFF',
+            tipo: item.tipo || 'LAVADORA'
+        });
+        setIsCatalogModalOpen(true);
+    };
+
+    const startAddingCatalogItem = (modulo: string) => {
+        setEditingCatalogId(null);
+        setCurrentCatalogModule(modulo);
+        setCatalogItem({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA' });
+        setIsCatalogModalOpen(true);
+    };
+
+    const handleUpload = async (modulo: string, e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // Límite de 2MB
+            const MAX_SIZE = 2 * 1024 * 1024;
+            if (file.size > MAX_SIZE) {
+                alert("El archivo es demasiado grande (Máximo 2MB).");
+                return;
+            }
+
+            setIsSaving(true);
+            try {
+                const url = await uploadGlobalAsset(file, modulo);
+                if (modulo === 'BANNER_COBRO') {
+                    setGlobalBannerCobro(url);
+                    await updateSaasGlobalConfig({ banner_cobro: url });
+                } else {
+                    setCatalogItem(prev => ({ ...prev, url }));
+                }
+            } catch (err) { 
+                console.error("Upload error:", err);
+                alert("Error subiendo archivo al storage."); 
+            } finally { setIsSaving(false); }
+        }
+    };
+
+    const handleSaveGlobalAPIs = async () => {
+        setIsSaving(true);
+        try {
+            await updateSaasGlobalConfig({ 
+                token_maestro_identidad: globalIdentityToken.trim(),
+                url_bot: globalUrlBot.trim(),
+                instancia_bot: globalInstanciaBot.trim(),
+                apikey_bot: globalApiKeyBot.trim()
+            });
+            alert("Configuraciones globales actualizadas.");
+            await loadData();
+        } catch (e) { alert("Error al guardar configuraciones."); } finally { setIsSaving(false); }
+    };
+
+    const handleSaveSettings = async () => {
+        if (!globalWaSaas) { alert("El número de WhatsApp es obligatorio."); return; }
+        setIsSaving(true);
+        try {
+            await updateSaasGlobalConfig({
+                whatsapp_saas: parseFloat(globalWaSaas),
+                whatsapp_cod_pais: globalWaCodPais
+            });
+            alert("Ajustes de contacto maestro guardados.");
+            await loadData();
+        } catch (e) { alert("Error al guardar ajustes."); } finally { setIsSaving(false); }
+    };
+
+    const toggleAccordion = (id: string) => {
+        setActiveAccordion(activeAccordion === id ? null : id);
+        setCatalogItem({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA' });
+    };
+
+    const getYouTubeId = (url: string) => {
+        if (!url) return null;
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    };
+
+    const selectedCountry = LATAM_CODES.find(c => c.code === globalWaCodPais) || LATAM_CODES[0];
+
+    if (loading) return <div className="h-screen bg-slate-950 flex flex-col items-center justify-center text-indigo-500 gap-4">
+        <Loader2 className="animate-spin" size={48} />
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40">Accediendo al Núcleo...</p>
+        
+        {/* Botón de emergencia para entrar si la DB tarda demasiado */}
+        <button 
+            onClick={() => setLoading(false)}
+            className="mt-8 px-6 py-2 bg-white/5 hover:bg-white/10 text-white/40 hover:text-white/60 rounded-xl text-[8px] font-bold uppercase tracking-widest transition-all border border-white/5"
+        >
+            Forzar Entrada (Modo Emergencia)
+        </button>
+    </div>;
+
+    return (
+        <div className="h-screen flex flex-col md:flex-row bg-slate-950 text-slate-200 font-sans overflow-hidden">
+            {/* Mobile Header */}
+            <div className="md:hidden flex items-center justify-between p-4 bg-slate-900 border-b border-white/5 z-30">
+                <div className="flex items-center gap-3">
+                    <div className="bg-indigo-600 p-2 rounded-xl"><ShieldCheck size={20} className="text-white" /></div>
+                    <span className="font-bold uppercase tracking-tight text-white">Sislav SaaS</span>
+                </div>
+                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-white">
+                    {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
+                </button>
+            </div>
+
+            {/* Sidebar */}
+            <aside className={`fixed md:relative inset-y-0 left-0 w-72 bg-slate-900 border-r border-white/5 flex flex-col shrink-0 z-50 shadow-2xl transition-transform duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+                <div className="p-8 mb-4 hidden md:block">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="bg-indigo-600 p-2.5 rounded-2xl shadow-lg"><ShieldCheck size={24} className="text-white" /></div>
+                        <div>
+                            <h1 className="text-lg font-bold uppercase tracking-tight text-white">Sislav <span className="text-indigo-400">SaaS</span></h1>
+                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.3em]">Master Panel</p>
+                        </div>
+                    </div>
+                </div>
+                <nav className="flex-1 px-4 space-y-2 mt-4 md:mt-0">
+                    <button onClick={() => { setView('ACCOUNTS'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${view === 'ACCOUNTS' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}><Building size={18} /> Cuentas & Sedes</button>
+                    <button onClick={() => { setView('USERS'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${view === 'USERS' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}><Users size={18} /> Accesos</button>
+                    <button onClick={() => { setView('GLOBAL'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${view === 'GLOBAL' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}><Globe size={18} /> Config. Global</button>
+                    <button onClick={() => { setView('LOGS'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${view === 'LOGS' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}><Terminal size={18} /> Logs Sistema</button>
+                    <button onClick={() => { setView('SETTINGS'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${view === 'SETTINGS' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}><Settings size={18} /> Ajustes</button>
+                    <a 
+                        href="/sislav.md" 
+                        download="sislav.md"
+                        className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all text-slate-500 hover:text-white hover:bg-white/5"
+                    >
+                        <FileText size={18} /> Descargar .md
+                    </a>
+                </nav>
+                <div className="p-6 mt-auto space-y-2">
+                    <button 
+                        onClick={() => setShowDiagnostics(!showDiagnostics)}
+                        className="w-full flex items-center justify-center gap-3 py-3 rounded-2xl bg-white/5 text-slate-500 hover:text-indigo-400 font-bold text-[9px] uppercase tracking-widest transition-all"
+                    >
+                        <Shield size={14} /> Diagnóstico
+                    </button>
+                    <button 
+                        onClick={() => {
+                            console.log("Botón Cerrar Sesión clickeado en SuperAdmin");
+                            onLogout();
+                        }} 
+                        className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-white/5 text-slate-400 hover:text-rose-400 font-bold text-[10px] uppercase tracking-widest transition-all"
+                    >
+                        <LogOut size={16} /> Cerrar Sesión
+                    </button>
+                </div>
+            </aside>
+
+            {isSidebarOpen && <div className="fixed inset-0 bg-black/60 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
+
+            {/* Diagnostics Modal */}
+            {showDiagnostics && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl">
+                        <div className="p-8 border-b border-white/5 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <Shield className="text-indigo-400" size={24} />
+                                <h3 className="text-xl font-bold uppercase tracking-tight text-white">Diagnóstico de Sesión</h3>
+                            </div>
+                            <button onClick={() => setShowDiagnostics(false)} className="text-slate-500 hover:text-white"><X size={24} /></button>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            <div className="space-y-4">
+                                <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">ID de Usuario (Auth)</p>
+                                    <p className="text-sm font-mono text-indigo-300 break-all">{sessionInfo?.user?.id || 'No disponible'}</p>
+                                </div>
+                                <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Rol en Sesión</p>
+                                    <p className="text-sm font-bold text-white uppercase tracking-widest">{sessionInfo?.user?.role || 'No disponible'}</p>
+                                </div>
+                                <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Nombre de Usuario</p>
+                                    <p className="text-sm text-slate-300">{sessionInfo?.user?.username || 'No disponible'}</p>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-2xl">
+                                <div className="flex gap-3 mb-3">
+                                    <AlertTriangle className="text-amber-500 shrink-0" size={20} />
+                                    <p className="text-xs font-bold text-amber-200 uppercase tracking-widest">Estado de RLS</p>
+                                </div>
+                                <p className="text-[11px] text-amber-200/70 leading-relaxed">
+                                    Si el ID de usuario no existe en la tabla <code className="text-amber-400">usuarios_login</code> con el rol <code className="text-amber-400">SAAS_MASTER</code>, las políticas de seguridad (RLS) bloquearán todos los datos, resultando en una pantalla vacía.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="p-8 bg-black/20 flex gap-4">
+                            <button 
+                                onClick={() => { setShowDiagnostics(false); onLogout(); }}
+                                className="flex-1 py-4 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white rounded-2xl font-bold text-xs uppercase tracking-widest transition-all"
+                            >
+                                Forzar Logout
+                            </button>
+                            <button 
+                                onClick={() => setShowDiagnostics(false)}
+                                className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <main className="flex-1 overflow-y-auto relative bg-[#0a0f1d] custom-scrollbar">
+                <div className="p-6 md:p-10 max-w-[1400px] mx-auto relative z-10">
+                    {view === 'ACCOUNTS' && (
+                        <div className="space-y-10 animate-in fade-in duration-500">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+                                <div><h2 className="text-3xl md:text-4xl font-bold uppercase tracking-tight text-white leading-none">CUENTAS SAAS</h2><p className="text-slate-500 text-sm font-medium mt-1 uppercase">Supervisión de empresas registradas ({companiesTotal}).</p></div>
+                                <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+                                    <div className="relative w-full md:w-80">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Buscar empresa..." 
+                                            className="w-full bg-slate-900 border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm font-medium focus:border-indigo-500 transition-all outline-none"
+                                            onChange={(e) => {
+                                                // Implementar búsqueda local o remota
+                                            }}
+                                        />
+                                    </div>
+                                    <button onClick={() => { resetCompanyForm(); setIsCompanyModalOpen(true); }} className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 px-8 py-4 rounded-2xl font-bold text-xs uppercase tracking-[0.15em] shadow-xl flex items-center justify-center gap-3 text-white"><Plus size={20} strokeWidth={3} /> Nueva Empresa</button>
+                                </div>
+                            </div>
+
+                            {/* Pagination Controls */}
+                            {companiesTotal > 0 && (
+                                <div className="flex items-center justify-between bg-slate-900/30 p-4 rounded-3xl border border-white/5">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                        Mostrando {companies.length} de {companiesTotal} empresas
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            disabled={companiesPage === 1}
+                                            onClick={() => setCompaniesPage(p => Math.max(1, p - 1))}
+                                            className="p-2 bg-white/5 hover:bg-white/10 rounded-xl disabled:opacity-30 transition-all"
+                                        >
+                                            <ChevronDown className="rotate-90" size={20} />
+                                        </button>
+                                        <span className="text-xs font-bold px-4 py-2 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/20">
+                                            Página {companiesPage}
+                                        </span>
+                                        <button 
+                                            disabled={companies.length < 50 || (companiesPage * 50) >= companiesTotal}
+                                            onClick={() => setCompaniesPage(p => p + 1)}
+                                            className="p-2 bg-white/5 hover:bg-white/10 rounded-xl disabled:opacity-30 transition-all"
+                                        >
+                                            <ChevronDown className="-rotate-90" size={20} />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                                {companies.filter(c => c.isActive).map(company => {
+                                    const companyBranches = branches.filter(b => b.empresaId === company.id);
+                                    return (
+                                        <div key={company.id} className="bg-slate-900/50 backdrop-blur-xl rounded-[2.5rem] md:rounded-[3rem] border border-white/5 p-6 md:p-8 shadow-2xl group hover:border-indigo-500/30 transition-all flex flex-col h-full">
+                                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                                                <div className="flex items-center gap-5">
+                                                    <div className="w-14 h-14 md:w-16 md:h-16 rounded-3xl bg-indigo-600/20 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shadow-inner">
+                                                        {company.logoUrl ? <img src={company.logoUrl} className="w-full h-full object-contain p-2" /> : <Building size={32} />}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                                            <h3 className="text-lg md:text-xl font-bold uppercase tracking-tight text-white">{company.name}</h3>
+                                                            <div className="flex items-center gap-2">
+                                                                <button 
+                                                                    onClick={() => handleCopyOwnerUrl(company.id)}
+                                                                    className="text-slate-500 hover:text-indigo-400 transition-colors"
+                                                                    title="Copiar URL de Login de Dueño"
+                                                                >
+                                                                    <Link size={16} />
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        // Bypass para entrar como OWNER de esta empresa
+                                                                        const ownerSession = {
+                                                                            user: {
+                                                                                id: `owner_${company.id}`,
+                                                                                username: `owner_${company.id}`,
+                                                                                name: `PROPIETARIO: ${company.name}`,
+                                                                                role: UserRole.OWNER,
+                                                                                holding_id: company.id,
+                                                                                holding_name: company.name,
+                                                                                isMasterBypass: true
+                                                                            }
+                                                                        };
+                                                                        localStorage.setItem('sislav_auth_session', JSON.stringify(ownerSession));
+                                                                        window.location.reload();
+                                                                    }}
+                                                                    className="bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white px-2 py-1 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all border border-emerald-500/20 flex items-center gap-1"
+                                                                    title="Acceso Directo como Propietario"
+                                                                >
+                                                                    <ShieldCheck size={10} /> Acceso Directo
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                            <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase ${company.paymentStatus === 'PAID' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                {company.paymentStatus}
+                                                            </span>
+                                                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{company.ruc}</span>
+                                                            <span 
+                                                                onClick={() => handleCopyId(company.id, 'Holding ID')}
+                                                                className="text-[9px] font-mono font-bold text-indigo-400/50 uppercase tracking-tighter bg-indigo-400/5 px-2 py-0.5 rounded-md border border-indigo-400/10 cursor-pointer hover:bg-indigo-400/10 hover:text-indigo-400 transition-all flex items-center gap-1.5" 
+                                                                title="Clic para copiar Holding ID (UUID)"
+                                                            >
+                                                                HID: {company.id} <Copy size={10} />
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2 self-end md:self-auto">
+                                                    <button 
+                                                        onClick={() => handleEditCompany(company)}
+                                                        className="bg-white/5 hover:bg-white/20 text-slate-400 hover:text-white p-3 rounded-2xl transition-all border border-white/5"
+                                                        title="Editar Empresa"
+                                                    >
+                                                        <Edit size={20} />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleDeleteCompany(company.id, company.name)}
+                                                        className="bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white p-3 rounded-2xl transition-all border border-red-500/20"
+                                                        title="Eliminar Empresa"
+                                                    >
+                                                        <Trash2 size={20} />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => { resetBranchForm(); setSelectedCompany(company); setIsBranchModalOpen(true); }}
+                                                        className="bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white p-3 rounded-2xl transition-all border border-indigo-500/20"
+                                                        title="Añadir Sucursal"
+                                                    >
+                                                        <Plus size={20} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex-1 space-y-3">
+                                                {companyBranches.map(branch => (
+                                                    <div key={branch.id} className="bg-black/40 border border-white/5 rounded-[1.8rem] p-4 md:p-5 flex flex-col md:flex-row items-center justify-between group/item hover:bg-indigo-900/20 transition-all gap-4">
+                                                        <div className="flex items-center gap-5 text-slate-200 w-full md:w-auto">
+                                                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center p-2 shadow-lg transform group-hover/item:scale-110 transition-transform shrink-0">
+                                                                {branch.logoUrl ? <img src={branch.logoUrl} className="max-w-full h-auto object-contain" /> : <Store size={24} className="text-slate-300" />}
+                                                            </div>
+                                                            <div className="min-w-0 flex-1">
+                                                                <span className="font-bold text-sm uppercase text-white block leading-none mb-1 truncate">{branch.name}</span>
+                                                                <div className="flex flex-wrap gap-x-3 gap-y-1 items-center">
+                                                                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight italic">slug: {branch.slug}</span>
+                                                                    <span 
+                                                                        onClick={() => handleCopyId(branch.id, 'Sucursal ID')}
+                                                                        className="text-[9px] font-mono font-bold text-indigo-400/40 uppercase tracking-tighter bg-white/5 px-1.5 py-0.5 rounded-md cursor-pointer hover:bg-white/10 hover:text-indigo-400/60 transition-all flex items-center gap-1.5" 
+                                                                        title="Clic para copiar Sucursal ID (UUID)"
+                                                                    >
+                                                                        SID: {branch.id} <Copy size={10} />
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2 w-full md:w-auto justify-end">
+                                                            <button 
+                                                                onClick={() => onSelectTenant(branch, true)}
+                                                                className="bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white p-2.5 md:p-3 rounded-2xl transition-all border border-indigo-500/20 shadow-lg shadow-indigo-500/10 group/enter"
+                                                                title="Ingresar a Sucursal"
+                                                            >
+                                                                <LogIn size={16} className="group-hover/enter:translate-x-0.5 transition-transform" />
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleCopyUrl(branch.slug)}
+                                                                className="bg-white/5 hover:bg-white/20 text-slate-400 hover:text-white p-2.5 md:p-3 rounded-2xl transition-all border border-white/5"
+                                                                title="Copiar URL de Acceso"
+                                                            >
+                                                                <Copy size={16} />
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => { setSelectedCompany(company); handleEditBranch(branch); }}
+                                                                className="bg-white/5 hover:bg-white/20 text-slate-400 hover:text-white p-2.5 md:p-3 rounded-2xl transition-all border border-white/5"
+                                                                title="Editar Sucursal"
+                                                            >
+                                                                <Edit size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                                {companies.length === 0 && !loading && (
+                                    <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-500 gap-6 border-2 border-dashed border-white/5 rounded-[3rem] bg-slate-900/20">
+                                        <div className="bg-amber-500/10 p-6 rounded-full">
+                                            <AlertTriangle size={48} className="text-amber-500/50" />
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="font-bold uppercase tracking-[0.2em] text-white text-lg">Sin Datos Disponibles</p>
+                                            <p className="text-xs mt-2 opacity-60 max-w-md mx-auto leading-relaxed">
+                                                No se han podido recuperar las empresas. Esto puede deberse a una sesión expirada, falta de permisos de SAAS_MASTER o un problema de red.
+                                            </p>
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <button 
+                                                onClick={() => loadData()} 
+                                                className="flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20"
+                                            >
+                                                <RefreshCcw size={18} /> Reintentar Carga
+                                            </button>
+                                            <button 
+                                                onClick={onLogout} 
+                                                className="flex items-center gap-3 px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all"
+                                            >
+                                                <LogOut size={18} /> Cerrar y Reingresar
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {view === 'LOGS' && <SystemLogsView />}
+                    {view === 'USERS' && <UsersListView />}
+
+                    {view === 'GLOBAL' && (
+                        <div className="space-y-8 animate-in fade-in duration-500 text-slate-200">
+                            <div><h2 className="text-3xl md:text-4xl font-bold uppercase tracking-tight text-white">Configuración Global</h2><p className="text-slate-500 text-sm font-medium mt-1 uppercase">Gestión de recursos centrales.</p></div>
+                            <div className="space-y-4">
+                                <AccordionItem id="APIS_MAESTRAS" title="APIs Maestras & Bots" icon={<Key size={20} />} isOpen={activeAccordion === 'APIS_MAESTRAS'} onToggle={() => toggleAccordion('APIS_MAESTRAS')}>
+                                    <div className="space-y-8 max-w-4xl">
+                                        <div className="bg-indigo-900/20 border border-indigo-500/30 p-6 rounded-[2rem] flex items-start gap-4 shadow-inner"><ShieldAlert className="text-indigo-400 shrink-0" size={24} /><div><h4 className="text-[11px] font-bold text-white uppercase tracking-widest mb-1">Centralización de Servicios</h4><p className="text-[10px] text-indigo-300 font-bold uppercase leading-tight">Endpoints maestros para identidad y monitoreo.</p></div></div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <div className="space-y-4">
+                                                <h4 className="text-[11px] font-bold text-white uppercase tracking-widest border-b border-white/10 pb-2">Identidad & Banners</h4>
+                                                <div className="space-y-4">
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Token Maestro Identidad</label>
+                                                        <input type="password" value={globalIdentityToken} onChange={e => setGlobalIdentityToken(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 font-mono text-sm text-indigo-400 outline-none focus:border-indigo-500 transition-all" placeholder="Bearer token..." />
+                                                    </div>
+                                                    <div className="pt-2">
+                                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-3 block">Banner Global de Cobranza</label>
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-32 aspect-video rounded-2xl bg-black/40 border-2 border-dashed border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                                                                {globalBannerCobro ? <img src={globalBannerCobro} className="w-full h-full object-cover" /> : <ImageIcon size={20} className="text-slate-700" />}
+                                                            </div>
+                                                            <label className="bg-white/5 hover:bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-[9px] uppercase cursor-pointer transition-all border border-white/5">
+                                                                SUBIR <input type="file" className="hidden" accept="image/*" onChange={(e) => handleUpload('BANNER_COBRO', e)} />
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-4">
+                                                <h4 className="text-[11px] font-bold text-white uppercase tracking-widest border-b border-white/10 pb-2 flex items-center gap-2"><Bot size={14} className="text-indigo-400" /> Bot de Actividad</h4>
+                                                <div className="space-y-4">
+                                                    <div className="space-y-2"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">URL Base Evolution</label><input value={globalUrlBot} onChange={e => setGlobalUrlBot(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 font-mono text-xs text-slate-300 outline-none" /></div>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-2"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Instancia</label><input value={globalInstanciaBot} onChange={e => setGlobalInstanciaBot(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 font-bold text-xs" /></div>
+                                                        <div className="space-y-2"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">API Key</label><input type="password" value={globalApiKeyBot} onChange={e => setGlobalApiKeyBot(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 font-mono text-xs" /></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button onClick={handleSaveGlobalAPIs} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 transition-all active:scale-95">{isSaving ? <Loader2 className="animate-spin" /> : <Save size={18} />} GUARDAR CONFIGURACIÓN</button>
+                                    </div>
+                                </AccordionItem>
+
+                                <AccordionItem id="CATEGORIAS" title="Iconos de Categoría" icon={<Layers size={20} />} isOpen={activeAccordion === 'CATEGORIAS'} onToggle={() => toggleAccordion('CATEGORIAS')}>
+                                    <div className="space-y-6">
+                                        <div className="flex justify-between items-center bg-black/20 p-6 rounded-3xl border border-white/5">
+                                            <div>
+                                                <h4 className="text-[11px] font-bold text-white uppercase tracking-widest">Listado de Categorías</h4>
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase">Predefinidas para nuevas sedes.</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => startAddingCatalogItem('CATEGORIA')}
+                                                className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold text-[10px] uppercase shadow-lg transition-all active:scale-95 flex items-center gap-2"
+                                            >
+                                                <Plus size={16} /> NUEVA CATEGORÍA
+                                            </button>
+                                        </div>
+                                                <div className="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-10 gap-4">
+                                                    {globalConfig?.defaultCategoryImages.map(img => (
+                                                        <div key={img.id} className="bg-black/40 border border-white/5 p-3 rounded-2xl relative group">
+                                                            <div className="aspect-square flex items-center justify-center"><img src={img.url} className="max-w-full max-h-full object-contain" /></div>
+                                                            <p className="text-[7px] font-bold text-center text-slate-500 mt-1 uppercase truncate">{img.nombre}</p>
+                                                            <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                                <button onClick={() => startEditingCatalogItem(img, 'CATEGORIA')} className="p-1 bg-amber-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Edit size={10}/></button>
+                                                                <button onClick={() => handleDeleteCatalogItem(img, 'CATEGORIA')} className="p-1 bg-rose-600 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Trash2 size={10}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                    </div>
+                                </AccordionItem>
+
+                                <AccordionItem id="VIDEOS_AYUDA" title="Tutoriales de Ayuda" icon={<Video size={20} />} isOpen={activeAccordion === 'VIDEOS_AYUDA'} onToggle={() => toggleAccordion('VIDEOS_AYUDA')}>
+                                    <div className="space-y-6">
+                                        <div className="flex justify-between items-center bg-black/20 p-6 rounded-3xl border border-white/5">
+                                            <div>
+                                                <h4 className="text-[11px] font-bold text-white uppercase tracking-widest">Tutoriales Maestro</h4>
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase">Videos de entrenamiento globales.</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => startAddingCatalogItem('VIDEO')}
+                                                className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold text-[10px] uppercase shadow-lg transition-all active:scale-95 flex items-center gap-2"
+                                            >
+                                                <Plus size={16} /> NUEVO TUTORIAL
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            {globalConfig?.defaultHelpVideos.map(video => {
+                                                const ytId = getYouTubeId(video.youtubeUrl);
+                                                return (
+                                                    <div key={video.id} className="bg-black/40 border border-white/5 rounded-3xl overflow-hidden group">
+                                                        <div className="aspect-video relative">
+                                                            <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} className="w-full h-full object-cover opacity-60" />
+                                                            <div className="absolute inset-0 flex items-center justify-center text-white/40 pointer-events-none"><PlayCircle size={48}/></div>
+                                                            <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-10">
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); startEditingCatalogItem(video, 'VIDEO'); }} 
+                                                                    className="p-2 bg-amber-500 text-white rounded-xl shadow-lg hover:scale-110 active:scale-95 transition-all"
+                                                                >
+                                                                    <Edit size={14}/>
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteCatalogItem(video, 'VIDEO'); }} 
+                                                                    className="p-2 bg-rose-600 text-white rounded-xl shadow-lg hover:scale-110 active:scale-95 transition-all"
+                                                                >
+                                                                    <Trash2 size={14}/>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="p-4"><p className="text-[10px] font-bold text-slate-200 uppercase tracking-tight truncate">{video.title}</p></div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </AccordionItem>
+
+                                <AccordionItem id="METODOS_PAGO" title="Iconos Métodos de Pago" icon={<CreditCard size={20} />} isOpen={activeAccordion === 'METODOS_PAGO'} onToggle={() => toggleAccordion('METODOS_PAGO')}>
+                                    <div className="space-y-6">
+                                        <div className="flex justify-between items-center bg-black/20 p-6 rounded-3xl border border-white/5">
+                                            <div>
+                                                <h4 className="text-[11px] font-bold text-white uppercase tracking-widest">Métodos de Pago Globales</h4>
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase">Predefinidos para nuevas sedes.</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => startAddingCatalogItem('METODO_PAGO')}
+                                                className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold text-[10px] uppercase shadow-lg transition-all active:scale-95 flex items-center gap-2"
+                                            >
+                                                <Plus size={16} /> NUEVO MÉTODO
+                                            </button>
+                                        </div>
+                                                <div className="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-10 gap-4">
+                                                    {globalConfig?.defaultPaymentImages.map(img => (
+                                                        <div key={img.id} className="bg-black/40 border border-white/5 p-3 rounded-2xl relative group">
+                                                            <div className="aspect-square flex items-center justify-center"><img src={img.url} className="max-w-full max-h-full object-contain" /></div>
+                                                            <p className="text-[7px] font-bold text-center text-slate-500 mt-1 uppercase truncate">{img.nombre}</p>
+                                                            <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                                <button onClick={() => startEditingCatalogItem(img, 'METODO_PAGO')} className="p-1 bg-amber-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Edit size={10}/></button>
+                                                                <button onClick={() => handleDeleteCatalogItem(img, 'METODO_PAGO')} className="p-1 bg-rose-600 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Trash2 size={10}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                    </div>
+                                </AccordionItem>
+
+                                <AccordionItem id="MAQUINAS" title="Modelos de Máquina" icon={<WashingMachine size={20} />} isOpen={activeAccordion === 'MAQUINAS'} onToggle={() => toggleAccordion('MAQUINAS')}>
+                                    <div className="space-y-6">
+                                        <div className="flex justify-between items-center bg-black/20 p-6 rounded-3xl border border-white/5">
+                                            <div>
+                                                <h4 className="text-[11px] font-bold text-white uppercase tracking-widest">Modelos de Máquinas 3D</h4>
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase">Base de datos de modelos oficiales.</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => startAddingCatalogItem('MAQUINA')}
+                                                className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold text-[10px] uppercase shadow-lg transition-all active:scale-95 flex items-center gap-2"
+                                            >
+                                                <Plus size={16} /> NUEVA MÁQUINA
+                                            </button>
+                                        </div>
+                                                <div className="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-10 gap-4">
+                                                    {globalConfig?.defaultMachineImages.map(img => (
+                                                        <div key={img.id} className="bg-black/40 border border-white/5 p-3 rounded-2xl relative group">
+                                                            <div className="aspect-square flex items-center justify-center"><img src={img.url} className="max-w-full max-h-full object-contain" /></div>
+                                                            <p className="text-[7px] font-bold text-center text-slate-500 mt-1 uppercase truncate">{img.nombre}</p>
+                                                            <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                                <button onClick={() => startEditingCatalogItem(img, 'MAQUINA')} className="p-1 bg-amber-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Edit size={10}/></button>
+                                                                <button onClick={() => handleDeleteCatalogItem(img, 'MAQUINA')} className="p-1 bg-rose-600 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Trash2 size={10}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                    </div>
+                                </AccordionItem>
+
+                                <AccordionItem id="COLORES" title="Paleta de Colores/Texturas" icon={<Palette size={20} />} isOpen={activeAccordion === 'COLORES'} onToggle={() => toggleAccordion('COLORES')}>
+                                    <div className="space-y-6">
+                                        <div className="flex justify-between items-center bg-black/20 p-6 rounded-3xl border border-white/5">
+                                            <div>
+                                                <h4 className="text-[11px] font-bold text-white uppercase tracking-widest">Paleta de Tonalidades</h4>
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase">Colores y texturas de interfaz.</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => startAddingCatalogItem('COLOR')}
+                                                className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold text-[10px] uppercase shadow-lg transition-all active:scale-95 flex items-center gap-2"
+                                            >
+                                                <Plus size={16} /> NUEVO COLOR/TEXTURA
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-4">
+                                            {globalConfig?.defaultColors.map(color => (
+                                                <div key={color.id} className="flex flex-col items-center gap-2 group relative">
+                                                    <div className="w-12 h-12 rounded-full border-2 border-white/10 shadow-lg flex items-center justify-center overflow-hidden bg-cover bg-center" style={{ backgroundColor: color.url_imagen ? 'transparent' : color.hex, backgroundImage: color.url_imagen ? `url(${color.url_imagen})` : 'none' }}></div>
+                                                    <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tight text-center line-clamp-1">{color.nombre}</span>
+                                                    <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-all scale-75">
+                                                        <button onClick={() => startEditingCatalogItem(color, 'COLOR')} className="p-1 bg-amber-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Edit size={10}/></button>
+                                                        <button onClick={() => handleDeleteCatalogItem(color, 'COLOR')} className="p-1 bg-rose-600 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Trash2 size={10}/></button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </AccordionItem>
+                            </div>
+                        </div>
+                    )}
+
+                    {view === 'SETTINGS' && (
+                        <div className="space-y-10 animate-in fade-in duration-500 text-slate-200">
+                            <div><h2 className="text-3xl md:text-4xl font-bold uppercase tracking-tight text-white leading-none">Ajustes Maestro</h2><p className="text-slate-500 text-sm font-medium mt-1 uppercase">Configuración de contacto oficial del sistema.</p></div>
+                            <div className="max-w-3xl bg-slate-900/50 backdrop-blur-xl rounded-[3rem] border border-white/5 p-8 md:p-10 shadow-2xl space-y-10">
+                                <div className="flex items-center gap-4 border-b border-white/5 pb-6">
+                                    <div className="bg-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-600/20"><Smartphone size={24} className="text-white"/></div>
+                                    <div>
+                                        <h4 className="font-bold text-xl uppercase tracking-tight text-white">Contacto WhatsApp SaaS</h4>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Número oficial del dueño para soporte master</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Código de País</label>
+                                        <div className="relative" ref={countryDropdownRef}>
+                                            <button type="button" onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)} className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-4 font-bold text-sm text-white flex items-center justify-between outline-none focus:border-indigo-50 transition-all group"><div className="flex items-center gap-3"><img src={`https://flagcdn.com/w20/${selectedCountry.iso}.png`} className="w-5 h-auto rounded-sm shadow-sm" alt="flag" /><span>{selectedCountry.code}</span></div><ChevronDown size={18} className={`text-slate-500 transition-transform ${isCountryDropdownOpen ? 'rotate-180' : ''}`} /></button>
+                                            {isCountryDropdownOpen && (<div className="absolute bottom-full mb-3 left-0 right-0 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl z-[100] overflow-hidden animate-in slide-in-from-bottom-2"><div className="max-h-60 overflow-y-auto custom-scrollbar">{LATAM_CODES.map(c => (<button key={c.code} type="button" onClick={() => { setGlobalWaCodPais(c.code); setIsCountryDropdownOpen(false); }} className="w-full px-5 py-3 hover:bg-white/5 flex items-center justify-between text-left transition-colors border-b border-white/5 last:border-0 group"><div className="flex items-center gap-3"><img src={`https://flagcdn.com/w20/${c.iso}.png`} className="w-5 h-auto rounded-sm shadow-sm" alt="flag" /><span className="font-bold text-xs text-white">{c.name}</span></div><span className="text-[10px] font-bold text-slate-400 group-hover:text-indigo-400">{c.code}</span></button>))}</div></div>)}
+                                        </div>
+                                    </div>
+                                    <div className="md:col-span-2 space-y-3">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Número de WhatsApp Principal</label>
+                                        <div className="relative group"><Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={20} /><input type="number" value={globalWaSaas} onChange={e => setGlobalWaSaas(e.target.value)} className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-4 pl-14 font-bold text-lg text-white outline-none focus:border-indigo-500 focus:bg-black/60 transition-all placeholder:text-slate-700" placeholder="931200353" /></div>
+                                    </div>
+                                </div>
+                                <button onClick={handleSaveSettings} disabled={isSaving} className="w-full py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-3xl font-bold text-sm uppercase tracking-[0.25em] shadow-xl shadow-emerald-900/40 transition-all active:scale-95 flex justify-center items-center gap-4 disabled:opacity-50">{isSaving ? <Loader2 className="animate-spin" /> : <Save size={24} strokeWidth={3}/>} GUARDAR AJUSTES DE CONTACTO</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </main>
+
+            {/* Modales Crud */}
+            {isCompanyModalOpen && (
+                <div className="fixed inset-0 bg-slate-950/90 z-[100] flex items-center justify-center p-2 md:p-4 backdrop-blur-md animate-in fade-in">
+                    <div className="bg-slate-900 rounded-3xl md:rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden border border-white/10 flex flex-col animate-in zoom-in-95 max-h-[98vh] md:max-h-[95vh]">
+                        <div className="p-5 md:p-8 border-b border-white/5 flex justify-between items-center bg-slate-900 shrink-0">
+                            <div className="flex items-center gap-3 md:gap-4">
+                                <div className="bg-indigo-600 p-2 md:p-2.5 rounded-xl md:rounded-2xl shadow-lg">
+                                    <Building size={20} className="text-white md:w-6 md:h-6" />
+                                </div>
+                                <h3 className="font-bold text-lg md:text-2xl text-white uppercase tracking-tight">
+                                    {isEditingCompany ? 'Editar Holding' : 'Nuevo Holding'}
+                                </h3>
+                            </div>
+                            <button onClick={() => setIsCompanyModalOpen(false)} className="text-white/40 hover:text-white p-2 rounded-full transition-colors">
+                                <X size={24} className="md:w-7 md:h-7"/>
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveCompany} className="p-5 md:p-10 space-y-6 md:space-y-8 overflow-y-auto custom-scrollbar flex-1">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">RUC Fiscal / DNI</label>
+                                    <div className="flex gap-2">
+                                        <input required value={compRuc} onChange={e => setCompRuc(e.target.value)} className="flex-1 bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20" placeholder="10XXXXXXXXX" />
+                                        <button type="button" onClick={handleSearchCompanyRuc} disabled={isSearchingRuc} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 md:px-5 rounded-xl md:rounded-2xl shadow-xl transition-all active:scale-90 flex items-center justify-center disabled:opacity-50">
+                                            {isSearchingRuc ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Razón Social</label><input required value={compName} onChange={e => setCompName(e.target.value.toUpperCase())} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20 uppercase" placeholder="LAVANDERIA SAC" /></div>
+                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Representante</label><input required value={compOwner} onChange={e => setCompOwner(e.target.value.toUpperCase())} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20 uppercase" placeholder="JUAN PEREZ" /></div>
+                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Teléfono</label><input required value={compPhone} onChange={e => setCompPhone(e.target.value)} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20" placeholder="999888777" /></div>
+                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Correo Admin</label><input required type="email" value={compEmail} onChange={e => setCompEmail(e.target.value.toLowerCase())} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20 lowercase" placeholder="admin@empresa.com" /></div>
+                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Pin Acceso Maestro</label><input required={!isEditingCompany} type="password" value={compPassword} onChange={e => setCompPassword(e.target.value)} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20" placeholder={isEditingCompany ? "Dejar en blanco para mantener" : "••••••"} /></div>
+                            </div>
+
+                            <div className="pt-6 border-t border-white/5 space-y-6 md:space-y-8">
+                                <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.2em]">Personalización de Marca</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                                    {/* LOGO SECTION */}
+                                    <div className="space-y-4">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Logotipo Corporativo</label>
+                                        <div className="flex flex-col gap-4">
+                                            <div className="flex items-center gap-4 bg-black/20 p-3 md:p-4 rounded-2xl md:rounded-3xl border border-white/5">
+                                                <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-slate-800 flex items-center justify-center p-2 border border-white/10 shrink-0 overflow-hidden">
+                                                    {isUploadingAsset ? <Loader2 className="animate-spin text-indigo-500" /> : compLogoUrl ? <img src={compLogoUrl} className="w-full h-full object-contain" /> : <ImageIcon size={20} className="text-slate-600 md:w-6 md:h-6" />}
+                                                </div>
+                                                <label className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 md:py-3 rounded-xl font-bold text-[9px] md:text-[10px] uppercase tracking-widest cursor-pointer text-center transition-all shadow-lg active:scale-95">
+                                                    SUBIR LOGO
+                                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleCompanyAssetUpload('LOGO', e)} />
+                                                </label>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-2">O pegar URL del Logo</label>
+                                                <input 
+                                                    value={compLogoUrl} 
+                                                    onChange={e => setCompLogoUrl(e.target.value)} 
+                                                    className="w-full bg-slate-800 border border-white/5 rounded-xl px-4 py-2 text-[10px] text-indigo-300 font-mono outline-none focus:border-indigo-500/50" 
+                                                    placeholder="https://..." 
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* FAVICON SECTION */}
+                                    <div className="space-y-4">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Favicon / Icono</label>
+                                        <div className="flex flex-col gap-4">
+                                            <div className="flex items-center gap-4 bg-black/20 p-3 md:p-4 rounded-2xl md:rounded-3xl border border-white/5">
+                                                <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-slate-800 flex items-center justify-center p-2 border border-white/10 shrink-0 overflow-hidden">
+                                                    {isUploadingAsset ? <Loader2 className="animate-spin text-indigo-500" /> : compFaviconUrl ? <img src={compFaviconUrl} className="w-full h-full object-contain" /> : <Camera size={20} className="text-slate-600 md:w-6 md:h-6" />}
+                                                </div>
+                                                <label className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2.5 md:py-3 rounded-xl font-bold text-[9px] md:text-[10px] uppercase tracking-widest cursor-pointer text-center transition-all shadow-lg active:scale-95">
+                                                    SUBIR FAVICON
+                                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleCompanyAssetUpload('FAVICON', e)} />
+                                                </label>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-2">O pegar URL del Favicon</label>
+                                                <input 
+                                                    value={compFaviconUrl} 
+                                                    onChange={e => setCompFaviconUrl(e.target.value)} 
+                                                    className="w-full bg-slate-800 border border-white/5 rounded-xl px-4 py-2 text-[10px] text-indigo-300 font-mono outline-none focus:border-indigo-500/50" 
+                                                    placeholder="https://..." 
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 md:gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Color Primario</label>
+                                        <div className="flex gap-3 items-center bg-black/20 p-3 rounded-2xl border border-white/5">
+                                            <input type="color" value={compPrimaryColor} onChange={e => setCompPrimaryColor(e.target.value)} className="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl cursor-pointer border-2 border-white/10 shadow-md bg-transparent" />
+                                            <span className="font-mono text-[10px] md:text-xs font-bold text-slate-400 uppercase">{compPrimaryColor}</span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Color Secundario</label>
+                                        <div className="flex gap-3 items-center bg-black/20 p-3 rounded-2xl border border-white/5">
+                                            <input type="color" value={compSecondaryColor} onChange={e => setCompSecondaryColor(e.target.value)} className="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl cursor-pointer border-2 border-white/10 shadow-md bg-transparent" />
+                                            <span className="font-mono text-[10px] md:text-xs font-bold text-slate-400 uppercase">{compSecondaryColor}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" disabled={isSaving || isUploadingAsset} className="w-full py-4 md:py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl md:rounded-3xl font-bold text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50">
+                                {isSaving ? <Loader2 className="animate-spin" /> : <Save size={18} />} 
+                                {isEditingCompany ? 'ACTUALIZAR HOLDING' : 'CREAR HOLDING'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {isBranchModalOpen && selectedCompany && (
+                <div className="fixed inset-0 bg-slate-950/80 z-[100] flex items-center justify-center p-0 md:p-4 backdrop-blur-md animate-in fade-in">
+                    <div className="bg-white md:rounded-[3rem] w-full md:max-w-5xl h-full md:h-auto md:max-h-[95vh] shadow-2xl overflow-hidden border border-white/10 flex flex-col animate-in zoom-in-95">
+                        <div className="p-6 md:p-10 border-b border-slate-100 bg-white flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 shadow-sm relative z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-600/20">
+                                    <Store size={24} className="text-white" />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="font-bold text-xl md:text-2xl text-slate-900 uppercase tracking-tight">
+                                        {isEditingBranch ? 'Configurar Sede' : 'Registrar Nueva Sede'}
+                                    </h3>
+                                    <div className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-widest flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                                        Holding: {selectedCompany.name}
+                                    </div>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsBranchModalOpen(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-500 p-3 rounded-2xl transition-all active:scale-90 absolute top-6 right-6 md:relative md:top-auto md:right-auto">
+                                <X size={24}/>
+                            </button>
+                        </div>
+                        <div className="flex bg-slate-100 border-b border-slate-200 p-2 gap-2 overflow-x-auto no-scrollbar shrink-0">
+                            {[
+                                { id: 'GENERAL', label: 'General', icon: Building2 }, 
+                                { id: 'FISCAL', label: 'Fiscal', icon: FileCheck },
+                                { id: 'SUNAT', label: 'SUNAT', icon: Globe }, 
+                                { id: 'WHATSAPP', label: 'WhatsApp', icon: MessageCircle }, 
+                                { id: 'PRINT', label: 'Ticket', icon: Printer },
+                                { id: 'MODULOS', label: 'Módulos', icon: LayoutGrid },
+                                { id: 'USUARIO', label: 'Dueño Sede', icon: UserPlus }
+                            ].map(tab => (
+                                <button 
+                                    key={tab.id} 
+                                    type="button"
+                                    onClick={() => setBranchModalTab(tab.id as any)} 
+                                    className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${branchModalTab === tab.id ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'}`}
+                                >
+                                    <tab.icon size={14} /> {tab.label}
+                                </button>
+                            ))}
+                        </div>
+                        <form onSubmit={handleSaveBranch} className="p-6 md:p-10 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
+                            {branchModalTab === 'GENERAL' && (
+                                <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="space-y-6">
+                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">RUC Sucursal</label><div className="flex gap-2"><input required value={brRuc} onChange={e => setBrRuc(e.target.value)} className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 transition-all shadow-inner" placeholder="20XXXXXXXXX" /><button type="button" onClick={handleSearchBranchRuc} disabled={isSearchingRuc} className="bg-slate-900 text-white px-5 rounded-2xl shadow-xl transition-all active:scale-90">{isSearchingRuc ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}</button></div></div>
+                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Razón Social (SUNAT)</label><input required value={brRazonSocial} onChange={e => setBrRazonSocial(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 uppercase shadow-inner" placeholder="LAVANDERIA SAC" /></div>
+                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Comercial</label><input required value={brName} onChange={e => setBrName(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 uppercase shadow-inner" placeholder="LAUNDRY SEDE NORTE" /></div>
+                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Identificador Slug (URL)</label><input disabled={isEditingBranch} value={brSlug} onChange={e => setBrSlug(e.target.value.toLowerCase().replace(/\s+/g, '_'))} className="w-full bg-slate-100 border-2 border-slate-100 rounded-2xl px-5 py-4 text-indigo-600 font-mono text-sm outline-none" placeholder="sede_norte" /></div>
+                                        </div>
+                                        <div className="space-y-6">
+                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Dirección Física</label><div className="relative"><MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input required value={brAddress} onChange={e => setBrAddress(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 uppercase shadow-inner" placeholder="AV. LIMA 123..." /></div></div>
+                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Teléfono Público</label><div className="relative"><Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input value={brPhone} onChange={e => setBrPhone(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="999888777" /></div></div>
+                                            
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Ubigeo</label><input value={brUbigeo} onChange={e => setBrUbigeo(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" maxLength={6} placeholder="150114" /></div>
+                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Urbanización</label><input value={brUrbanizacion} onChange={e => setBrUrbanizacion(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="PUEBLO LIBRE" /></div>
+                                            </div>
+
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Distrito</label><input value={brDistrito} onChange={e => setBrDistrito(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-[11px] font-bold text-slate-900 outline-none focus:border-indigo-500 shadow-inner" /></div>
+                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Provincia</label><input value={brProvincia} onChange={e => setBrProvincia(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-[11px] font-bold text-slate-900 outline-none focus:border-indigo-500 shadow-inner" /></div>
+                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Departamento</label><input value={brDepartamento} onChange={e => setBrDepartamento(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-[11px] font-bold text-slate-900 outline-none focus:border-indigo-500 shadow-inner" /></div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Color Primario</label><div className="flex gap-3 items-center bg-slate-100 p-3 rounded-2xl border border-slate-200"><input type="color" value={brColorPrimary} onChange={e => setBrColorPrimary(e.target.value)} className="w-10 h-10 rounded-xl cursor-pointer border-2 border-white shadow-md" /><span className="font-mono text-xs font-bold text-slate-400 uppercase">{brColorPrimary}</span></div></div><div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Color Secundario</label><div className="flex gap-3 items-center bg-slate-100 p-3 rounded-2xl border border-slate-200"><input type="color" value={brColorSecondary} onChange={e => setBrColorSecondary(e.target.value)} className="w-10 h-10 rounded-xl cursor-pointer border-2 border-white shadow-md" /><span className="font-mono text-xs font-bold text-slate-400 uppercase">{brColorSecondary}</span></div></div></div>
+                                        </div>
+                                    </div>
+                                    <div className="pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="space-y-4">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Logotipo Principal</label>
+                                            <div className="flex flex-col gap-4">
+                                                <div className="flex items-center gap-6">
+                                                    <div className="w-24 h-24 rounded-3xl bg-slate-50 flex items-center justify-center p-3 shadow-inner border-2 border-dashed border-slate-200 shrink-0">
+                                                        {isSaving ? <Loader2 className="animate-spin text-indigo-600" /> : brLogoUrl ? <img src={brLogoUrl} className="w-full h-full object-contain" /> : <ImageIcon size={32} className="text-slate-300" />}
+                                                    </div>
+                                                    <label className="bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-2xl font-bold text-[10px] uppercase tracking-widest cursor-pointer shadow-xl transition-all">
+                                                        SUBIR IMAGEN
+                                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleBranchAssetUpload('LOGO', e)} />
+                                                    </label>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">O pegar URL directa</label>
+                                                    <input 
+                                                        value={brLogoUrl} 
+                                                        onChange={e => setBrLogoUrl(e.target.value)} 
+                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[10px] font-mono outline-none focus:border-indigo-500 transition-all" 
+                                                        placeholder="https://ejemplo.com/logo.png" 
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Favicon / Icono</label>
+                                            <div className="flex flex-col gap-4">
+                                                <div className="flex items-center gap-6">
+                                                    <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center p-2 shadow-inner border-2 border-dashed border-slate-200 shrink-0">
+                                                        {isSaving ? <Loader2 className="animate-spin text-indigo-600" /> : brFaviconUrl ? <img src={brFaviconUrl} className="w-full h-full object-contain" /> : <Layers size={24} className="text-slate-300" />}
+                                                    </div>
+                                                    <label className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-3 rounded-2xl font-bold text-[10px] uppercase tracking-widest cursor-pointer border border-slate-200 transition-all">
+                                                        SUBIR IMAGEN
+                                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleBranchAssetUpload('FAVICON', e)} />
+                                                    </label>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">O pegar URL directa</label>
+                                                    <input 
+                                                        value={brFaviconUrl} 
+                                                        onChange={e => setBrFaviconUrl(e.target.value)} 
+                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[10px] font-mono outline-none focus:border-indigo-500 transition-all" 
+                                                        placeholder="https://ejemplo.com/favicon.ico" 
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {branchModalTab === 'FISCAL' && (
+                                <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+                                    <div className="bg-indigo-50 border border-indigo-100 p-8 rounded-[2.5rem] flex items-start gap-5">
+                                        <div className="bg-indigo-600 p-4 rounded-2xl shadow-lg shadow-indigo-600/20 text-white">
+                                            <ShieldCheck size={28} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <h4 className="text-xs font-black text-indigo-900 uppercase tracking-widest">Configuración Fiscal y Legal por Sucursal</h4>
+                                            <p className="text-[11px] text-indigo-600 font-bold uppercase leading-relaxed max-w-2xl">Gestione los parámetros tributarios específicos de esta sede y active las validaciones legales requeridas por las normativas regionales.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                        <div className="space-y-6">
+                                            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+                                                <div className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-3 pb-4 border-b border-slate-50">
+                                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                                                        <Percent size={16} />
+                                                    </div>
+                                                    Impuestos Generales
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Porcentaje de IGV / IVA (%)</label>
+                                                    <div className="relative group">
+                                                        <div className="absolute right-5 top-1/2 -translate-y-1/2 font-black text-slate-300 group-focus-within:text-indigo-600">%</div>
+                                                        <input 
+                                                            type="number" 
+                                                            step="0.01"
+                                                            value={brPorcentajeIgv} 
+                                                            onChange={e => setBrPorcentajeIgv(e.target.value)} 
+                                                            className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-6 py-5 text-slate-900 font-black outline-none focus:border-indigo-500 focus:bg-white transition-all text-2xl shadow-inner group-focus-within:shadow-indigo-100" 
+                                                            placeholder="18.00" 
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Símbolo de Moneda</label>
+                                                    <input 
+                                                        value={brMonedaSimbolo} 
+                                                        onChange={e => setBrMonedaSimbolo(e.target.value)} 
+                                                        className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-6 py-5 text-slate-900 font-black outline-none focus:border-indigo-500 focus:bg-white transition-all text-2xl shadow-inner" 
+                                                        placeholder="S/" 
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+                                                <div className="flex items-center justify-between pb-4 border-b border-slate-50">
+                                                    <div className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                                                            <ShieldAlert size={16} />
+                                                        </div>
+                                                        Candado Legal (SUNAT)
+                                                    </div>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setBrDocEnforceEnabled(!brDocEnforceEnabled)}
+                                                        className={`relative w-14 h-7 rounded-full transition-all duration-300 shadow-inner ${brDocEnforceEnabled ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                                                    >
+                                                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 shadow-md ${brDocEnforceEnabled ? 'left-8' : 'left-1'}`} />
+                                                    </button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase leading-relaxed">
+                                                    Si el total supera el umbral, se exigirá DNI/RUC al cliente (Solo en modos TEST/PROD).
+                                                </p>
+                                                
+                                                <div className={`space-y-3 transition-all duration-500 ${!brDocEnforceEnabled ? 'opacity-30 pointer-events-none grayscale' : 'opacity-100'}`}>
+                                                    <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest ml-1">Monto Umbral (DNI/RUC)</label>
+                                                    <div className="relative group">
+                                                        <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 font-black text-xl group-focus-within:text-emerald-600 transition-colors">{brMonedaSimbolo}</span>
+                                                        <input 
+                                                            type="number" 
+                                                            value={brDocEnforceThreshold} 
+                                                            disabled={!brDocEnforceEnabled}
+                                                            onChange={e => setBrDocEnforceThreshold(e.target.value)} 
+                                                            className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl pl-16 pr-6 py-5 text-slate-900 font-black outline-none focus:border-emerald-500 focus:bg-white transition-all text-2xl shadow-inner group-focus-within:shadow-emerald-100" 
+                                                            placeholder="700.00" 
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {branchModalTab === 'SUNAT' && (
+                                <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+                                    <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-[2rem] flex items-start gap-4">
+                                        <ShieldCheck className="text-indigo-600 shrink-0" size={24} />
+                                        <div>
+                                            <h4 className="text-[11px] font-bold text-indigo-900 uppercase tracking-widest mb-1">Entorno de Facturación</h4>
+                                            <p className="text-[10px] text-indigo-700 font-bold uppercase leading-tight">Configuración crítica de enlace con OSE/SUNAT.</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Modo de Operación</label>
+                                            <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
+                                                <button type="button" onClick={() => setBrModoSunat('0')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '0' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>BETA</button>
+                                                <button type="button" onClick={() => setBrModoSunat('2')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '2' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-400'}`}>PRUEBA</button>
+                                                <button type="button" onClick={() => setBrModoSunat('1')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '1' ? 'bg-red-600 text-white shadow-md' : 'text-slate-400'}`}>PROD</button>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">SOL User</label>
+                                            <input value={brSolUser} onChange={e => setBrSolUser(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="MODDATOS" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">SOL Pass</label>
+                                            <input type="password" value={brSolPass} onChange={e => setBrSolPass(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="moddatos" />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="space-y-6">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Comercial</label>
+                                                <input value={brNombreComercial} onChange={e => setBrNombreComercial(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">URL de Integración</label>
+                                                <div className="relative group">
+                                                    <Link className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
+                                                    <input value={brSunatUrl} onChange={e => setBrSunatUrl(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-slate-700 font-mono text-xs outline-none focus:border-indigo-500 transition-all shadow-inner" placeholder="https://..." />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-6">
+                                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Code size={14}/> Series de Documentos</h4>
+                                            <div className="bg-slate-50 border border-slate-100 p-6 rounded-[2rem] space-y-4">
+                                                <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Serie Boleta</span><input value={brSerieBoleta} onChange={e => setBrSerieBoleta(e.target.value.toUpperCase())} className="w-20 p-2 text-center bg-white border border-slate-200 rounded-lg font-bold text-indigo-600 uppercase" maxLength={4} /></div>
+                                                <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Serie Factura</span><input value={brSerieFactura} onChange={e => setBrSerieFactura(e.target.value.toUpperCase())} className="w-20 p-2 text-center bg-white border border-slate-200 rounded-lg font-bold text-indigo-600 uppercase" maxLength={4} /></div>
+                                                <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Serie Nota Venta</span><input value={brSerieNv} onChange={e => setBrSerieNv(e.target.value.toUpperCase())} className="w-20 p-2 text-center bg-white border border-slate-200 rounded-lg font-bold text-slate-600 uppercase" maxLength={4} /></div>
+                                                <div className="pt-2 border-t border-slate-200 mt-2">
+                                                    <div className="flex justify-between items-center mb-2"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">N. Crédito Factura</span><input value={brSerieNcF} onChange={e => setBrSerieNcF(e.target.value.toUpperCase())} className="w-20 p-2 text-center bg-white border border-slate-200 rounded-lg font-bold text-rose-600 uppercase" maxLength={4} /></div>
+                                                    <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">N. Crédito Boleta</span><input value={brSerieNcB} onChange={e => setBrSerieNcB(e.target.value.toUpperCase())} className="w-20 p-2 text-center bg-white border border-slate-200 rounded-lg font-bold text-rose-600 uppercase" maxLength={4} /></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {branchModalTab === 'WHATSAPP' && (
+                                <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+                                    <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-[2rem] flex items-start gap-4 shadow-inner">
+                                        <div className="bg-white p-2.5 rounded-xl shadow-lg shadow-emerald-600/10 text-emerald-600"><Smartphone size={24} /></div>
+                                        <div>
+                                            <h4 className="text-[11px] font-bold text-emerald-900 uppercase tracking-widest mb-1">Evolution API Connect</h4>
+                                            <p className="text-[10px] text-emerald-700 font-bold uppercase leading-tight">Configuración de mensajería instantánea del local.</p>
+                                        </div>
+                                    </div>
+                                    <div className="max-w-2xl mx-auto space-y-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Base URL (Evolution)</label>
+                                            <div className="relative group">
+                                                <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-600 transition-colors" size={18} />
+                                                <input value={brWaInstance} onChange={e => setBrWaInstance(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-slate-700 font-mono text-xs outline-none focus:border-emerald-500 transition-all shadow-inner" placeholder="https://api-wa.mi-instancia.com" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">API Key (Token de Seguridad)</label>
+                                            <div className="relative group">
+                                                <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-600 transition-colors" size={18} />
+                                                <input type="password" value={brWaToken} onChange={e => setBrWaToken(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-slate-700 font-mono text-xs outline-none focus:border-emerald-500 transition-all shadow-inner" placeholder="Token global..." />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre de la Instancia</label>
+                                            <div className="relative group">
+                                                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-600 transition-colors" size={18} />
+                                                <input value={brWaName} onChange={e => setBrWaName(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-slate-900 font-bold outline-none focus:border-emerald-500 transition-all shadow-inner" placeholder="instancia_local" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {branchModalTab === 'PRINT' && (
+                                <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+                                    <div className="bg-slate-900 text-white p-8 rounded-[3rem] shadow-2xl relative overflow-hidden group">
+                                        <div className="absolute top-0 right-0 p-10 opacity-10 group-hover:scale-110 transition-transform"><Printer size={120} /></div>
+                                        <div className="relative z-10">
+                                            <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.3em] mb-4">Lógica de Correlativos</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                                <div className="space-y-6">
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Cantidad de Ceros</label>
+                                                        <input type="number" value={brOrderZeros} onChange={e => setBrOrderZeros(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold text-xl text-center" />
+                                                    </div>
+                                                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">¿Usar Sufijo (Letra)?</span>
+                                                        <button type="button" onClick={() => setBrUseSuffix(!brUseSuffix)} className={`relative w-12 h-6 rounded-full transition-all ${brUseSuffix ? 'bg-indigo-600' : 'bg-slate-700'}`}><div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-all ${brUseSuffix ? 'translate-x-7' : 'translate-x-1'}`} /></button>
+                                                    </div>
+                                                    {brUseSuffix && (
+                                                        <div className="grid grid-cols-2 gap-4 animate-in zoom-in-95">
+                                                            <div className="space-y-2"><label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Letra Actual</label><input value={brSuffixChar} onChange={e => setBrSuffixChar(e.target.value.toUpperCase())} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-center font-bold text-indigo-400" maxLength={1} /></div>
+                                                            <div className="space-y-2"><label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Posición</label><select value={brSuffixPos} onChange={e => setBrSuffixPos(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] font-bold appearance-none"><option value="BEFORE">ANTES</option><option value="AFTER">DESPUÉS</option></select></div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="space-y-6">
+                                                    <div className="bg-black/40 p-6 rounded-[2rem] border border-white/5 text-center">
+                                                        <p className="text-[8px] font-bold text-slate-600 uppercase tracking-widest mb-3">Previsualización del Código</p>
+                                                        <div className="font-mono text-4xl font-bold text-indigo-500 tracking-tight">
+                                                            {brSuffixPos === 'BEFORE' && brUseSuffix ? `${brSuffixChar}-` : ''}{'1'.padStart(parseInt(brOrderZeros), '0')}{brSuffixPos === 'AFTER' && brUseSuffix ? `-${brSuffixChar}` : ''}
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-5 border-t border-white/5 space-y-4">
+                                                        <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-slate-500 uppercase">Equiv. Puntos (S/)</span><input type="number" value={brPuntosEq} onChange={e => setBrPuntosEq(e.target.value)} className="w-20 p-2 bg-white/5 border border-white/10 rounded-lg text-center font-bold text-emerald-400" /></div>
+                                                        <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-rose-400 uppercase flex items-center gap-2 animate-pulse"><AlertTriangle size={14}/> Bloqueo Cobranza</span><button type="button" onClick={() => setBrCobranza(!brCobranza)} className={`relative w-12 h-6 rounded-full transition-all ${brCobranza ? 'bg-rose-600' : 'bg-slate-700'}`}><div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-all ${brCobranza ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 space-y-6">
+                                            <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2"><RotateCcw size={14}/> Reinicio de Contador</h4>
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-slate-500 uppercase">Habilitar Reinicio</span><button type="button" onClick={() => setBrUseOrderReset(!brUseOrderReset)} className={`relative w-12 h-6 rounded-full transition-all ${brUseOrderReset ? 'bg-indigo-600' : 'bg-slate-300'}`}><div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-all ${brUseOrderReset ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>
+                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Límite para Reiniciar</label><input type="number" disabled={!brUseOrderReset} value={brLimiteReconteo} onChange={e => setBrLimiteReconteo(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl p-3 font-bold text-sm text-slate-700 disabled:opacity-30" /></div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-indigo-50/50 p-6 rounded-[2rem] border border-indigo-100 flex flex-col justify-center gap-4">
+                                            <div className="flex items-center gap-4"><div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-indigo-600 shadow-sm"><Percent size={24}/></div><div><p className="text-[10px] font-bold text-slate-400 uppercase">Impuesto Nacional</p><h5 className="font-bold text-lg text-slate-900">Configuración IGV</h5></div></div>
+                                            <div className="flex items-center gap-3"><input type="number" step="0.01" value={brPorcentajeIgv} onChange={e => setBrPorcentajeIgv(e.target.value)} className="w-24 p-3 bg-white border-2 border-indigo-100 rounded-xl font-bold text-center text-indigo-600 outline-none focus:border-indigo-500" /><span className="text-xl font-bold text-slate-400">%</span></div>
+                                            <div className="pt-2"><label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Símbolo Moneda</label><input value={brMonedaSimbolo} onChange={e => setBrMonedaSimbolo(e.target.value)} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-xs mt-1" /></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {branchModalTab === 'MODULOS' && (
+                                <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+                                    <div className="bg-indigo-900 text-white p-8 rounded-[3rem] shadow-2xl relative overflow-hidden group">
+                                        <div className="absolute top-0 right-0 p-10 opacity-10 group-hover:scale-110 transition-transform"><LayoutGrid size={120} /></div>
+                                        <div className="relative z-10">
+                                            <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.3em] mb-2">Activación de Módulos</h4>
+                                            <p className="text-slate-400 text-xs font-bold uppercase mb-6">Habilite o deshabilite funciones específicas para esta sucursal.</p>
+                                            
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {['BÁSICO', 'PREMIUM'].map(category => (
+                                                    <div key={category} className="space-y-4">
+                                                        <h5 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/10 pb-2">{category}</h5>
+                                                        <div className="space-y-2">
+                                                            {AVAILABLE_MODULES.filter(m => m.category === category).map(module => (
+                                                                <div key={module.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[10px] font-bold text-white uppercase tracking-tight">{module.label}</span>
+                                                                        <span className="text-[8px] font-bold text-slate-500 font-mono">{module.id}</span>
+                                                                    </div>
+                                                                    <button 
+                                                                        type="button" 
+                                                                        onClick={() => toggleModule(module.id)} 
+                                                                        className={`relative w-12 h-6 rounded-full transition-all ${brModulosConfig[module.id] ? 'bg-indigo-600' : 'bg-slate-700'}`}
+                                                                    >
+                                                                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-all ${brModulosConfig[module.id] ? 'translate-x-7' : 'translate-x-1'}`} />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {branchModalTab === 'USUARIO' && (
+                                <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+                                    <div className="bg-amber-50 border border-amber-100 p-6 rounded-[2rem] flex items-start gap-4">
+                                        <UserPlus className="text-amber-600 shrink-0" size={24} />
+                                        <div>
+                                            <h4 className="text-[11px] font-bold text-amber-900 uppercase tracking-widest mb-1">Primer Usuario Administrador</h4>
+                                            <p className="text-[10px] text-amber-700 font-bold uppercase leading-tight">Este usuario será el dueño de la sede y podrá crear otros usuarios.</p>
+                                        </div>
+                                    </div>
+                                    
+                                    {isEditingBranch ? (
+                                        <div className="p-10 text-center space-y-4">
+                                            <ShieldAlert size={48} className="mx-auto text-slate-300" />
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">La creación de usuario inicial solo está disponible para sedes nuevas.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="max-w-xl mx-auto space-y-6">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Completo del Dueño</label>
+                                                <input 
+                                                    value={brUserFullname} 
+                                                    onChange={e => setBrUserFullname(e.target.value.toUpperCase())} 
+                                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-amber-500 transition-all shadow-inner" 
+                                                    placeholder="JUAN PEREZ" 
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Usuario de Acceso</label>
+                                                    <input 
+                                                        value={brUsername} 
+                                                        onChange={e => setBrUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))} 
+                                                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-amber-500 transition-all shadow-inner" 
+                                                        placeholder="admin_norte" 
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Contraseña Inicial</label>
+                                                    <input 
+                                                        type="password"
+                                                        value={brUserPassword} 
+                                                        onChange={e => setBrUserPassword(e.target.value)} 
+                                                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-amber-500 transition-all shadow-inner" 
+                                                        placeholder="********" 
+                                                    />
+                                                </div>
+                                            </div>
+                                            <p className="text-[9px] text-slate-400 font-bold uppercase text-center italic">
+                                                * El correo de acceso será: {brUsername || 'usuario'}@sislav.com
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="pt-8 border-t border-slate-200 flex flex-col md:flex-row gap-4 shrink-0">
+                                <button type="button" onClick={() => setIsBranchModalOpen(false)} className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold text-[10px] uppercase tracking-widest rounded-2xl transition-all">Cancelar</button>
+                                <button type="submit" disabled={isSaving} className="flex-[2] py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-[0.25em] rounded-2xl shadow-xl shadow-indigo-600/20 transition-all flex items-center justify-center gap-3 active:scale-95">{isSaving ? <Loader2 className="animate-spin" /> : <Save size={18} />} {isEditingBranch ? 'ACTUALIZAR SEDE' : 'REGISTRAR SEDE'}</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE ELIMINACIÓN LÓGICA */}
+            {isDeleteModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 bg-[#050810]/95 backdrop-blur-xl animate-in fade-in duration-300">
+                    <div className="w-full max-w-md bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-8 md:p-10 text-center">
+                            <div className="w-20 h-20 bg-red-500/20 rounded-3xl flex items-center justify-center text-red-500 mx-auto mb-6 shadow-inner">
+                                <AlertTriangle size={40} strokeWidth={2.5} />
+                            </div>
+                            
+                            <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-3">
+                                ¿Eliminar Empresa?
+                            </h3>
+                            
+                            <div className="text-slate-400 text-sm font-bold uppercase leading-relaxed mb-8">
+                                Estás a punto de ocultar la empresa <span className="text-white">"{companyToDelete?.name}"</span>. 
+                                <br />
+                                <span className="text-red-400/80 text-[10px] mt-2 block italic">Esta acción es irreversible desde este panel.</span>
+                            </div>
+                            
+                            <div className="flex flex-col gap-3">
+                                <button 
+                                    onClick={confirmDeleteCompany}
+                                    disabled={isSaving}
+                                    className="w-full py-4 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-red-900/20 transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
+                                >
+                                    {isSaving ? <Loader2 className="animate-spin" /> : <Trash2 size={18} />}
+                                    SÍ, ELIMINAR AHORA
+                                </button>
+                                
+                                <button 
+                                    onClick={() => { setIsDeleteModalOpen(false); setCompanyToDelete(null); }}
+                                    disabled={isSaving}
+                                    className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    CANCELAR
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE ITEM DE CATÁLOGO (CREAR/EDITAR) */}
+            {isCatalogModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 bg-[#050810]/95 backdrop-blur-xl animate-in fade-in duration-300">
+                    <div className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-8 space-y-6">
+                            <div className="flex items-center justify-between border-b border-white/5 pb-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-indigo-600 p-3 rounded-2xl shadow-lg shadow-indigo-600/20">
+                                        <Plus className="text-white" size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-black text-white uppercase tracking-tight">
+                                            {editingCatalogId ? 'Editar Recurso' : 'Nuevo Recurso'}
+                                        </h3>
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{currentCatalogModule?.replace('_', ' ')}</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setIsCatalogModalOpen(false)} className="p-2 hover:bg-white/5 rounded-xl transition-colors text-slate-400">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre / Título</label>
+                                    <input 
+                                        value={catalogItem.nombre} 
+                                        onChange={e => setCatalogItem({...catalogItem, nombre: e.target.value})} 
+                                        className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-4 font-bold text-sm text-white outline-none focus:border-indigo-500 transition-all font-mono"
+                                        placeholder="EJ: EDREDONES / YAPE / SAMSUNG"
+                                    />
+                                </div>
+
+                                {currentCatalogModule === 'MAQUINA' && (
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Tipo de Máquina</label>
+                                        <div className="relative">
+                                            <select 
+                                                value={catalogItem.tipo} 
+                                                onChange={e => setCatalogItem({...catalogItem, tipo: e.target.value})} 
+                                                className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-4 font-bold text-sm text-white outline-none focus:border-indigo-500 transition-all appearance-none"
+                                            >
+                                                <option value="LAVADORA">LAVADORA</option>
+                                                <option value="SECADORA">SECADORA</option>
+                                            </select>
+                                            <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {currentCatalogModule === 'COLOR' && (
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Color HEX</label>
+                                        <div className="flex gap-4 items-center bg-black/40 border-2 border-white/10 rounded-2xl p-2.5">
+                                            <input 
+                                                type="color" 
+                                                value={catalogItem.hex} 
+                                                onChange={e => setCatalogItem({...catalogItem, hex: e.target.value})} 
+                                                className="w-12 h-12 rounded-xl cursor-pointer bg-transparent border-none shadow-lg"
+                                            />
+                                            <span className="text-sm font-mono font-bold text-slate-300 uppercase">{catalogItem.hex}</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">
+                                        {currentCatalogModule === 'VIDEO' ? 'URL de Youtube' : 'Subir Archivo (IMG/SVG/PNG)'}
+                                    </label>
+                                    {currentCatalogModule === 'VIDEO' ? (
+                                        <input 
+                                            value={catalogItem.url} 
+                                            onChange={e => setCatalogItem({...catalogItem, url: e.target.value})} 
+                                            className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-4 font-bold text-sm text-white outline-none focus:border-indigo-500 transition-all font-mono"
+                                            placeholder="https://www.youtube.com/watch?v=..."
+                                        />
+                                    ) : (
+                                        <label className="flex items-center justify-center gap-4 w-full bg-slate-800/50 border-2 border-dashed border-white/10 rounded-2xl p-6 text-sm font-bold uppercase cursor-pointer hover:bg-slate-800 transition-colors text-white group">
+                                            {isSaving ? (
+                                                <Loader2 className="animate-spin text-indigo-400" size={24}/>
+                                            ) : catalogItem.url ? (
+                                                <div className="flex items-center gap-3 text-emerald-400">
+                                                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center"><Check size={20} /></div>
+                                                    <span>IMAGEN CARGADA</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-2 text-slate-400 group-hover:text-white">
+                                                    <Upload size={32} strokeWidth={1.5} />
+                                                    <span className="text-[10px]">CLIC PARA SUBIR (MÁX 2MB)</span>
+                                                </div>
+                                            )}
+                                            <input type="file" className="hidden" onChange={(e) => handleUpload(currentCatalogModule, e)} />
+                                        </label>
+                                    )}
+                                    {catalogItem.url && currentCatalogModule !== 'VIDEO' && (
+                                        <div className="mt-4 flex justify-center">
+                                            <div className="w-32 h-32 rounded-2xl bg-black/40 border border-white/10 p-4 flex items-center justify-center overflow-hidden shadow-xl">
+                                                <img src={catalogItem.url} className="max-w-full max-h-full object-contain" />
+                                            </div>
+                                        </div>
+                                    )}
+                                    {catalogItem.url && currentCatalogModule === 'VIDEO' && (
+                                        <div className="mt-4 flex justify-center">
+                                            <div className="w-full max-w-[200px] aspect-video rounded-2xl bg-black/40 border border-white/10 overflow-hidden shadow-xl relative">
+                                                <img src={`https://img.youtube.com/vi/${getYouTubeId(catalogItem.url)}/mqdefault.jpg`} className="w-full h-full object-cover opacity-60" />
+                                                <div className="absolute inset-0 flex items-center justify-center text-white/50"><PlayCircle size={32}/></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={handleAddItem} 
+                                disabled={isSaving || (currentCatalogModule !== 'COLOR' && !catalogItem.url)} 
+                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-indigo-900/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
+                            >
+                                {isSaving ? <Loader2 className="animate-spin" /> : <Save size={18} />}
+                                {editingCatalogId ? 'ACTUALIZAR CAMBIOS' : 'GUARDAR EN CATÁLOGO'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN DE CATÁLOGO */}
+            {isCatalogDeleteModalOpen && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 md:p-6 bg-[#050810]/98 backdrop-blur-2xl animate-in fade-in duration-300">
+                    <div className="w-full max-w-sm bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-8 text-center md:p-10">
+                            <div className="w-20 h-20 bg-rose-500/20 rounded-3xl flex items-center justify-center text-rose-500 mx-auto mb-6 shadow-inner">
+                                <AlertTriangle size={40} />
+                            </div>
+                            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">¿Eliminar Recurso?</h3>
+                            <div className="text-slate-400 text-[10px] font-bold uppercase tracking-widest leading-relaxed mb-8">
+                                Estás a punto de ocultar <span className="text-white">"{currentCatalogModule === 'VIDEO' ? catalogItemToDelete?.title : catalogItemToDelete?.nombre}"</span> del catálogo central.
+                                <br />
+                                <span className="text-rose-400/80 mt-2 block italic italic">Esta acción afectará a todas las sucursales.</span>
+                            </div>
+                            <div className="flex flex-col gap-3">
+                                <button 
+                                    onClick={confirmDeleteCatalogItem} 
+                                    disabled={isSaving} 
+                                    className="w-full py-4 bg-rose-600 hover:bg-rose-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-rose-900/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isSaving ? <Loader2 className="animate-spin" /> : <Trash2 size={16} />}
+                                    SÍ, ELIMINAR AHORA
+                                </button>
+                                <button 
+                                    onClick={() => { setIsCatalogDeleteModalOpen(false); setCatalogItemToDelete(null); }} 
+                                    disabled={isSaving} 
+                                    className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    CANCELAR
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};

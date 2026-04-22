@@ -1,0 +1,23 @@
+{
+  "name": "SISLAV - CONTROL TOTAL",
+  "short_name": "SISLAV",
+  "description": "Sistema de Control Total para Lavanderías",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0f14",
+  "theme_color": "#4f8ef7",
+  "icons": [
+    {
+      "src": "https://lavanderiasislav.com/logo-sislav.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://lavanderiasislav.com/logo-sislav.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

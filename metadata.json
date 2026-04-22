@@ -1,0 +1,10 @@
+{
+  "name": "sislav_pro_V1",
+  "description": "Sistema de gestión integral y control total para lavanderías. Gestiona ventas, inventario, clientes y más.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}

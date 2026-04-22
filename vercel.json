@@ -1,0 +1,21 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/api-proxy/decolecta/:path*",
+      "destination": "https://api.decolecta.com/v1/:path*"
+    },
+    {
+      "source": "/api-proxy/sunat",
+      "destination": "https://apisu.sysventa.com/API_SUNAT/post.php"
+    },
+    {
+      "source": "/owner-login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="theme-color" content="#4f8ef7" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧺</text></svg>" />
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧺</text></svg>" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SISLAV - CONTROL TOTAL</title>
+    <meta name="description" content="SISLAV - Sistema de Control Total para Lavanderías" />
+    <meta property="og:title" content="SISLAV - CONTROL TOTAL" />
+    <meta property="og:description" content="Sistema de gestión integral para lavanderías." />
+    <meta property="og:image" content="https://lavanderiasislav.com/logo-sislav.png" />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Shim crítico para compatibilidad de librerías en el navegador
+      window.process = { env: { API_KEY: "" } };
+      
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'DM Sans', 'ui-sans-serif', 'system-ui'],
+              heading: ['Outfit', 'Inter', 'sans-serif'],
+              display: ['Outfit', 'Inter', 'sans-serif'],
+            },
+            colors: {
+              bg: 'var(--bg)',
+              bg2: 'var(--bg2)',
+              bg3: 'var(--bg3)',
+              surface: 'var(--surface)',
+              surface2: 'var(--surface2)',
+              text: 'var(--text)',
+              text2: 'var(--text2)',
+              text3: 'var(--text3)',
+              accent: {
+                DEFAULT: 'var(--accent)',
+                glow: 'var(--accent-glow)',
+              },
+              sunat: {
+                primary: '#0054A6',
+                secondary: '#D42D1F',
+              },
+              brand: {
+                primary: 'var(--brand-primary, #4f8ef7)',
+                secondary: 'var(--brand-secondary, #22c55e)',
+              }
+            },
+            borderRadius: {
+              'radius': '10px',
+              'radius-lg': '14px',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --brand-primary: #4f8ef7;
+        --brand-secondary: #22c55e;
+        --bg: #0d0f14;
+        --bg2: #13161e;
+        --bg3: #1a1e28;
+        --surface: #1e2330;
+        --surface2: #242938;
+        --border: rgba(255,255,255,0.07);
+        --border2: rgba(255,255,255,0.12);
+        --text: #f0f2f7;
+        --text2: #8b90a0;
+        --text3: #555b6e;
+        --accent: #4f8ef7;
+        --accent-glow: rgba(79,142,247,0.15);
+      }
+
+      /* Light Theme Overrides */
+      .light-theme {
+        --bg: #f1f5f9;
+        --bg2: #ffffff;
+        --bg3: #e2e8f0;
+        --surface: #ffffff;
+        --surface2: #f8fafc;
+        --border: rgba(0,0,0,0.06);
+        --border2: rgba(0,0,0,0.12);
+        --text: #0f172a;
+        --text2: #475569;
+        --text3: #94a3b8;
+        --accent: #3b82f6;
+        --accent-glow: rgba(59,130,246,0.1);
+      }
+      body {
+        font-family: 'DM Sans', sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+      }
+      h1, h2, h3, .font-heading { font-family: 'Outfit', sans-serif; }
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+      /* Custom utility classes from the provided HTML */
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+      .tbl th { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+      .tbl td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+  <body class="bg-gray-50 text-gray-800 antialiased h-screen overflow-hidden">
+    <div id="root" class="h-full"></div>
+    <!-- Vite resolverá esta ruta durante el proceso de build en Vercel -->
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
