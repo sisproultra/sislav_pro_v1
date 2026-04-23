@@ -665,7 +665,8 @@ export const dbGetProducts = async (): Promise<Product[]> => {
             .eq('empresa_holding_id', holdingId)
             .eq('activo', true)
             .eq('estado', 'a')
-            .limit(200); // Límite para evitar sobrecarga
+            .order('nombre', { ascending: true })
+            .limit(1000); // Límite aumentado para evitar que productos nuevos no aparezcan
         if (error) return [];
         return (data || []).map(p => {
             const catInfo = normalizeRelation(p.categorias);
@@ -704,7 +705,8 @@ export const dbGetCatalogProductsByBranch = async (branchId: string): Promise<Pr
             .eq('activo', true)
             .eq('estado', 'a')
             .eq('mostrar_en_catalogo', true)
-            .limit(100);
+            .order('nombre', { ascending: true })
+            .limit(1000);
         if (error) return [];
         return (data || []).map(p => {
             const catInfo = normalizeRelation(p.categorias);

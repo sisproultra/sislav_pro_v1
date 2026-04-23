@@ -276,7 +276,9 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
       const isActiveStatus = p.estado === 'a' || p.estado === '1' || p.activo === true;
       if (!isActiveStatus) return false;
       const pCatNormalized = normalizeStr(p.category);
-      if (!activeCategoryNamesNormalized.has(pCatNormalized)) return false;
+      // Solo ocultar si la categoría existe en el sistema y está inactiva. 
+      // Si es 'GENERAL' o la categoría no se encuentra, lo mostramos igual para evitar que se pierdan productos.
+      if (pCatNormalized && pCatNormalized !== 'GENERAL' && activeCategoryNamesNormalized.size > 0 && !activeCategoryNamesNormalized.has(pCatNormalized)) return false;
       
       const nameNormalized = normalizeStr(p.name);
       const priceStr = p.price.toString();
