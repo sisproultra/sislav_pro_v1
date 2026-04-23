@@ -199,30 +199,31 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
             @page { margin: 0; size: 80mm auto; }
             body { 
               margin: 0; padding: 4mm; 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: Arial, Helvetica, sans-serif; 
               width: 72mm; 
-              font-size: 9pt; 
-              line-height: 1.15; 
+              font-size: 10pt; 
+              line-height: 1.2; 
               color: #000;
+              -webkit-print-color-adjust: exact;
             }
             .text-center { text-align: center; }
             .bold { font-weight: bold; }
-            .black { font-weight: 900; }
-            .divider { border-top: 1.5px solid #000; margin: 6px 0; }
-            .divider-dashed { border-top: 1px dashed #000; margin: 6px 0; }
-            table { width: 100%; border-collapse: collapse; margin: 4px 0; }
-            td { padding: 2px 0; vertical-align: top; }
-            .qr-code { width: 35mm; height: 35mm; margin: 6px auto; display: block; }
-            .barcode { width: 50mm; height: auto; margin: 6px auto; display: block; }
-            .promo-banner { width: 100%; height: auto; margin-top: 5mm; border-top: 0.5px solid #000; padding-top: 2mm; }
-            .logo-ticket { max-width: ${logoSize}%; height: auto; margin: 0 auto 3mm auto; display: block; }
+            .black { font-weight: 800; }
+            .divider { border-top: 2px solid #000; margin: 8px 0; }
+            .divider-dashed { border-top: 2px dashed #000; margin: 8px 0; }
+            table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+            td { padding: 3px 0; vertical-align: top; }
+            .qr-code { width: 40mm; height: 40mm; margin: 8px auto; display: block; }
+            .barcode { width: 55mm; height: auto; margin: 8px auto; display: block; }
+            .promo-banner { width: 100%; height: auto; margin-top: 5mm; border-top: 1px solid #000; padding-top: 2mm; }
+            .logo-ticket { max-width: ${logoSize}%; height: auto; margin: 0 auto 4mm auto; display: block; }
             
             .politicas-container {
-                font-size: 7.5pt;
+                font-size: 8pt;
                 text-align: justify;
-                margin-top: 6px;
+                margin-top: 8px;
                 white-space: pre-line;
-                line-height: 1.3;
+                line-height: 1.2;
             }
 
             /* ESTILOS ESPECÍFICOS ORDEN DE TRABAJO (MODERNO) */
@@ -230,38 +231,38 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             }
             .order-number-giant { 
-                font-size: 38pt; 
+                font-size: 42pt; 
                 font-weight: 900; 
                 margin: 5px 0; 
                 display: block; 
-                line-height: 1;
+                line-height: 1.1;
                 text-align: center;
                 letter-spacing: -2px;
                 word-break: break-all;
             }
             .page-break { page-break-after: always; }
             .box-header { 
-                border-bottom: 4px solid #000; 
+                border-bottom: 5px solid #000; 
                 padding: 2px 20px; 
                 display: inline-block; 
-                margin-bottom: 10px; 
-                font-size: 13pt; 
-                font-weight: normal;
+                margin-bottom: 12px; 
+                font-size: 14pt; 
+                font-weight: bold;
                 letter-spacing: 1px;
             }
             .flex-between { display: flex; justify-content: space-between; }
-            .pu-row { font-size: 8pt; color: #000; padding-left: 10px; font-style: italic; }
-            .hash-text { font-size: 7pt; font-family: monospace; margin: 5px 0; word-break: break-all; }
-            .atendido-por { margin-top: 5px; font-size: 9pt; border-top: 1.5px solid #000; padding-top: 3px; }
+            .pu-row { font-size: 10pt; color: #000; padding-left: 10px; font-weight: bold; }
+            .hash-text { font-size: 8pt; font-family: monospace; margin: 5px 0; word-break: break-all; }
+            .atendido-por { margin-top: 8px; font-size: 10pt; border-top: 2px solid #000; padding-top: 4px; }
             .software-footer { 
-                margin-top: 15px; 
-                font-size: 8.5pt; 
+                margin-top: 18px; 
+                font-size: 9pt; 
                 font-weight: bold; 
-                border-top: 1px solid #ccc;
-                padding-top: 8px;
+                border-top: 1px solid #000;
+                padding-top: 10px;
                 text-transform: uppercase;
                 text-align: center;
-                font-family: 'Inter', sans-serif;
+                font-family: Arial, sans-serif;
             }
 
             /* Quitar negrita de las etiquetas del ticket interno */
@@ -287,7 +288,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
             <div class="divider"></div>
           </div>
 
-          <div style="margin: 6px 0; font-size: 8.5pt;">
+          <div style="margin: 8px 0; font-size: 10pt;" class="bold">
             <div>CLIENTE: ${invoice.client.name.toUpperCase()}</div>
             <div>${invoice.client.docType}: ${invoice.client.docNumber}</div>
             <div>DIR: ${invoice.client.address || '-'}</div>
@@ -393,13 +394,31 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                   <tr style="border-bottom: 1px solid #000">
                     <td width="15%" class="black" style="font-size: 22pt; padding: 10px 0; font-weight: normal !important;">${item.quantity.toFixed(0)}</td>
                     <td style="padding: 10px 0;">
-                      <div class="black" style="font-size: 12pt; font-weight: normal !important;">${item.name.toUpperCase()}</div>
+                      <div class="black" style="font-size: 12pt; font-weight: normal !important; display: flex; justify-content: space-between;">
+                        <span>${item.name.toUpperCase()}</span>
+                        <span>S/ ${(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
                       ${(item.details || item.color || item.defectos || (item.images && item.images.length > 0) || (item as any).url_foto_1 || item.audioNote) ? `<div style="font-size: 8.5pt; font-weight: normal; font-style: italic; background: #f0f0f0; padding: 5px; margin-top: 5px; border-left: 5px solid #000;">${formatItemDetails(item, true, 'icons')}</div>` : ''}
                     </td>
                   </tr>
                 `).join('')}
               </tbody>
             </table>
+
+            <div style="margin-top: 10px; border: 1px solid #000; padding: 8px;">
+                <div style="display: flex; justify-content: space-between; font-size: 11pt; font-weight: bold;">
+                    <span>TOTAL SERVICIOS:</span>
+                    <span>S/ ${invoice.totals.total.toFixed(2)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 10pt; margin-top: 2px;">
+                    <span>PAGADO / ADELANTO:</span>
+                    <span>S/ ${(invoice.prePaymentAmount || 0).toFixed(2)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 11pt; font-weight: 900; margin-top: 4px; border-top: 1px solid #000; padding-top: 4px;">
+                    <span>SALDO PENDIENTE:</span>
+                    <span>S/ ${(invoice.totals.total - (invoice.prePaymentAmount || 0)).toFixed(2)}</span>
+                </div>
+            </div>
 
             <div style="margin-top: 15px;">
               <div class="black" style="font-size: 10pt; text-transform: uppercase;">Observaciones:</div>
