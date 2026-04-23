@@ -12,18 +12,21 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
   
   // LOGICA DE PROXY: 
   // Si la URL apunta a 'apisu.sysventa.com', usamos el proxy interno '/api-proxy/sunat'
-  // para evitar problemas de CORS (Cross-Origin Resource Sharing).
+  // para evitar problemas de CORS.
   let finalUrl = '/api-proxy/sunat';
+  let isProxy = true;
   
   if (dbUrl && dbUrl.startsWith('http')) {
       if (dbUrl.includes('apisu.sysventa.com')) {
           finalUrl = '/api-proxy/sunat';
+          isProxy = true;
       } else {
-          // Si es una URL externa personalizada (como slvlaundry.sysventa.com),
-          // intentamos ir directo, pero el servidor destino DEBE tener habilitado CORS.
           finalUrl = dbUrl;
+          isProxy = false;
       }
   }
+
+  console.log(`🚀 Preparando envío a SUNAT. URL Final: ${finalUrl} (Proxy: ${isProxy})`);
   
   // Base URL para generar los links de descarga (PDF/XML/CDR)
   const apiBaseUrl = dbUrl ? dbUrl.split('/post.php')[0] : 'https://apisu.sysventa.com/API_SUNAT';
@@ -146,11 +149,29 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
 
   try {
       console.log("Enviando payload a SUNAT:", JSON.stringify(payload, null, 2));
-      const response = await fetch(finalUrl, { 
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-      });
+
+      let response;
+      try {
+          response = await fetch(finalUrl, { 
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+          });
+      } catch (fetchError: any) {
+          console.error("Error en fetch inicial:", fetchError);
+          // Si el proxy falló por "Failed to fetch" (común en entornos con Service Workers o bloqueos de red),
+          // y tenemos una URL de DB válida, intentamos el envío directo al servidor de SUNAT.
+          if (isProxy && dbUrl && dbUrl.startsWith('http')) {
+              console.warn("Reintentando conexión directa a:", dbUrl);
+              response = await fetch(dbUrl, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+              });
+          } else {
+              throw fetchError;
+          }
+      }
       
       if (!response.ok) {
           const errorText = await response.text();

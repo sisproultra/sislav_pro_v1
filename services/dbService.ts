@@ -934,9 +934,9 @@ export const dbGetBirthdaysToday = async (branchId?: string): Promise<Client[]> 
             .from('clientes')
             .select('*')
             .eq('sucursal_id', activeBranchId)
-            .eq('activo', true)
-            .not('cumpleanos', 'is', null)
-            .neq('cumpleanos', '-');
+            // .eq('activo', true) // COMENTADO POR ERROR 400 EN ALGUNAS DBS
+            .not('cumpleanos', 'is', null);
+            // .neq('cumpleanos', '-'); // COMENTADO POR ERROR 400 SI COLUMNA ES DATE
 
         if (error) return [];
         
@@ -2050,9 +2050,9 @@ export const dbGetExpenses = async (page: number = 1, pageSize: number = 50): Pr
     try {
         let query = supabase
             .from('egresos')
-            .select('*', { count: 'exact', head: true })
-            .eq('sucursal_id', branchId)
-            .eq('activo', true);
+            .select('id', { count: 'exact', head: true }) 
+            .eq('sucursal_id', branchId);
+            // .eq('activo', true); // COMENTADO POR ERROR 400
 
         const { count, error: countError } = await query;
 
