@@ -32,25 +32,7 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
   const cleanDoc = (doc: string) => doc.replace(/[^0-9]/g, '').trim();
   const cleanText = (text: string) => (text || "").toUpperCase().replace(/[<>&"']/g, '').trim();
 
-  const itemsPayload = invoice.items.map((item, idx) => {
-    const itemIgvType = item.igvType || '10';
-    let precioBase = Number(item.price) || 0;
-    if (itemIgvType === '10') {
-        precioBase = Number((precioBase / igvFactor).toFixed(2));
-    }
-    const cleanProductName = cleanText(item.name || "PRODUCTO");
-
-    return {
-        "producto": cleanProductName,
-        "cantidad": (Number(item.quantity) || 0).toString(),
-        "precio_base": precioBase.toFixed(2), 
-        "codigo_producto": item.id ? item.id.substring(0, 15) : `p-${idx}`,
-        "codigo_unidad": item.unitCode || 'NIU', 
-        "tipo_igv_codigo": itemIgvType
-    };
-  });
-
-  const isTestMode = company.sunatEnvironment === 'TEST' || 
+  const isTestMode = company.sunatEnvironment === 'BETA' || 
                      (company.sunatEnvironment === 'BETA' && (company.solUser === 'MODDATOS' || !company.solUser));
 
   if (company.sunatEnvironment === 'PRODUCTION' && (company.solUser === 'MODDATOS' || !company.solUser)) {
@@ -62,9 +44,8 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
 
   const safeNumber = (val: any) => {
     const n = Number(val);
-    if (isNaN(n) || n === 0) return "";
-    // Si es entero, enviarlo sin decimales para mayor compatibilidad
-    return Number.isInteger(n) ? n.toString() : n.toFixed(2);
+    if (isNaN(n)) return "0.00";
+    return n.toFixed(2);
   };
 
   const payload: any = {

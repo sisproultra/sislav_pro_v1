@@ -469,11 +469,11 @@ const Layout: React.FC<LayoutProps> = ({
                 <button onClick={() => setIsHelpModalOpen(true)} className={`p-2 rounded-lg transition-all active:scale-90 ${isDarkMode ? 'text-text hover:bg-bg3' : 'text-slate-600 hover:bg-slate-50'}`} title="Ayuda y Tutoriales"><HelpCircle size={18} /></button>
                 <button onClick={() => setIsCalculatorOpen(true)} className={`p-2 rounded-lg transition-all active:scale-90 ${isDarkMode ? 'text-text hover:bg-bg3' : 'text-slate-600 hover:bg-slate-50'}`}><Calculator size={18} /></button>
             </div>
-            <div className={`p-0.5 rounded-lg flex gap-0.5 border ${company?.sunatEnvironment === 'TEST' ? 'bg-white/10 border-white/20' : isDarkMode ? 'bg-bg3 border-border' : 'bg-slate-100 border-slate-200'}`}>
+            <div className={`p-0.5 rounded-lg flex gap-0.5 border ${company?.sunatEnvironment === 'BETA' ? 'bg-white/10 border-white/20' : isDarkMode ? 'bg-bg3 border-border' : 'bg-slate-100 border-slate-200'}`}>
                 <button onClick={() => isDarkMode && toggleTheme()} className={`p-1.5 rounded-md transition-all ${!isDarkMode ? 'bg-white text-orange-500 shadow-sm' : 'text-text3'}`}><Sun size={14} fill={!isDarkMode ? "currentColor" : "none"} /></button>
                 <button onClick={() => !isDarkMode && toggleTheme()} className={`p-1.5 rounded-md transition-all ${isDarkMode ? 'bg-accent text-white shadow-sm' : 'text-slate-400'}`} style={isDarkMode ? { backgroundColor: 'var(--brand-primary)' } : {}}><Moon size={14} fill={isDarkMode ? "currentColor" : "none"} /></button>
             </div>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border shadow-sm ${company?.sunatEnvironment === 'TEST' ? 'bg-white/10 border-white/20 text-white' : 'bg-surface border-border text-text3'}`}><User size={16} /></div>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border shadow-sm ${company?.sunatEnvironment === 'BETA' ? 'bg-white/10 border-white/20 text-white' : 'bg-surface border-border text-text3'}`}><User size={16} /></div>
           </div>
         </header>
 

@@ -23,7 +23,7 @@ const ConvertInvoiceModal: React.FC<ConvertInvoiceModalProps> = ({
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const isTestMode = company?.sunatEnvironment === 'TEST';
+  const isBetaMode = company?.sunatEnvironment === 'BETA';
 
   useEffect(() => {
     if (isOpen) {
@@ -90,13 +90,13 @@ const ConvertInvoiceModal: React.FC<ConvertInvoiceModalProps> = ({
             <div className="flex gap-2">
               <button 
                 onClick={() => setTargetType(InvoiceType.BOLETA)}
-                className={`flex-1 py-4 rounded-2xl font-bold text-sm transition-all border-2 ${targetType === InvoiceType.BOLETA ? (isTestMode ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg' : 'bg-indigo-600 text-white border-indigo-600 shadow-lg') : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'} ${isTestMode ? 'animate-pulse bg-emerald-500 border-emerald-600 text-white' : ''}`}
+                className={`flex-1 py-4 rounded-2xl font-bold text-sm transition-all border-2 ${targetType === InvoiceType.BOLETA ? (isBetaMode ? 'bg-orange-500 text-white border-orange-500 shadow-lg' : 'bg-indigo-600 text-white border-indigo-600 shadow-lg') : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'} ${isBetaMode ? 'bg-orange-500 border-orange-600 text-white' : ''}`}
               >
                 BOLETA
               </button>
               <button 
                 onClick={() => setTargetType(InvoiceType.FACTURA)}
-                className={`flex-1 py-4 rounded-2xl font-bold text-sm transition-all border-2 ${targetType === InvoiceType.FACTURA ? (isTestMode ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg' : 'bg-indigo-600 text-white border-indigo-600 shadow-lg') : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'} ${isTestMode ? 'animate-pulse bg-emerald-500 border-emerald-600 text-white' : ''}`}
+                className={`flex-1 py-4 rounded-2xl font-bold text-sm transition-all border-2 ${targetType === InvoiceType.FACTURA ? (isBetaMode ? 'bg-orange-500 text-white border-orange-500 shadow-lg' : 'bg-indigo-600 text-white border-indigo-600 shadow-lg') : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'} ${isBetaMode ? 'bg-orange-500 border-orange-600 text-white' : ''}`}
               >
                 FACTURA
               </button>

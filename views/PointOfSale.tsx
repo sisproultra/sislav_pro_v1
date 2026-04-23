@@ -423,7 +423,7 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
     }
 
     // Candado legal Sunat (Nuevo Pedido del Usuario)
-    const isEnforceMode = company?.sunatEnvironment === 'PRODUCTION' || company?.sunatEnvironment === 'TEST';
+    const isEnforceMode = company?.sunatEnvironment === 'PRODUCTION' || company?.sunatEnvironment === 'BETA';
     if (company?.doc_enforce_enabled && isEnforceMode) {
         const threshold = company.doc_enforce_threshold || 700;
         const totalAmount = totals.total;

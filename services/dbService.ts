@@ -368,7 +368,7 @@ export const normalizeSucursal = (s: any): any => {
         solUser: s.sol_user || s.solUser || '',
         solPass: s.sol_pass || s.solPass || '',
         contactPhone: s.telefono || s.telefono_contacto || '',
-        sunatEnvironment: s.modo_sunat === '1' ? 'PRODUCTION' : (s.modo_sunat === '0' ? 'BETA' : 'INTERNAL'),
+        sunatEnvironment: String(s.modo_sunat) === '1' ? 'PRODUCTION' : (String(s.modo_sunat) === '0' ? 'BETA' : 'INTERNAL'),
         serieBoleta: s.serie_boleta ?? 'B001',
         serieFactura: s.serie_factura ?? 'F001',
         serieNotaVenta: s.serie_nv ?? 'NV01',
@@ -2269,7 +2269,10 @@ export const dbUpdateSucursalBranding = async (id: string, updates: any) => {
     
     // SUNAT Config
     if (updates.sunat_url !== undefined) payload.sunat_url = updates.sunat_url;
-    if (updates.sunatEnvironment !== undefined) payload.modo_sunat = updates.sunatEnvironment === 'PRODUCTION' ? '1' : '0';
+    if (updates.sunatEnvironment !== undefined) {
+        payload.modo_sunat = updates.sunatEnvironment === 'PRODUCTION' ? '1' : 
+                            (updates.sunatEnvironment === 'BETA' ? '0' : '2');
+    }
     
     // SUNAT Credentials
     if (updates.sol_user !== undefined) payload.sol_user = updates.sol_user;

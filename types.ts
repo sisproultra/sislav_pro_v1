@@ -43,7 +43,7 @@ export interface Company extends BaseEntity {
     ubigeo?: string;
     address: string;
     logoUrl?: string;
-    sunatEnvironment: 'BETA' | 'PRODUCTION' | 'TEST';
+    sunatEnvironment: 'BETA' | 'PRODUCTION' | 'INTERNAL';
     nombre_comercial?: string;
     urbanizacion?: string;
     distrito?: string;

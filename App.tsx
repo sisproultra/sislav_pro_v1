@@ -168,9 +168,8 @@ export default function App() {
             try {
                 const refreshedSucursalData = await dbGetSucursalById(activeSucursal.id);
                 if (refreshedSucursalData) {
-                    const normalized = normalizeSucursal(refreshedSucursalData);
-                    setActiveSucursal(normalized);
-                    localStorage.setItem('sislav_active_sucursal', JSON.stringify(normalized));
+                    setActiveSucursal(refreshedSucursalData);
+                    localStorage.setItem('sislav_active_sucursal', JSON.stringify(refreshedSucursalData));
                 }
             } catch (e) {
                 console.error("Error refreshing sucursal data:", e);
@@ -210,9 +209,8 @@ export default function App() {
                     // REFRESH SILENCIOSO en segundo plano del perfil de sucursal
                     dbGetSucursalById(sucursal.id).then(data => {
                         if (data) {
-                            const normalized = normalizeSucursal(data);
-                            setActiveSucursal(normalized);
-                            localStorage.setItem('sislav_active_sucursal', JSON.stringify(normalized));
+                            setActiveSucursal(data);
+                            localStorage.setItem('sislav_active_sucursal', JSON.stringify(data));
                         }
                     }).catch(() => {});
                 }
@@ -226,10 +224,9 @@ export default function App() {
                     const slug = params.get('s')!;
                     const sucursalData = await dbGetSucursalBySlug(slug);
                     if (sucursalData) {
-                        const normalized = normalizeSucursal(sucursalData);
-                        setActiveSucursal(normalized);
+                        setActiveSucursal(sucursalData);
                         const session = JSON.parse(localStorage.getItem('sislav_auth_session') || '{}');
-                        setDbBranchContext(normalized.id, normalized.empresa_id, session?.user?.id);
+                        setDbBranchContext(sucursalData.id, sucursalData.empresa_id, session?.user?.id);
                     }
                 }
 
