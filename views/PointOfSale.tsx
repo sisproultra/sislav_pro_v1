@@ -760,20 +760,20 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
         <div className="p-4 border-b flex bg-gray-50 gap-2 shrink-0 overflow-x-auto no-scrollbar">
             {[
                 { type: InvoiceType.NOTA_VENTA, label: 'N. VENTA' },
-                ...(company?.sunatEnvironment === 'PRODUCTION' || company?.sunatEnvironment === 'TEST' ? [
+                ...(company?.sunatEnvironment === 'PRODUCTION' || company?.sunatEnvironment === 'BETA' ? [
                     { type: InvoiceType.BOLETA, label: 'BOLETA' },
                     { type: InvoiceType.FACTURA, label: 'FACTURA' }
                 ] : [])
             ].map(doc => {
-                const isTestDoc = company?.sunatEnvironment === 'TEST' && (doc.type === InvoiceType.BOLETA || doc.type === InvoiceType.FACTURA);
+                const isBetaDoc = company?.sunatEnvironment === 'BETA' && (doc.type === InvoiceType.BOLETA || doc.type === InvoiceType.FACTURA);
                 const isActive = selectedDocType === doc.type;
                 
                 return (
                     <button 
                         key={doc.type} 
                         onClick={() => setSelectedDocType(doc.type)} 
-                        style={isActive ? { backgroundColor: isTestDoc ? '#10b981' : primaryColor, borderColor: isTestDoc ? '#10b981' : primaryColor } : {}} 
-                        className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all border-2 ${isActive ? 'text-white shadow-lg' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'} ${isTestDoc ? 'animate-pulse bg-emerald-500 border-emerald-600 text-white' : ''}`}
+                        style={isActive ? { backgroundColor: isBetaDoc ? '#f97316' : primaryColor, borderColor: isBetaDoc ? '#f97316' : primaryColor } : {}} 
+                        className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all border-2 ${isActive ? 'text-white shadow-lg' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'} ${isBetaDoc && isActive ? '' : (isBetaDoc ? 'border-orange-200 text-orange-600' : '')}`}
                     >
                         {doc.label}
                     </button>

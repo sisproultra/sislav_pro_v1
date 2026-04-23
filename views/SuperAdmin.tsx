@@ -2187,9 +2187,9 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Modo de Operación</label>
                                             <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
-                                                <button type="button" onClick={() => setBrModoSunat('0')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '0' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>BETA</button>
-                                                <button type="button" onClick={() => setBrModoSunat('2')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '2' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-400'}`}>PRUEBA</button>
-                                                <button type="button" onClick={() => setBrModoSunat('1')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '1' ? 'bg-red-600 text-white shadow-md' : 'text-slate-400'}`}>PROD</button>
+                                                <button type="button" onClick={() => setBrModoSunat('2')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '2' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>INT</button>
+                                                <button type="button" onClick={() => setBrModoSunat('0')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '0' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400'}`}>BETA</button>
+                                                <button type="button" onClick={() => setBrModoSunat('1')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '1' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400'}`}>PROD</button>
                                             </div>
                                         </div>
                                         <div className="space-y-2">

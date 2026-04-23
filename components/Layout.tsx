@@ -423,22 +423,22 @@ const Layout: React.FC<LayoutProps> = ({
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
-        <header className={`h-[56px] flex items-center justify-between px-6 lg:px-8 z-10 border-b transition-colors duration-500 ${company?.sunatEnvironment === 'TEST' ? 'bg-emerald-500 text-white border-emerald-600 animate-pulse' : isDarkMode ? 'bg-bg2 border-border' : 'bg-white border-slate-100 shadow-sm'}`}>
+        <header className={`h-[56px] flex items-center justify-between px-6 lg:px-8 z-10 border-b transition-colors duration-500 ${company?.sunatEnvironment === 'BETA' ? 'bg-emerald-500 text-white border-emerald-600 shadow-lg' : isDarkMode ? 'bg-bg2 border-border' : 'bg-white border-slate-100 shadow-sm'}`}>
           <div className="flex items-center gap-3">
-             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={`p-2 rounded-lg transition-all ${company?.sunatEnvironment === 'TEST' ? 'hover:bg-white/10 text-white' : isDarkMode ? 'hover:bg-bg3 text-text' : 'hover:bg-slate-50 text-slate-600'}`}><Menu size={20} /></button>
+             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={`p-2 rounded-lg transition-all ${company?.sunatEnvironment === 'BETA' ? 'hover:bg-white/10 text-white' : isDarkMode ? 'hover:bg-bg3 text-text' : 'hover:bg-slate-50 text-slate-600'}`}><Menu size={20} /></button>
              <div className="flex gap-2 items-center">
                 {company?.sunatEnvironment === 'PRODUCTION' ? (
                   <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-green-500/10 text-green-600 text-[8px] font-bold border border-green-500/20 uppercase">
                     <img src="https://iili.io/BxxqxVt.png" className="w-3 h-3 object-contain" alt="SUNAT" />
                     PROD
                   </span>
-                ) : company?.sunatEnvironment === 'TEST' ? (
-                  <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-white text-emerald-600 text-[8px] font-bold border border-white/20 uppercase shadow-sm">
-                    <Beaker size={10} /> PRUEBA
+                ) : company?.sunatEnvironment === 'BETA' ? (
+                  <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-orange-500 text-white text-[8px] font-bold border border-orange-400 uppercase shadow-sm">
+                    <Beaker size={10} /> BETA
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-orange-500/10 text-orange-600 text-[8px] font-bold border border-orange-500/20 uppercase">
-                    <TestTube2 size={10} /> INTERNO
+                  <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-blue-500/10 text-blue-600 text-[8px] font-bold border border-blue-500/20 uppercase">
+                    <TestTube2 size={10} /> INT
                   </span>
                 )}
                 <div className={`flex items-center gap-1.5 rounded-md border text-[8px] font-bold uppercase transition-all overflow-hidden pr-2 ${waStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-bg3 text-text3 border-border'}`}><div className="relative w-5 h-5 flex items-center justify-center shrink-0"><img src="https://iili.io/fXXft0Q.png" className={`w-3.5 h-3.5 object-contain ${waStatus !== 'connected' ? 'grayscale opacity-40' : ''}`} alt="WA" />{waStatus === 'connected' && <div className="absolute top-1 right-1 w-1 h-1 bg-emerald-500 rounded-full animate-pulse" />}</div><span className="leading-none">{waStatus === 'connected' ? 'WA ON' : 'WA OFF'}</span></div>

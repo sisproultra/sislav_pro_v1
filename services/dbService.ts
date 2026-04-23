@@ -368,7 +368,7 @@ export const normalizeSucursal = (s: any): any => {
         solUser: s.sol_user || s.solUser || '',
         solPass: s.sol_pass || s.solPass || '',
         contactPhone: s.telefono || s.telefono_contacto || '',
-        sunatEnvironment: s.modo_sunat === '1' ? 'PRODUCTION' : (s.modo_sunat === '2' ? 'TEST' : 'BETA'),
+        sunatEnvironment: s.modo_sunat === '1' ? 'PRODUCTION' : (s.modo_sunat === '0' ? 'BETA' : 'INTERNAL'),
         serieBoleta: s.serie_boleta ?? 'B001',
         serieFactura: s.serie_factura ?? 'F001',
         serieNotaVenta: s.serie_nv ?? 'NV01',
