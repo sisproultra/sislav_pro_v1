@@ -171,11 +171,12 @@ export const printQuoteDirectly = async (quote: PausedSale, company: Company, pa
             @page { margin: 0; size: 80mm auto; }
             body { 
               margin: 0; padding: 4mm; 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: Arial, Helvetica, sans-serif; 
               width: 72mm; 
-              font-size: 9pt; 
-              line-height: 1.15; 
+              font-size: 10pt; 
+              line-height: 1.2; 
               color: #000;
+              -webkit-print-color-adjust: exact;
             }
             .text-center { text-align: center; }
             .bold { font-weight: bold; }
@@ -344,17 +345,18 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
             @page { margin: 0; size: 80mm auto; }
             body { 
               margin: 0; padding: 4mm; 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: Arial, Helvetica, sans-serif; 
               width: 72mm; 
-              font-size: 9pt; 
-              line-height: 1.15; 
+              font-size: 10pt; 
+              line-height: 1.2; 
               color: #000;
+              -webkit-print-color-adjust: exact;
             }
             .text-center { text-align: center; }
             .bold { font-weight: bold; }
-            .black { font-weight: 900; }
-            .divider { border-top: 1.5px solid #000; margin: 6px 0; }
-            .divider-dashed { border-top: 1px dashed #000; margin: 6px 0; }
+            .black { font-weight: 800; }
+            .divider { border-top: 2px solid #000; margin: 8px 0; }
+            .divider-dashed { border-top: 2px dashed #000; margin: 8px 0; }
             table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 8pt; }
             th { text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 2px; font-size: 8.5pt; }
             td { padding: 3px 0; vertical-align: top; }
@@ -580,13 +582,31 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                   <tr style="border-bottom: 1px solid #000">
                     <td width="15%" class="black" style="font-size: 22pt; padding: 10px 0; font-weight: normal !important;">${item.quantity.toFixed(0)}</td>
                     <td style="padding: 10px 0;">
-                      <div class="black" style="font-size: 12pt; font-weight: normal !important;">${item.name.toUpperCase()}</div>
+                      <div class="black" style="font-size: 12pt; font-weight: normal !important; display: flex; justify-content: space-between;">
+                        <span>${item.name.toUpperCase()}</span>
+                        <span>S/ ${(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
                       ${(item.details || item.color || item.defectos || (item.images && item.images.length > 0) || (item as any).url_foto_1 || item.audioNote) ? `<div style="font-size: 8.5pt; font-weight: normal; font-style: italic; background: #f0f0f0; padding: 5px; margin-top: 5px; border-left: 5px solid #000;">${formatItemDetails(item, true, 'icons')}</div>` : ''}
                     </td>
                   </tr>
                 `).join('')}
               </tbody>
             </table>
+
+            <div style="margin-top: 10px; border: 2px solid #000; padding: 8px;">
+                <div style="display: flex; justify-content: space-between; font-size: 11pt; font-weight: bold;">
+                    <span>TOTAL SERVICIOS:</span>
+                    <span>S/ ${invoice.totals.total.toFixed(2)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 10pt; margin-top: 2px;">
+                    <span>PAGADO (ADELANTO):</span>
+                    <span>S/ ${(invoice.prePaymentAmount || 0).toFixed(2)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 12pt; font-weight: 900; margin-top: 4px; border-top: 2px solid #000; padding-top: 4px;">
+                    <span>SALDO PENDIENTE:</span>
+                    <span>S/ ${(invoice.totals.total - (invoice.prePaymentAmount || 0)).toFixed(2)}</span>
+                </div>
+            </div>
 
             <div style="margin-top: 15px;">
               <div class="black" style="font-size: 10pt; text-transform: uppercase;">Observaciones:</div>
