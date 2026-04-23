@@ -55,6 +55,7 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
   }, []);
 
   const filteredInvoices = invoices.filter(inv => {
+      if (inv.orderStatus === 'CANCELADO') return false;
       if (selectedPeriod !== 'ALL' && !inv.date.startsWith(selectedPeriod)) return false;
       const term = searchTerm.toLowerCase();
       const matchesSearch = inv.client.name.toLowerCase().includes(term) || 

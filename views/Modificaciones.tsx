@@ -18,11 +18,13 @@ import {
   dbAdjustClientBalance,
   dbSaveExpense,
   dbAddPayment,
+  dbAnularVenta,
   getActiveBranchId,
   dbGetGlobalColors
 } from '../services/dbService';
 import { GlobalColor } from '../types';
 import CartItemDetailModal from '../components/CartItemDetailModal';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 interface ModificacionesProps {
   invoices: Invoice[];
@@ -46,6 +48,9 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  const [isAnularModalOpen, setIsAnularModalOpen] = useState(false);
+  const [invoiceToAnular, setInvoiceToAnular] = useState<Invoice | null>(null);
 
   // Estados para Ajuste de Ítems
   const [adjustmentCart, setAdjustmentCart] = useState<CartItem[]>([]);
@@ -84,6 +89,7 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
 
   const modifiableInvoices = useMemo(() => {
     return invoices.filter(inv => {
+      if (inv.orderStatus === 'CANCELADO') return false;
       const invDate = new Date(inv.date);
       // Solo permitimos modificar si es posterior al último cierre de caja
       return invDate > lastClosingDate;
@@ -413,6 +419,24 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
     }
   };
 
+  const handleAnularOrden = async () => {
+    if (!invoiceToAnular) return;
+    
+    setIsActionLoading(true);
+    try {
+      await dbAnularVenta(invoiceToAnular.id);
+      setIsAnularModalOpen(false);
+      setInvoiceToAnular(null);
+      onRefresh();
+      alert("✅ Orden anulada con éxito.");
+    } catch (error: any) {
+      console.error("Error al anular orden:", error);
+      alert("❌ ERROR AL ANULAR: " + (error.message || "Error desconocido"));
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 space-y-4 bg-white h-full grow">
@@ -516,6 +540,22 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
                     {canManage && (
                       <button 
                         onClick={() => {
+                          if (inv.prePaymentAmount && inv.prePaymentAmount > 0) {
+                            alert("No se puede anular una orden con pagos. Debe eliminar los pagos primero.");
+                            return;
+                          }
+                          setInvoiceToAnular(inv);
+                          setIsAnularModalOpen(true);
+                        }}
+                        className="p-3 bg-white border border-slate-200 text-red-600 rounded-xl transition-all shadow-sm active:scale-95"
+                        title="Anular Orden"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                    {canManage && (
+                      <button 
+                        onClick={() => {
                           setSelectedInvoice(inv);
                           setIsPayModalOpen(true);
                         }}
@@ -609,6 +649,22 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
                             >
                               <Receipt size={16} />
                             </button>
+                          {canManage && (
+                             <button 
+                               onClick={() => {
+                                 if (inv.prePaymentAmount && inv.prePaymentAmount > 0) {
+                                   alert("No se puede anular una orden con pagos. Debe eliminar los pagos primero.");
+                                   return;
+                                 }
+                                 setInvoiceToAnular(inv);
+                                 setIsAnularModalOpen(true);
+                               }}
+                               title="Anular Orden Permanentemente"
+                               className="p-3 bg-white border border-slate-100 text-red-500 hover:bg-red-600 hover:text-white rounded-2xl transition-all shadow-sm active:scale-95 group/btn"
+                             >
+                               <Trash2 size={16} />
+                             </button>
+                           )}
                           {inv.orderStatus === 'ENTREGADO' && canManage && (
                             <button 
                               onClick={() => handleRestoreStatus(inv)}
@@ -1219,6 +1275,21 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
               </motion.div>
           )}
       </AnimatePresence>
+      
+      <ConfirmationModal
+        isOpen={isAnularModalOpen}
+        onClose={() => {
+          if (!isActionLoading) {
+              setIsAnularModalOpen(false);
+              setInvoiceToAnular(null);
+          }
+        }}
+        onConfirm={handleAnularOrden}
+        title="ANULAR ORDEN"
+        message={`¿Está seguro de que desea ANULAR la orden ${invoiceToAnular?.ordenNumber}? Esta acción es irreversible y la orden desaparecerá de todos los módulos.`}
+        confirmText="SÍ, ANULAR AHORA"
+        isDangerous={true}
+      />
       </div>
     </div>
   );

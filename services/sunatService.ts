@@ -49,8 +49,7 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
   const cleanDoc = (doc: string) => doc.replace(/[^0-9]/g, '').trim();
   const cleanText = (text: string) => (text || "").toUpperCase().replace(/[<>&"']/g, '').trim();
 
-  const isTestMode = company.sunatEnvironment === 'BETA' || 
-                     (company.sunatEnvironment === 'BETA' && (company.solUser === 'MODDATOS' || !company.solUser));
+  const isTestMode = company.sunatEnvironment === 'BETA' || company.sunatEnvironment === 'INTERNAL';
 
   if (company.sunatEnvironment === 'PRODUCTION' && (company.solUser === 'MODDATOS' || !company.solUser)) {
      return {

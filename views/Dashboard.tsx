@@ -48,12 +48,13 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   // --- MÉTRICAS OPERATIVAS ---
   const operationalMetrics = useMemo(() => {
-    const pendingToWash = invoices.filter(inv => inv.orderStatus === 'PENDIENTE' || inv.orderStatus === 'RECIBIDO' || inv.orderStatus === 'EN_LAVADO' || inv.orderStatus === 'EN_SECADO');
-    const toDeliver = invoices.filter(inv => inv.orderStatus === 'LISTO' || inv.orderStatus === 'EN_RUTA');
+    const activeInvoices = invoices.filter(inv => inv.orderStatus !== 'CANCELADO');
+    const pendingToWash = activeInvoices.filter(inv => inv.orderStatus === 'PENDIENTE' || inv.orderStatus === 'RECIBIDO' || inv.orderStatus === 'EN_LAVADO' || inv.orderStatus === 'EN_SECADO');
+    const toDeliver = activeInvoices.filter(inv => inv.orderStatus === 'LISTO' || inv.orderStatus === 'EN_RUTA');
     
     // Horario con mayor atención (Peak Hours)
     const hoursMap: Record<number, number> = {};
-    invoices.forEach(inv => {
+    activeInvoices.forEach(inv => {
       const hour = new Date(inv.date).getHours();
       hoursMap[hour] = (hoursMap[hour] || 0) + 1;
     });
@@ -64,7 +65,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     // Top 5 Categorías (Total en Dinero)
     const catMap: Record<string, number> = {};
-    invoices.forEach(inv => {
+    activeInvoices.forEach(inv => {
       inv.items.forEach(item => {
         if (item.isAnulado || item.estado_id === 9) return;
         const cat = categories.find(c => c.id === item.categoria_id)?.name || 'Otros';
@@ -78,7 +79,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     // Top 5 Clientes
     const clientMap: Record<string, { name: string, total: number }> = {};
-    invoices.forEach(inv => {
+    activeInvoices.forEach(inv => {
       if (inv.client) {
         if (!clientMap[inv.client.id]) clientMap[inv.client.id] = { name: inv.client.name, total: 0 };
         clientMap[inv.client.id].total += inv.totals.total;
@@ -90,7 +91,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     // % Fidelización (clientes que lavaron en los últimos 30 días)
     const activeClientsCount = new Set(
-      invoices
+      activeInvoices
         .filter(inv => new Date(inv.date) >= thirtyDaysAgo)
         .map(inv => inv.client?.id)
         .filter(Boolean)
@@ -124,6 +125,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     const daysNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
     invoices.forEach(inv => {
+      if (inv.orderStatus === 'CANCELADO') return;
       const d = new Date(inv.date);
       const year = d.getFullYear().toString();
       const monthIdx = d.getMonth();

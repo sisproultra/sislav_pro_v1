@@ -365,8 +365,6 @@ export const normalizeSucursal = (s: any): any => {
         provincia: s.provincia || '',
         departamento: s.departamento || '',
         ubigeo: s.ubigeo || '',
-        solUser: s.sol_user || s.solUser || '',
-        solPass: s.sol_pass || s.solPass || '',
         contactPhone: s.telefono || s.telefono_contacto || '',
         sunatEnvironment: String(s.modo_sunat) === '1' ? 'PRODUCTION' : (String(s.modo_sunat) === '0' ? 'BETA' : 'INTERNAL'),
         serieBoleta: s.serie_boleta ?? 'B001',
@@ -1237,6 +1235,32 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
 };
 
 /**
+ * Anula lógicamente una venta. Solo si no tiene pagos.
+ */
+export const dbAnularVenta = async (ventaId: string) => {
+    // 1. Verificar si tiene pagos
+    const { data: pagos, error: pError } = await supabase
+        .from('pagos_venta')
+        .select('id')
+        .eq('venta_id', ventaId);
+    
+    if (pError) throw pError;
+    if (pagos && pagos.length > 0) {
+        throw new Error("No se puede anular una orden que ya tiene pagos registrados. Debe eliminar los pagos primero.");
+    }
+
+    // 2. Anular lógicamente
+    const { error } = await supabase
+        .from('ventas')
+        .update({ 
+            estado: 'CANCELADO'
+        })
+        .eq('id', ventaId);
+    
+    if (error) throw error;
+};
+
+/**
  * Actualiza el monto de descuento de una venta existente
  */
 export const dbUpdateInvoiceDiscount = async (ventaId: string, discount: number) => {
@@ -1412,6 +1436,7 @@ export const dbGetInvoicesForReport = async (filter: 'TO_COLLECT' | 'TO_DELIVER'
             .select('*, clientes(*), items_venta(*)')
             .eq('sucursal_id', branchId)
             .eq('empresa_holding_id', holdingId)
+            .neq('estado', 'CANCELADO')
             .neq('tipo_documento_codigo', '07') // Excluir notas de crédito
             .order('fecha_recepcion', { ascending: false })
             .limit(1000);
@@ -1479,7 +1504,8 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
             .from('ventas')
             .select('*, clientes(*), items_venta(*)', { count: 'exact' })
             .eq('sucursal_id', branchId)
-            .eq('empresa_holding_id', holdingId);
+            .eq('empresa_holding_id', holdingId)
+            .neq('estado', 'CANCELADO');
 
         if (searchTerm) {
             let intelligentSearch = searchTerm.trim().toUpperCase();
@@ -1668,6 +1694,7 @@ export const dbGetOrderStats = async (): Promise<{ toCollect: number, toDeliver:
             .from('ventas')
             .select('id, total, descuento, estado, pagos_venta(monto)')
             .eq('sucursal_id', branchId)
+            .neq('estado', 'CANCELADO')
             .or('estado.neq.ENTREGADO,total.gt.0'); // Aproximación rápida
 
         if (error) throw error;
@@ -2441,8 +2468,9 @@ export const dbGetActiveItems = async (): Promise<any[]> => {
     
     // Join with ventas to filter by sucursal_id
     const { data } = await supabase.from('items_venta')
-        .select('id, venta_id, estado, ventas!inner(sucursal_id)')
+        .select('id, venta_id, estado, ventas!inner(sucursal_id, estado)')
         .eq('ventas.sucursal_id', branchId)
+        .neq('ventas.estado', 'CANCELADO')
         .in('estado', ['EN_LAVADO', 'EN_SECADO']);
         
     return (data || []).map(it => ({

@@ -195,6 +195,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
 
     const stats = useMemo(() => {
         return invoices.reduce((acc, inv) => {
+            if (inv.orderStatus === 'CANCELADO') return acc;
             const isDelivered = inv.orderStatus === 'ENTREGADO';
             const total = inv.totals?.total || 0;
             const paid = inv.prePaymentAmount || 0;
@@ -210,6 +211,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
 
     const filteredInvoices = useMemo(() => {
         return invoices.filter(inv => {
+            if (inv.orderStatus === 'CANCELADO') return false;
             if (inv.type === '07') return false;
             
             if (selectedSummaryFilter === 'TO_COLLECT') {

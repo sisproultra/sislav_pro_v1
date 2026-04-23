@@ -103,6 +103,7 @@ const Operations: React.FC<OperationsProps> = ({ invoices, machines, activeItems
   // Filtro de Órdenes Pendientes (PENDIENTE, RECIBIDO o RECIBIDO_CENTRAL)
   const pendingOrders = useMemo(() => {
       return invoices.filter(inv => {
+          if (inv.orderStatus === 'CANCELADO') return false;
           if (inv.type === '07') return false;
           return inv.items.some(i => {
               if (i.estado_id === 9 || i.estado === 'CANCELADO') return false;
@@ -121,9 +122,10 @@ const Operations: React.FC<OperationsProps> = ({ invoices, machines, activeItems
   }, [invoices, searchTerm, optimisticStatuses]);
 
   // Corrected activeItems below to actually use item.unitCode properly
-  const refinedActiveItems = useMemo(() => {
+    const refinedActiveItems = useMemo(() => {
       const items: OperationItem[] = [];
       invoices.forEach(inv => {
+          if (inv.orderStatus === 'CANCELADO') return;
           if (inv.type === '07') return;
           inv.items.forEach((item, idx) => {
               if (item.estado_id === 9 || item.estado === 'CANCELADO') return;
@@ -238,10 +240,11 @@ const Operations: React.FC<OperationsProps> = ({ invoices, machines, activeItems
       setIsMachineModalOpen(false);
   };
 
-  const getSelectedDataList = (columnStatus: OrderStatus) => {
+    const getSelectedDataList = (columnStatus: OrderStatus) => {
       if (columnStatus === 'PENDIENTE') {
           const list: OperationItem[] = [];
           invoices.forEach(inv => {
+              if (inv.orderStatus === 'CANCELADO') return;
               inv.items.forEach((item, idx) => {
                   const uid = item.id;
                   const status = optimisticStatuses[uid] || item.status || 'PENDIENTE';

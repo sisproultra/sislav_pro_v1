@@ -163,7 +163,7 @@ const ConvertInvoiceModal: React.FC<ConvertInvoiceModalProps> = ({
           <button 
             disabled={!canConvert || isProcessing}
             onClick={handleConvertClick}
-            className={`w-full py-5 rounded-2xl font-bold text-lg shadow-xl transition-all flex items-center justify-center gap-3 active:scale-95 ${canConvert && !isProcessing ? (isTestMode ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-200 animate-pulse' : 'bg-slate-900 text-white hover:bg-black shadow-slate-200') : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+            className={`w-full py-5 rounded-2xl font-bold text-lg shadow-xl transition-all flex items-center justify-center gap-3 active:scale-95 ${canConvert && !isProcessing ? (isBetaMode ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-200 animate-pulse' : 'bg-slate-900 text-white hover:bg-black shadow-slate-200') : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
           >
             {isProcessing ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={24}/> EMITIR {targetType === InvoiceType.BOLETA ? 'BOLETA' : 'FACTURA'}</>}
           </button>

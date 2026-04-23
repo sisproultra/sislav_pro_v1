@@ -117,6 +117,11 @@ export interface Client extends BaseEntity {
     phone?: string;
     email?: string;
     address: string;
+    ubigeo?: string;
+    urbanizacion?: string;
+    distrito?: string;
+    provincia?: string;
+    departamento?: string;
     points: number;
     birthday?: string;
     gender?: string;
