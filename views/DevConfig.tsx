@@ -4,7 +4,7 @@ import {
     CheckCircle2, AlertCircle, Loader2, ArrowRight,
     Database, ShieldAlert, Layers, Globe, Save, Hash, 
     LayoutTemplate, Server, Search, MessageCircle, FileCode,
-    FileText, LayoutGrid, Link, Lock, Unlock, Info, Eye, X, Type, Maximize2, Check, Globe2, Zap, WashingMachine, Trash2, ImagePlus, ImageIcon, Plus, Smartphone,
+    FileText, LayoutGrid, Link, Lock, Unlock, Info, Eye, X, Type, Maximize2, Check, Globe2, Zap, WashingMachine, Trash2, ImagePlus, ImageIcon, Plus, Minus, Smartphone,
     AlertTriangle,
     ArrowRightLeft,
     Pause,
@@ -460,6 +460,50 @@ const DevConfig: React.FC<DevConfigProps> = ({ onRefreshData, company, onSaveCom
                                                         </div>
                                                     </div>
                                                 ))}
+
+                                                <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-3xl border border-slate-100 dark:border-white/5 hover:border-indigo-200 transition-all group mt-2">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <Hash size={12} className="text-slate-500" />
+                                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Correlativo de Orden Interna</span>
+                                                        </div>
+                                                        <div className="px-2 py-0.5 bg-white dark:bg-slate-800 rounded-md border border-slate-100 dark:border-white/10 text-[8px] font-black text-slate-400">
+                                                            GLOBAL
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button 
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                const current = manualNumbers['ORDEN_INTERNA_'] || 0;
+                                                                handleUpdateManualNumber('ORDEN_INTERNA', '', (current - 1).toString());
+                                                            }}
+                                                            className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-sm"
+                                                        >
+                                                            <Minus size={14} className="text-slate-600 dark:text-slate-400" />
+                                                        </button>
+                                                        <input 
+                                                            type="number"
+                                                            value={manualNumbers['ORDEN_INTERNA_'] ?? ''} 
+                                                            onChange={e => handleUpdateManualNumber('ORDEN_INTERNA', '', e.target.value)} 
+                                                            className="flex-1 p-2 bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 border-[1.5px] rounded-xl font-black text-center text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" 
+                                                            style={{ color: primaryColor, borderColor: primaryColor }}
+                                                            placeholder="N° CORRELATIVO" 
+                                                        />
+                                                        <button 
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                const current = manualNumbers['ORDEN_INTERNA_'] || 0;
+                                                                handleUpdateManualNumber('ORDEN_INTERNA', '', (current + 1).toString());
+                                                            }}
+                                                            className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-sm"
+                                                        >
+                                                            <Plus size={14} className="text-slate-600 dark:text-slate-400" />
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
 

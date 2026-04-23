@@ -291,7 +291,7 @@ export default function App() {
     }, [authSession]);
     const [darkMode, setDarkMode] = useState(() => {
         const saved = localStorage.getItem('sislav_dark_mode');
-        return saved ? JSON.parse(saved) : true;
+        return saved ? JSON.parse(saved) : false;
     });
 
     useEffect(() => {

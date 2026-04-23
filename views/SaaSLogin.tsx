@@ -16,7 +16,7 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
   const [error, setError] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('sislav_login_theme');
-    return saved === 'light' ? false : true;
+    return saved === 'dark' ? true : false;
   });
 
   const toggleTheme = () => {
