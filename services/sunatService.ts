@@ -7,9 +7,13 @@ import { getPeruDateTime } from '../utils/calculations';
  */
 export const sendBillToSunat = async (invoice: Invoice, company: Company): Promise<SunatResponse> => {
   
-  // Usamos el túnel configurado en vercel.json
-  const finalUrl = '/api-proxy/sunat';
+  // Usamos la URL de la base de datos si existe, de lo contrario el proxy (que es el default antiguo)
+  const dbUrl = company.sunat_url?.trim();
+  const finalUrl = dbUrl && dbUrl.startsWith('http') ? dbUrl : '/api-proxy/sunat';
   
+  // Base URL para archivos PDF/XML/CDR
+  const apiBaseUrl = dbUrl ? dbUrl.split('/post.php')[0] : 'https://apisu.sysventa.com/API_SUNAT';
+
   const peruTime = getPeruDateTime();
   const dateToUse = invoice.fecha_emision || invoice.date;
   const fechaEmision = dateToUse ? dateToUse.split('T')[0] : peruTime.date;
@@ -166,9 +170,9 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
               success: true,
               description: data?.respuesta_sunat_descripcion || "Comprobante Aceptado por SUNAT",
               hash: data?.hash || "---",
-              pdfUrl: data?.ruta_pdf || data?.url_pdf || `https://apisu.sysventa.com/API_SUNAT/files/facturacion_electronica/PDF/${company.ruc}-${invoice.serie}-${invoice.correlativo}.pdf`,
-              xmlUrl: data?.ruta_xml || `https://apisu.sysventa.com/API_SUNAT/files/facturacion_electronica/XML/${company.ruc}-${invoice.serie}-${invoice.correlativo}.xml`,
-              cdrUrl: data?.ruta_cdr || `https://apisu.sysventa.com/API_SUNAT/files/facturacion_electronica/CDR/R-${company.ruc}-${invoice.serie}-${invoice.correlativo}.zip`
+              pdfUrl: data?.ruta_pdf || data?.url_pdf || `${apiBaseUrl}/files/facturacion_electronica/PDF/${company.ruc}-${invoice.serie}-${invoice.correlativo}.pdf`,
+              xmlUrl: data?.ruta_xml || `${apiBaseUrl}/files/facturacion_electronica/XML/${company.ruc}-${invoice.serie}-${invoice.correlativo}.xml`,
+              cdrUrl: data?.ruta_cdr || `${apiBaseUrl}/files/facturacion_electronica/CDR/R-${company.ruc}-${invoice.serie}-${invoice.correlativo}.zip`
           };
       } else {
           return {
@@ -224,8 +228,12 @@ export const sendSummaryToSunat = async (invoices: Invoice[], company: Company) 
     }))
   };
 
+  const dbUrl = company.sunat_url?.trim();
+  const summaryBaseUrl = dbUrl ? dbUrl.split('/post.php')[0] : 'https://apisu.sysventa.com/API_SUNAT';
+  const finalUrl = dbUrl ? `${summaryBaseUrl}/api/resumen` : '/api-proxy/sunat/api/resumen';
+
   try {
-    const response = await fetch('/api-proxy/sunat/api/resumen', {
+    const response = await fetch(finalUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
