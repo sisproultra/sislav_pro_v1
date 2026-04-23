@@ -7,11 +7,25 @@ import { getPeruDateTime } from '../utils/calculations';
  */
 export const sendBillToSunat = async (invoice: Invoice, company: Company): Promise<SunatResponse> => {
   
-  // Usamos la URL de la base de datos si existe, de lo contrario el proxy (que es el default antiguo)
+  // Usamos la URL configurada en la sucursal
   const dbUrl = company.sunat_url?.trim();
-  const finalUrl = dbUrl && dbUrl.startsWith('http') ? dbUrl : '/api-proxy/sunat';
   
-  // Base URL para archivos PDF/XML/CDR
+  // LOGICA DE PROXY: 
+  // Si la URL apunta a 'apisu.sysventa.com', usamos el proxy interno '/api-proxy/sunat'
+  // para evitar problemas de CORS (Cross-Origin Resource Sharing).
+  let finalUrl = '/api-proxy/sunat';
+  
+  if (dbUrl && dbUrl.startsWith('http')) {
+      if (dbUrl.includes('apisu.sysventa.com')) {
+          finalUrl = '/api-proxy/sunat';
+      } else {
+          // Si es una URL externa personalizada (como slvlaundry.sysventa.com),
+          // intentamos ir directo, pero el servidor destino DEBE tener habilitado CORS.
+          finalUrl = dbUrl;
+      }
+  }
+  
+  // Base URL para generar los links de descarga (PDF/XML/CDR)
   const apiBaseUrl = dbUrl ? dbUrl.split('/post.php')[0] : 'https://apisu.sysventa.com/API_SUNAT';
 
   const peruTime = getPeruDateTime();
@@ -50,17 +64,20 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
 
   const payload: any = {
     "empresa": {
-        // Si es modo prueba con MODDATOS, forzamos el RUC de prueba que la API acepta
+        // RUC de prueba estándar si está en modo BETA
         "ruc": isTestMode ? "20604051984" : cleanDoc(company.ruc),
         "razon_social": cleanText(company.razonSocial || "EMPRESA DE PRUEBA"),
         "nombre_comercial": cleanText(company.nombre_comercial || company.razonSocial || "EMPRESA DE PRUEBA"), 
         "domicilio_fiscal": cleanText(company.address || "CALLE PRUEBA 123"),
         "ubigeo": company.ubigeo || "150101",
-        "urbanizacion": cleanText(company.urbanizacion || "-"),
+        "urbanizacion": cleanText(company.urbanizacion && company.urbanizacion !== '-' ? company.urbanizacion : ""),
         "distrito": cleanText(company.distrito || "LIMA"),
         "provincia": cleanText(company.provincia || "LIMA"),
         "departamento": cleanText(company.departamento || "LIMA"),
         "modo": company.sunatEnvironment === 'PRODUCTION' ? "1" : "0", 
+        // Enviamos ambos formatos de credenciales para máxima compatibilidad con diferentes versiones del backend
+        "usu_secundario_user": (company.solUser || "MODDATOS").trim(), 
+        "usu_secundario_password": (company.solPass || "MODDATOS").trim(),
         "usu_secundario_produccion_user": (company.solUser || "MODDATOS").trim(), 
         "usu_secundario_produccion_password": (company.solPass || "MODDATOS").trim()
     },
@@ -75,13 +92,18 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
         "numero": invoice.correlativo.toString(),
         "fecha_emision": fechaEmision,
         "hora_emision": horaEmision,
-        "fecha_vencimiento": "",
+        "fecha_vencimiento": fechaEmision, // Usamos la misma fecha si no hay vencimiento
         "moneda_id": company.moneda_simbolo?.includes('$') ? "2" : "1", 
         "forma_pago_id": "1", 
         "total_gravada": safeNumber(invoice.totals.gravada),
         "total_igv": safeNumber(invoice.totals.igv),
         "total_exonerada": safeNumber(invoice.totals.exonerada),
         "total_inafecta": safeNumber(invoice.totals.inafecta),
+        "total_gratuitas": "0.00",
+        "total_otros_cargos": "0.00",
+        "total_descuento": "0.00",
+        "total_exportacion": "0.00",
+        "total_venta": safeNumber(invoice.totals.total),
         "tipo_documento_codigo": invoice.type,
         "nota": cleanText(invoice.notes || "VENTA REALIZADA DESDE SISTEMA POS"),
         // Campos para Nota de Crédito (Tipo 07)
@@ -89,24 +111,35 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
             "tipo_documento_referencia": invoice.relatedDocument.type,
             "serie_referencia": invoice.relatedDocument.serie,
             "numero_referencia": String(invoice.relatedDocument.correlativo),
-            "motivo_codigo": "01", // 01: Anulación de la operación
+            "motivo_codigo": "01", 
             "motivo_descripcion": "ANULACION DE LA OPERACION"
         } : {})
     },
     "items": invoice.items.map((item, idx) => {
         const itemIgvType = item.igvType || '10';
-        let precioBase = Number(item.price) || 0;
+        let valorUnitario = Number(item.price) || 0;
         if (itemIgvType === '10') {
-            precioBase = Number((precioBase / igvFactor).toFixed(2));
+            valorUnitario = Number((valorUnitario / igvFactor).toFixed(6)); // Más precisión
         }
+        
+        const cantidad = Number(item.quantity) || 0;
+        const total = Number((Number(item.price) * cantidad).toFixed(2));
+        const subtotal = Number((valorUnitario * cantidad).toFixed(2));
+        const igv = Number((total - subtotal).toFixed(2));
+
         return {
             "producto": cleanText(item.name || "PRODUCTO"),
-            "cantidad": (Number(item.quantity) || 0).toString(),
-            "precio_base": safeNumber(precioBase), 
-            "codigo_sunat": "-",
+            "cantidad": cantidad.toString(),
+            "valor_unitario": valorUnitario.toFixed(2),
+            "precio_unitario": safeNumber(item.price),
+            "precio_base": valorUnitario.toFixed(2), // Compatibilidad
+            "codigo_sunat": "",
             "codigo_producto": item.id ? item.id.substring(0, 15) : `p-${idx}`,
             "codigo_unidad": item.unitCode || 'NIU', 
-            "tipo_igv_codigo": itemIgvType
+            "tipo_igv_codigo": itemIgvType,
+            "igv": igv.toFixed(2),
+            "subtotal": subtotal.toFixed(2),
+            "total": total.toFixed(2)
         };
     })
   };
