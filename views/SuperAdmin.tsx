@@ -527,7 +527,7 @@ const UsersListView: React.FC = () => {
 };
 
 export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: SaasBranch, isMasterBypass: boolean) => void }> = ({ onLogout, onSelectTenant }) => {
-    const [view, setView] = useState<'ACCOUNTS' | 'GLOBAL' | 'SETTINGS' | 'LOGS' | 'USERS'>('ACCOUNTS');
+    const [view, setView] = useState<'ACCOUNTS' | 'GLOBAL' | 'SETTINGS' | 'LOGS' | 'USERS' | 'BULK_MODULOS'>('ACCOUNTS');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [activeAccordion, setActiveAccordion] = useState<string | null>('APIS_MAESTRAS');
     const [companies, setCompanies] = useState<SaasCompany[]>([]);
@@ -630,32 +630,58 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
     const [isCatalogDeleteModalOpen, setIsCatalogDeleteModalOpen] = useState(false);
     const [catalogItemToDelete, setCatalogItemToDelete] = useState<any>(null);
     const [currentCatalogModule, setCurrentCatalogModule] = useState<string>('');
+    const [companySearch, setCompanySearch] = useState('');
 
     const AVAILABLE_MODULES = [
-        { id: 'view:dashboard', label: 'Dashboard', category: 'BÁSICO' },
-        { id: 'view:pos', label: 'Nueva Venta', category: 'BÁSICO' },
-        { id: 'view:orders', label: 'Mis Órdenes', category: 'BÁSICO' },
-        { id: 'view:inventory', label: 'Servicios', category: 'BÁSICO' },
-        { id: 'view:clients', label: 'Clientes', category: 'BÁSICO' },
-        { id: 'view:expenses', label: 'Egresos', category: 'BÁSICO' },
-        { id: 'view:reports', label: 'Reportes', category: 'BÁSICO' },
-        { id: 'view:settings', label: 'Ajustes', category: 'BÁSICO' },
-        { id: 'view:agenda', label: 'Agenda / Calendario', category: 'PREMIUM' },
-        { id: 'view:operations', label: 'Operación Lavado', category: 'PREMIUM' },
-        { id: 'view:yape', label: 'Monitor Yape', category: 'PREMIUM' },
-        { id: 'view:machines', label: 'Control de Máquinas', category: 'PREMIUM' },
-        { id: 'view:callcenter', label: 'Call Center', category: 'PREMIUM' },
-        { id: 'view:delivery', label: 'Delivery / Logística', category: 'PREMIUM' },
-        { id: 'view:supplies', label: 'Control de Insumos', category: 'PREMIUM' },
-        { id: 'view:purchases', label: 'Gestión de Compras', category: 'PREMIUM' },
-        { id: 'view:package_inventory', label: 'Inventario Paquetes', category: 'PREMIUM' },
-        { id: 'view:loyalty', label: 'Fidelización', category: 'PREMIUM' },
-        { id: 'view:bonus_points', label: 'Puntos Bonus', category: 'PREMIUM' },
-        { id: 'view:promotions', label: 'Promociones', category: 'PREMIUM' },
-        { id: 'view:wa_campaign', label: 'Campañas WhatsApp', category: 'PREMIUM' },
-        { id: 'view:modificaciones', label: 'Modificar Operaciones', category: 'BÁSICO' },
-        { id: 'DEV_CONFIG', label: 'Config. Developer', category: 'PREMIUM' }
+        { id: 'view:dashboard', label: 'Dashboard', category: 'PRINCIPAL' },
+        { id: 'view:agenda', label: 'Mi Tarea del Día', category: 'PRINCIPAL' },
+        { id: 'view:pos', label: 'Nueva Venta', category: 'PRINCIPAL' },
+        { id: 'view:orders', label: 'Mis Órdenes', category: 'PRINCIPAL' },
+        { id: 'view:operations', label: 'Operación Lavado', category: 'PRINCIPAL' },
+        { id: 'view:cash_closing', label: 'Cierre de Caja', category: 'PRINCIPAL' },
+        { id: 'view:history', label: 'Documentos Elec.', category: 'PRINCIPAL' },
+        { id: 'view:yape', label: 'Mis Yapes', category: 'PRINCIPAL' },
+        { id: 'view:my_reports', label: 'Mis Reportes', category: 'PRINCIPAL' },
+
+        { id: 'view:inventory', label: 'Servicios', category: 'GESTIÓN' },
+        { id: 'view:clients', label: 'Clientes', category: 'GESTIÓN' },
+        { id: 'view:employees', label: 'Empleados', category: 'GESTIÓN' },
+        { id: 'view:expenses', label: 'Egresos', category: 'GESTIÓN' },
+
+        { id: 'view:machines', label: 'Máquinas', category: 'LOGÍSTICA' },
+        { id: 'view:logistics_hub', label: 'Logística Hub', category: 'LOGÍSTICA' },
+        { id: 'view:callcenter', label: 'Call Center', category: 'LOGÍSTICA' },
+        { id: 'view:delivery', label: 'Delivery', category: 'LOGÍSTICA' },
+        { id: 'view:supplies', label: 'Insumos', category: 'LOGÍSTICA' },
+        { id: 'view:purchases', label: 'Compras', category: 'LOGÍSTICA' },
+        { id: 'view:package_inventory', label: 'Inv. Paquetes', category: 'LOGÍSTICA' },
+        { id: 'view:product_counting', label: 'Conteo Inventario', category: 'LOGÍSTICA' },
+
+        { id: 'view:loyalty', label: 'Fidelización', category: 'MARKETING' },
+        { id: 'view:bonus_points', label: 'Puntos Bonus', category: 'MARKETING' },
+        { id: 'view:promotions', label: 'Promociones', category: 'MARKETING' },
+        { id: 'view:wa_campaign', label: 'Campaña WA', category: 'MARKETING' },
+
+        { id: 'view:modificaciones', label: 'Modificar', category: 'ADMINISTRACIÓN' },
+        { id: 'view:categories', label: 'Categorías', category: 'ADMINISTRACIÓN' },
+        { id: 'view:payment_methods', label: 'Pagos', category: 'ADMINISTRACIÓN' },
+        { id: 'view:reports', label: 'Reportes', category: 'ADMINISTRACIÓN' },
+        { id: 'view:accounting', label: 'Contabilidad', category: 'ADMINISTRACIÓN' },
+        { id: 'view:settings', label: 'Ajustes', category: 'ADMINISTRACIÓN' },
+        
+        { id: 'DEV_CONFIG', label: 'Config, Developer', category: 'SISTEMA' }
     ];
+
+    const DEFAULT_MODULES_CONFIG = {
+        'view:dashboard': true,
+        'view:agenda': true,
+        'view:pos': true,
+        'view:orders': true,
+        'view:operations': true,
+        'view:cash_closing': true,
+        'view:history': true,
+        'view:yape': true
+    };
 
     const [showDiagnostics, setShowDiagnostics] = useState(false);
     const [sessionInfo, setSessionInfo] = useState<any>(null);
@@ -737,7 +763,7 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
         setBrLogoUrl(''); setBrFaviconUrl(''); setBrIsActive(true);
         setBrPorcentajeIgv('18.00'); setBrMonedaSimbolo('S/');
         setBrUseOrderReset(false); setBrLimiteReconteo('10000');
-        setBrModulosConfig({});
+        setBrModulosConfig(DEFAULT_MODULES_CONFIG);
         setBrDocEnforceEnabled(false);
         setBrDocEnforceThreshold('700');
         setIsEditingBranch(false);
@@ -1304,6 +1330,7 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
                 </div>
                 <nav className="flex-1 px-4 space-y-2 mt-4 md:mt-0">
                     <button onClick={() => { setView('ACCOUNTS'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${view === 'ACCOUNTS' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}><Building size={18} /> Cuentas & Sedes</button>
+                    <button onClick={() => { setView('BULK_MODULOS'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${view === 'BULK_MODULOS' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}><LayoutGrid size={18} /> Módulos</button>
                     <button onClick={() => { setView('USERS'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${view === 'USERS' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}><Users size={18} /> Accesos</button>
                     <button onClick={() => { setView('GLOBAL'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${view === 'GLOBAL' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}><Globe size={18} /> Config. Global</button>
                     <button onClick={() => { setView('LOGS'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${view === 'LOGS' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}><Terminal size={18} /> Logs Sistema</button>
@@ -1404,10 +1431,9 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
                                         <input 
                                             type="text" 
                                             placeholder="Buscar empresa..." 
+                                            value={companySearch}
                                             className="w-full bg-slate-900 border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm font-medium focus:border-indigo-500 transition-all outline-none"
-                                            onChange={(e) => {
-                                                // Implementar búsqueda local o remota
-                                            }}
+                                            onChange={(e) => setCompanySearch(e.target.value)}
                                         />
                                     </div>
                                     <button onClick={() => { resetCompanyForm(); setIsCompanyModalOpen(true); }} className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 px-8 py-4 rounded-2xl font-bold text-xs uppercase tracking-[0.15em] shadow-xl flex items-center justify-center gap-3 text-white"><Plus size={20} strokeWidth={3} /> Nueva Empresa</button>
@@ -1443,7 +1469,7 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
                             )}
 
                             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                                {companies.filter(c => c.isActive).map(company => {
+                                {companies.filter(c => c.isActive && (c.name.toLowerCase().includes(companySearch.toLowerCase()) || c.ruc.includes(companySearch))).map(company => {
                                     const companyBranches = branches.filter(b => b.empresaId === company.id);
                                     return (
                                         <div key={company.id} className="bg-slate-900/50 backdrop-blur-xl rounded-[2.5rem] md:rounded-[3rem] border border-white/5 p-6 md:p-8 shadow-2xl group hover:border-indigo-500/30 transition-all flex flex-col h-full">
@@ -1611,6 +1637,151 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
 
                     {view === 'LOGS' && <SystemLogsView />}
                     {view === 'USERS' && <UsersListView />}
+                    {view === 'BULK_MODULOS' && (
+                        <div className="space-y-8 animate-in fade-in duration-500">
+                            <div>
+                                <h2 className="text-3xl md:text-4xl font-bold uppercase tracking-tight text-white leading-none">Gestión Masiva de Módulos</h2>
+                                <p className="text-slate-500 text-sm font-medium mt-1 uppercase">Configure la visibilidad de módulos para todas las sedes del sistema.</p>
+                            </div>
+
+                            <div className="bg-slate-900/50 backdrop-blur-xl rounded-[2.5rem] border border-white/5 p-8 shadow-2xl">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                                    {['PRINCIPAL', 'GESTIÓN', 'LOGÍSTICA', 'MARKETING', 'ADMINISTRACIÓN', 'SISTEMA'].map(category => (
+                                        <div key={category} className="space-y-4">
+                                            <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                                                <div className="w-8 h-8 rounded-lg bg-indigo-600/20 flex items-center justify-center text-indigo-400">
+                                                    <LayoutGrid size={16} />
+                                                </div>
+                                                <h5 className="text-[11px] font-black text-white uppercase tracking-[0.2em]">{category}</h5>
+                                            </div>
+                                            <div className="space-y-3">
+                                                {AVAILABLE_MODULES.filter(m => m.category === category).map(module => (
+                                                    <div key={module.id} className="flex flex-col gap-3 p-5 bg-white/5 rounded-3xl border border-white/5 hover:bg-white/10 transition-all group">
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className="text-[11px] font-black text-white uppercase tracking-tight group-hover:text-indigo-400 transition-colors truncate">{module.label}</span>
+                                                                <span className="text-[9px] font-bold text-slate-500 font-mono truncate">{module.id}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-3 shrink-0">
+                                                                <div className="flex flex-col items-center gap-1">
+                                                                    <span className="text-[7px] font-bold text-slate-500 uppercase tracking-widest">NUEVO</span>
+                                                                    <button 
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                const currentConfig = globalConfig?.globalModules || {};
+                                                                                const moduleCfg = typeof currentConfig[module.id] === 'object' 
+                                                                                    ? currentConfig[module.id] 
+                                                                                    : { isActive: true };
+                                                                                
+                                                                                const isNew = !moduleCfg.isNew;
+                                                                                const newModules = {
+                                                                                    ...currentConfig,
+                                                                                    [module.id]: {
+                                                                                        ...moduleCfg,
+                                                                                        isNew
+                                                                                    }
+                                                                                };
+                                                                                await updateSaasGlobalConfig({ modulos_globales: newModules });
+                                                                                await loadData();
+                                                                            } catch (err: any) {
+                                                                                console.error("Error updating badge:", err);
+                                                                                alert(`Error actualizando badge NUEVO: ${err.message || 'Error desconocido'}`);
+                                                                            }
+                                                                        }}
+                                                                        className={`relative w-10 h-5 rounded-full transition-all ${globalConfig?.globalModules?.[module.id]?.isNew ? 'bg-indigo-500' : 'bg-slate-700'}`}
+                                                                    >
+                                                                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${globalConfig?.globalModules?.[module.id]?.isNew ? 'left-6' : 'left-1'}`} />
+                                                                    </button>
+                                                                </div>
+                                                                <div className="h-8 w-px bg-white/10" />
+                                                                <div className="flex flex-col items-center gap-1">
+                                                                    <span className="text-[7px] font-bold text-slate-500 uppercase tracking-widest">ACTIVO</span>
+                                                                    <button 
+                                                                        onClick={async () => {
+                                                                            const currentConfig = globalConfig?.globalModules || {};
+                                                                            const moduleCfg = typeof currentConfig[module.id] === 'object' 
+                                                                                ? currentConfig[module.id] 
+                                                                                : { isNew: false };
+                                                                            
+                                                                            const isActive = !(moduleCfg.isActive !== false);
+                                                                            
+                                                                            if (confirm(`¿Está seguro de ${isActive ? 'ACTIVAR' : 'DESACTIVAR'} el módulo "${module.label}" para TODAS las sedes?`)) {
+                                                                                try {
+                                                                                    const newModules = {
+                                                                                        ...currentConfig,
+                                                                                        [module.id]: {
+                                                                                            ...moduleCfg,
+                                                                                            isActive
+                                                                                        }
+                                                                                    };
+                                                                                    await updateSaasGlobalConfig({ modulos_globales: newModules });
+                                                                                    await loadData();
+                                                                                } catch (err: any) {
+                                                                                    console.error("Error updating active status:", err);
+                                                                                    alert(`Error actualizando estado global: ${err.message || 'Error desconocido'}`);
+                                                                                }
+                                                                            }
+                                                                        }}
+                                                                        className={`relative w-10 h-5 rounded-full transition-all ${globalConfig?.globalModules?.[module.id]?.isActive !== false ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                                                                    >
+                                                                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${globalConfig?.globalModules?.[module.id]?.isActive !== false ? 'left-6' : 'left-1'}`} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="flex flex-wrap gap-1.5 pt-3 border-t border-white/5">
+                                                            {['OWNER', 'ADMIN', 'CAJERO', 'OPERARIO', 'DELIVERY', 'CONTABILIDAD'].map(role => {
+                                                                const isAllowed = globalConfig?.globalModules?.[module.id]?.allowedRoles?.includes(role);
+                                                                return (
+                                                                    <button
+                                                                        key={role}
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                const currentConfig = globalConfig?.globalModules || {};
+                                                                                const moduleCfg = typeof currentConfig[module.id] === 'object' 
+                                                                                    ? currentConfig[module.id] 
+                                                                                    : { isActive: true, isNew: false };
+                                                                                
+                                                                                const currentRoles = Array.isArray(moduleCfg.allowedRoles) ? moduleCfg.allowedRoles : [];
+                                                                                const newRoles = currentRoles.includes(role)
+                                                                                    ? currentRoles.filter((r: string) => r !== role)
+                                                                                    : [...currentRoles, role];
+                                                                                
+                                                                                const newModules = {
+                                                                                    ...currentConfig,
+                                                                                    [module.id]: {
+                                                                                        ...moduleCfg,
+                                                                                        allowedRoles: newRoles
+                                                                                    }
+                                                                                };
+                                                                                await updateSaasGlobalConfig({ modulos_globales: newModules });
+                                                                                await loadData();
+                                                                            } catch (err: any) {
+                                                                                console.error("Error updating roles:", err);
+                                                                                alert(`Error actualizando roles: ${err.message || 'Error desconocido'}`);
+                                                                            }
+                                                                        }}
+                                                                        className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-tighter transition-all border ${
+                                                                            isAllowed 
+                                                                            ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-400' 
+                                                                            : 'bg-white/5 border-white/5 text-slate-500 hover:border-white/20'
+                                                                        }`}
+                                                                    >
+                                                                        {role}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {view === 'GLOBAL' && (
                         <div className="space-y-8 animate-in fade-in duration-500 text-slate-200">
@@ -2331,7 +2502,7 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
                                             <p className="text-slate-400 text-xs font-bold uppercase mb-6">Habilite o deshabilite funciones específicas para esta sucursal.</p>
                                             
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                {['BÁSICO', 'PREMIUM'].map(category => (
+                                                {['PRINCIPAL', 'GESTIÓN', 'LOGÍSTICA', 'MARKETING', 'ADMINISTRACIÓN', 'SISTEMA'].map(category => (
                                                     <div key={category} className="space-y-4">
                                                         <h5 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/10 pb-2">{category}</h5>
                                                         <div className="space-y-2">

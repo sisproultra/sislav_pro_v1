@@ -404,6 +404,7 @@ export interface SunatResponse {
 export interface GlobalModuleConfig {
     isActive: boolean;
     isNew?: boolean;
+    allowedRoles?: UserRole[];
 }
 
 export interface PausedSale extends BaseEntity {
@@ -536,7 +537,8 @@ export const SYSTEM_PERMISSIONS: PermissionDefinition[] = [
     { id: 'view:payment_methods', label: 'Pagos', description: 'Métodos de pago aceptados', group: 'ADMIN' },
     { id: 'view:reports', label: 'Reportes', description: 'Análisis de ventas y egresos', group: 'ADMIN' },
     { id: 'view:accounting', label: 'Contabilidad', description: 'Reportes para contador y SUNAT', group: 'ADMIN' },
-    { id: 'view:settings', label: 'Ajustes', description: 'Configuración local', group: 'ADMIN' }
+    { id: 'view:settings', label: 'Ajustes', description: 'Configuración local', group: 'ADMIN' },
+    { id: 'view:my_reports', label: 'Mis Reportes', description: 'Reportes de ingresos y ventas', group: 'PRINCIPAL' }
 ];
 
 export const SUNAT_PAYMENT_CODES = [

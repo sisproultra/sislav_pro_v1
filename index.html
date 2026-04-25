@@ -109,6 +109,34 @@
       .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
       .tbl th { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
       .tbl td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+
+      @keyframes neon-pulse {
+        0%, 100% { 
+          filter: brightness(1.2) drop-shadow(0 0 3px var(--brand-primary));
+          opacity: 0.9;
+        }
+        50% { 
+          filter: brightness(1.8) drop-shadow(0 0 10px var(--brand-primary));
+          opacity: 1;
+        }
+      }
+      .neon-badge {
+        animation: neon-pulse 1.5s infinite ease-in-out;
+        border: 1px solid var(--brand-primary);
+        box-shadow: 0 0 8px var(--brand-primary), inset 0 0 4px var(--brand-primary);
+        background: transparent;
+        color: var(--brand-primary);
+        text-shadow: 0 0 5px var(--brand-primary);
+        font-weight: 900;
+        letter-spacing: 0.05em;
+      }
+      @keyframes blink-badge {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.8; transform: scale(0.95); }
+      }
+      .animate-blink-badge {
+        animation: blink-badge 1.5s infinite;
+      }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>

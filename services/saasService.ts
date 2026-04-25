@@ -716,6 +716,38 @@ export const updateSaasBranch = async (id: string, branch: any) => {
 };
 
 export const updateSaasGlobalConfig = async (updates: any) => {
-    const { error } = await supabase.from('saas_configuracion_global').update(updates).eq('id', 1);
-    if (error) throw error;
+    try {
+        console.log("⏳ [updateSaasGlobalConfig] Intentando actualización...", updates);
+        
+        // 1. Intentamos obtener el ID del primer registro (solo debería haber uno)
+        const { data: firstRow, error: fetchError } = await supabase
+            .from('saas_configuracion_global')
+            .select('id')
+            .limit(1)
+            .maybeSingle();
+
+        if (fetchError) {
+            console.error("❌ Error al buscar ID de configuración global:", fetchError);
+            throw fetchError;
+        }
+
+        const targetId = firstRow?.id || 1;
+        console.log(`🎯 [updateSaasGlobalConfig] Target ID: ${targetId}`);
+
+        // 2. Ejecutamos la actualización
+        const { error: updateError } = await supabase
+            .from('saas_configuracion_global')
+            .update(updates)
+            .eq('id', targetId);
+
+        if (updateError) {
+            console.error("❌ Error en update configuracion global:", updateError);
+            throw updateError;
+        }
+        
+        console.log("✅ [updateSaasGlobalConfig] Actualización exitosa.");
+    } catch (err) {
+        console.error("🔥 Excepción crítica en updateSaasGlobalConfig:", err);
+        throw err;
+    }
 };

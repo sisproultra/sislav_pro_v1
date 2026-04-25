@@ -82,6 +82,7 @@ import PaymentMethods from './views/PaymentMethods';
 import Reports from './views/Reports';
 import Settings from './views/Settings';
 import SalesHistory from './views/SalesHistory';
+import MyReports from './views/MyReports';
 import YapeMonitor from './views/YapeMonitor';
 import DevConfig from './views/DevConfig';
 import { SuperAdmin } from './views/SuperAdmin';
@@ -1621,6 +1622,7 @@ export default function App() {
             case 'view:payment_methods': return <PaymentMethods methods={paymentMethods} globalPaymentCatalog={globalConfig?.defaultPaymentImages} onSave={async (pm) => { await dbSavePaymentMethod(pm); refreshData(true); }} onUpdate={async (id, pm) => { await dbUpdatePaymentMethod(id, pm); refreshData(true); }} canManage={canManageApp} />;
             case 'view:wa_campaign': return <WaCampaign clients={clients} company={activeSucursal} globalContacts={waContacts} setGlobalContacts={setWaContacts} globalStatus={waStatus} setGlobalStatus={setWaStatus} globalTemplates={waTemplates} setGlobalTemplates={setWaTemplates} globalDelay={waDelay} setGlobalDelay={setWaDelay} globalImage={waGlobalImage} setGlobalImage={setWaGlobalImage} globalReminderMsg={waReminderMessageState} setGlobalReminderMsg={setWaReminderMessageState} globalReminderTemplates={waReminderTemplates} setGlobalReminderTemplates={setWaReminderTemplates} globalActiveTab={waActiveTab} setGlobalActiveTab={setWaActiveTab} />;
             case 'view:reports': return <Reports expenses={expenses} invoices={invoices} clients={clients} company={activeSucursal} />;
+            case 'view:my_reports': return <MyReports invoices={invoices} paymentMethods={paymentMethods} company={activeSucursal} />;
             case 'view:accounting': return <Accounting invoices={invoices} paymentMethods={paymentMethods} company={activeSucursal} />;
             case 'view:modificaciones': return <Modificaciones invoices={invoices} products={products} company={activeSucursal} paymentMethods={paymentMethods} onRefresh={() => refreshData(true)} canManage={canManageApp} checkCajaOpen={checkCajaOpen} />;
             case 'view:history': return <SalesHistory invoices={invoices} company={activeSucursal} clients={clients} onViewReceipt={(inv) => setSelectedInvoiceForReceipt(inv)} onAddClient={dbCreateClient} onConvertInvoice={handleConvertInvoice} onVoidInvoice={handleVoidInvoice} onRetrySunat={handleRetrySunat} onSendSummary={handleSendDailySummary} />;
