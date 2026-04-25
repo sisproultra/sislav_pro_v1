@@ -1624,9 +1624,13 @@ export default function App() {
             case 'view:modificaciones': return <Modificaciones invoices={invoices} products={products} company={activeSucursal} paymentMethods={paymentMethods} onRefresh={() => refreshData(true)} canManage={canManageApp} checkCajaOpen={checkCajaOpen} />;
             case 'view:history': return <SalesHistory invoices={invoices} company={activeSucursal} clients={clients} onViewReceipt={(inv) => setSelectedInvoiceForReceipt(inv)} onAddClient={dbCreateClient} onConvertInvoice={handleConvertInvoice} onVoidInvoice={handleVoidInvoice} onRetrySunat={handleRetrySunat} onSendSummary={handleSendDailySummary} />;
             case 'view:owner_dashboard': return <OwnerDashboard session={authSession} isDarkMode={darkMode} toggleTheme={toggleDarkMode} onLogout={handleLogout} onSelectBranch={(b) => { 
+                console.log("OWNER selecting branch:", b);
                 const normalized = normalizeSucursal(b);
+                const holdingId = normalized.empresa_holding_id 
+                               || normalized.empresa_id 
+                               || b.empresa_id;  // fallback directo al objeto original
                 setActiveSucursal(normalized); 
-                setDbBranchContext(normalized.id, normalized.empresa_id); 
+                setDbBranchContext(normalized.id, holdingId); 
                 setCurrentView('view:dashboard'); 
             }} />;
             case 'view:yape': return <YapeMonitor company={activeSucursal} />;
@@ -1685,8 +1689,11 @@ export default function App() {
             onLogout={handleLogout} 
             onSelectBranch={(b) => {
                 const normalized = normalizeSucursal(b);
+                const holdingId = normalized.empresa_holding_id 
+                               || normalized.empresa_id 
+                               || b.empresa_id;  // fallback directo al objeto original
                 setActiveSucursal(normalized);
-                setDbBranchContext(normalized.id, normalized.empresa_id);
+                setDbBranchContext(normalized.id, holdingId);
                 setCurrentView('view:dashboard');
             }} 
         />;
@@ -1753,9 +1760,13 @@ export default function App() {
                 toggleTheme={toggleDarkMode}
                 onLogout={handleLogout} 
                 onSelectBranch={(b) => {
+                    console.log("OWNER selecting branch (initial):", b);
                     const normalized = normalizeSucursal(b);
+                    const holdingId = normalized.empresa_holding_id 
+                                   || normalized.empresa_id 
+                                   || b.empresa_id;  // fallback directo al objeto original
                     setActiveSucursal(normalized);
-                    setDbBranchContext(normalized.id, normalized.empresa_id);
+                    setDbBranchContext(normalized.id, holdingId);
                     setCurrentView('view:dashboard');
                 }} 
             />;

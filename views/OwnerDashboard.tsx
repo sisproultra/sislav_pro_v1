@@ -320,16 +320,16 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
                   src={holdingInfo.url_logo} 
                   alt="Logo" 
                   className="h-8 md:h-11 w-auto object-contain" 
-                />
-              ) : holdingInfo?.url_favicon ? (
-                <img 
-                  src={holdingInfo.url_favicon} 
-                  alt="Favicon" 
-                  className="h-8 md:h-10 w-auto object-contain rounded-lg" 
+                  referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-white/5' : 'bg-gray-100'} text-accent`}>
-                  <Store className="w-5 h-5 md:w-6 md:h-6" />
+                <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-accent/10' : 'bg-accent/5'} text-accent`}>
+                  <img 
+                    src={holdingInfo?.url_logo || 'https://raw.githubusercontent.com/ZapV/ZapV_Images/refs/heads/main/v5.png'} 
+                    className="h-8 md:h-10 w-auto object-contain" 
+                    alt="Logo Empresa"
+                    referrerPolicy="no-referrer"
+                  />
                 </div>
               )}
               <div className="hidden sm:block">
@@ -496,7 +496,7 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
           <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-none snap-x snap-mandatory -mx-4 px-4 md:mx-0 md:px-0">
             <button
               onClick={() => setSelectedBranchId(null)}
-              className={`whitespace-nowrap px-2.5 py-1.5 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl text-[9px] md:text-xs font-bold border transition-all flex items-center gap-1.5 md:gap-3 shrink-0 snap-start ${
+              className={`whitespace-nowrap px-2 py-1.5 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl text-[8px] md:text-xs font-bold border transition-all flex items-center gap-1 md:gap-3 shrink-0 snap-start ${
                 !selectedBranchId 
                   ? 'bg-accent border-accent text-white shadow-xl shadow-accent/20' 
                   : (isDarkMode ? 'bg-surface border-white/10 text-text2 hover:text-white hover:border-white/20' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400')
@@ -512,7 +512,7 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
               <button
                 key={branch.id}
                 onClick={() => setSelectedBranchId(selectedBranchId === branch.id ? null : branch.id)}
-                className={`whitespace-nowrap px-2.5 py-1.5 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl text-[9px] md:text-xs font-bold border transition-all flex items-center gap-1.5 md:gap-3 shrink-0 snap-start ${
+                className={`whitespace-nowrap px-2 py-1.5 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl text-[8px] md:text-xs font-bold border transition-all flex items-center gap-1 md:gap-3 shrink-0 snap-start ${
                   selectedBranchId === branch.id 
                     ? 'shadow-xl shadow-accent/20' 
                     : (isDarkMode ? 'bg-surface border-white/10 text-text2 hover:text-white hover:border-white/20' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400')

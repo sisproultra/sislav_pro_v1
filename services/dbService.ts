@@ -27,6 +27,7 @@ let activeHoldingId: string | null = null;
 let activeUserId: string | null = null;
 
 export const setDbBranchContext = (branchId: string, holdingId?: string, userId?: string) => {
+    console.log(`Setting DB Context - Branch: ${branchId}, Holding: ${holdingId}, User: ${userId}`);
     if (branchId) {
         activeBranchId = branchId;
         localStorage.setItem('sislav_active_branch_uuid', branchId);
@@ -44,13 +45,40 @@ export const setDbBranchContext = (branchId: string, holdingId?: string, userId?
 export const getActiveBranchId = () => {
     const stored = localStorage.getItem('sislav_active_branch_uuid');
     if (stored) return stored;
-    return activeBranchId;
+    if (activeBranchId) return activeBranchId;
+    
+    // Fallback de respaldo desde el objeto de sucursal persistido
+    const storedSucursal = localStorage.getItem('sislav_active_sucursal');
+    if (storedSucursal) {
+        try {
+            const parsed = JSON.parse(storedSucursal);
+            if (parsed?.id) {
+                console.log("Recuperando BranchId desde fallback sucursal:", parsed.id);
+                return parsed.id;
+            }
+        } catch (e) {}
+    }
+    return null;
 };
 
 export const getActiveHoldingId = () => {
     const stored = localStorage.getItem('sislav_active_holding_uuid');
     if (stored) return stored;
-    return activeHoldingId;
+    if (activeHoldingId) return activeHoldingId;
+
+    // Fallback de respaldo desde el objeto de sucursal persistido
+    const storedSucursal = localStorage.getItem('sislav_active_sucursal');
+    if (storedSucursal) {
+        try {
+            const parsed = JSON.parse(storedSucursal);
+            const hid = parsed?.empresa_id || parsed?.empresa_holding_id;
+            if (hid) {
+                console.log("Recuperando HoldingId desde fallback sucursal:", hid);
+                return hid;
+            }
+        } catch (e) {}
+    }
+    return null;
 };
 
 export const getActiveUserId = () => {
@@ -318,14 +346,19 @@ export const dbOwnerAuth = async (email: string, pass: string): Promise<AuthSess
 
 const ensureHoldingId = async (branchId: string): Promise<string> => {
     let hid = getActiveHoldingId();
-    if (!hid) {
-        const { data } = await supabase.from('sucursales').select('empresa_id').eq('id', branchId).single();
-        if (data) {
+    console.log(`Ensuring HoldingId for Branch: ${branchId}, Current: ${hid}`);
+    if (!hid && branchId) {
+        const { data } = await supabase.from('sucursales').select('empresa_id').eq('id', branchId).maybeSingle();
+        if (data?.empresa_id) {
             hid = data.empresa_id;
-            setDbBranchContext(branchId, hid!);
+            console.log(`Found missing HoldingId in DB: ${hid}`);
+            setDbBranchContext(branchId, hid);
         }
     }
-    if (!hid) throw new Error("Contexto de Holding no detectado. Re-inicie sesión.");
+    if (!hid) {
+        console.error("Contexto de Holding no detectado para branch:", branchId);
+        throw new Error("Contexto de Holding no detectado. Re-inicie sesión.");
+    }
     return hid;
 };
 
@@ -344,8 +377,8 @@ export const normalizeSucursal = (s: any): any => {
     return {
         id: s.id,
         sucursal_id: s.id,
-        empresa_id: s.empresa_id,
-        empresa_holding_id: s.empresa_id,
+        empresa_id: s.empresa_id || s.empresa_holding_id,
+        empresa_holding_id: s.empresa_id || s.empresa_holding_id,
         slug: s.slug,
         razonSocial: name,
         nombre_sucursal: name,
@@ -655,9 +688,14 @@ export const dbDeleteSucursalBanner = async (id: string) => {
 
 export const dbGetProducts = async (): Promise<Product[]> => {
     const branchId = getActiveBranchId();
-    if (!branchId) return [];
+    if (!branchId) {
+        console.warn("dbGetProducts: No branchId detected");
+        return [];
+    }
     try {
         const holdingId = await ensureHoldingId(branchId);
+        console.log(`dbGetProducts Fetching for Branch: ${branchId}, Holding: ${holdingId}`);
+        
         const { data, error } = await supabase
             .from('productos')
             .select('*, categorias(nombre), productos_recetas(*, insumos(nombre, unidad_medida, stock_actual))')
@@ -666,8 +704,14 @@ export const dbGetProducts = async (): Promise<Product[]> => {
             .eq('activo', true)
             .eq('estado', 'a')
             .order('nombre', { ascending: true })
-            .limit(1000); // Límite aumentado para evitar que productos nuevos no aparezcan
-        if (error) return [];
+            .limit(1000);
+
+        if (error) {
+            console.error("dbGetProducts Supabase Error:", error);
+            return [];
+        }
+        
+        console.log(`dbGetProducts Found ${data?.length || 0} products`);
         return (data || []).map(p => {
             const catInfo = normalizeRelation(p.categorias);
             return { 
