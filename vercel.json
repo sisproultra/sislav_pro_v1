@@ -1,6 +1,5 @@
 {
   "cleanUrls": true,
-  "trailingSlash": false,
   "rewrites": [
     {
       "source": "/api-proxy/decolecta/:path*",
@@ -9,10 +8,6 @@
     {
       "source": "/api-proxy/sunat",
       "destination": "https://apisu.sysventa.com/API_SUNAT/post.php"
-    },
-    {
-      "source": "/owner-login",
-      "destination": "/index.html"
     },
     {
       "source": "/(.*)",
