@@ -315,20 +315,26 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
             </button>
 
             <div className="flex items-center gap-3 shrink-0">
-              {holdingInfo?.url_logo || holdingInfo?.url_favicon ? (
+              {holdingInfo?.url_logo ? (
                 <img 
-                  src={holdingInfo.url_logo || holdingInfo.url_favicon} 
-                  alt="Holding Logo" 
-                  className="h-9 md:h-11 w-auto object-contain rounded-lg" 
+                  src={holdingInfo.url_logo} 
+                  alt="Logo" 
+                  className="h-8 md:h-11 w-auto object-contain" 
+                />
+              ) : holdingInfo?.url_favicon ? (
+                <img 
+                  src={holdingInfo.url_favicon} 
+                  alt="Favicon" 
+                  className="h-8 md:h-10 w-auto object-contain rounded-lg" 
                 />
               ) : (
-                <div className="w-9 h-9 md:w-11 md:h-11 rounded-xl bg-accent flex items-center justify-center text-white">
+                <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-white/5' : 'bg-gray-100'} text-accent`}>
                   <Store className="w-5 h-5 md:w-6 md:h-6" />
                 </div>
               )}
               <div className="hidden sm:block">
                 <h1 className="text-lg md:text-xl font-heading font-bold leading-none">{session.user.holding_name || session.user.company_name}</h1>
-                <p className={`text-[10px] md:text-xs mt-1 ${textSecondary}`}>Panel Corporativo</p>
+                <p className={`text-[10px] md:text-xs mt-1 ${textSecondary}`}>Panel de Control</p>
               </div>
             </div>
 
@@ -415,32 +421,42 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
             
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1 md:gap-2 bg-surface p-1 rounded-xl border border-white/5 self-start sm:self-auto overflow-x-auto no-scrollbar max-w-full">
-                {[7, 30, 90, 180, 365].map(days => (
-                  <button
-                    key={days}
-                    onClick={() => {
-                      setTimeRange(days);
-                      setIsCustomDate(false);
-                    }}
-                    className={`whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-bold transition-all ${
-                      !isCustomDate && timeRange === days 
-                        ? 'bg-accent text-white shadow-lg shadow-accent/20' 
-                        : 'text-text2 hover:text-white'
-                    }`}
-                  >
-                    {days === 7 ? '7D' : days === 30 ? '30D' : days === 90 ? '90D' : days === 180 ? '6M' : '1A'}
-                  </button>
-                ))}
+                <button
+                  onClick={() => {
+                    setTimeRange(0);
+                    setIsCustomDate(false);
+                  }}
+                  className={`whitespace-nowrap px-4 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-bold transition-all ${
+                    !isCustomDate && timeRange === 0 
+                      ? 'bg-accent text-white shadow-lg shadow-accent/20' 
+                      : 'text-text2 hover:text-white'
+                  }`}
+                >
+                  HOY
+                </button>
+                <button
+                  onClick={() => {
+                    setTimeRange(1);
+                    setIsCustomDate(false);
+                  }}
+                  className={`whitespace-nowrap px-4 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-bold transition-all ${
+                    !isCustomDate && timeRange === 1 
+                      ? 'bg-accent text-white shadow-lg shadow-accent/20' 
+                      : 'text-text2 hover:text-white'
+                  }`}
+                >
+                  AYER
+                </button>
                 <button
                   onClick={() => setIsCustomDate(!isCustomDate)}
-                  className={`whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-bold transition-all flex items-center gap-2 ${
+                  className={`whitespace-nowrap px-4 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-bold transition-all flex items-center gap-2 ${
                     isCustomDate 
                       ? 'bg-accent text-white shadow-lg shadow-accent/20' 
                       : 'text-text2 hover:text-white'
                   }`}
                 >
                   <Calendar className="w-3 h-3 md:w-4 md:h-4" />
-                  RANGO {isCustomDate ? '' : 'F.'}
+                  RANGO
                 </button>
               </div>
 
@@ -480,7 +496,7 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
           <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-none snap-x snap-mandatory -mx-4 px-4 md:mx-0 md:px-0">
             <button
               onClick={() => setSelectedBranchId(null)}
-              className={`whitespace-nowrap px-3 py-2 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-bold border transition-all flex items-center gap-2 md:gap-3 shrink-0 snap-start ${
+              className={`whitespace-nowrap px-2.5 py-1.5 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl text-[9px] md:text-xs font-bold border transition-all flex items-center gap-1.5 md:gap-3 shrink-0 snap-start ${
                 !selectedBranchId 
                   ? 'bg-accent border-accent text-white shadow-xl shadow-accent/20' 
                   : (isDarkMode ? 'bg-surface border-white/10 text-text2 hover:text-white hover:border-white/20' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400')
@@ -489,13 +505,14 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
               <div className={`p-1 md:p-1.5 rounded-lg ${!selectedBranchId ? 'bg-white/20' : (isDarkMode ? 'bg-white/5' : 'bg-gray-100/50')}`}>
                 <Store className="w-3 h-3 md:w-4 md:h-4" />
               </div>
-              TODAS LAS SUCURSALES
+              TODAS 
+              <span className="hidden sm:inline">LAS SUCURSALES</span>
             </button>
             {branches.map(branch => (
               <button
                 key={branch.id}
                 onClick={() => setSelectedBranchId(selectedBranchId === branch.id ? null : branch.id)}
-                className={`whitespace-nowrap px-3 py-2 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-bold border transition-all flex items-center gap-2 md:gap-3 shrink-0 snap-start ${
+                className={`whitespace-nowrap px-2.5 py-1.5 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl text-[9px] md:text-xs font-bold border transition-all flex items-center gap-1.5 md:gap-3 shrink-0 snap-start ${
                   selectedBranchId === branch.id 
                     ? 'shadow-xl shadow-accent/20' 
                     : (isDarkMode ? 'bg-surface border-white/10 text-text2 hover:text-white hover:border-white/20' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400')
