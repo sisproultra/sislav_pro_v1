@@ -23,7 +23,18 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
     if (ownerId) {
       supabase.from('empresas_holding').select('*').eq('id', ownerId).maybeSingle()
         .then(({ data }) => {
-          if (data) setCompanyInfo(data);
+          if (data) {
+            setCompanyInfo(data);
+            if (data.url_favicon) {
+              const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement || document.createElement('link');
+              link.rel = 'icon';
+              link.href = data.url_favicon;
+              document.getElementsByTagName('head')[0].appendChild(link);
+            }
+            if (data.nombre_empresa) {
+              document.title = `${data.nombre_empresa} - Panel de Propietario`;
+            }
+          }
         });
     }
   }, []);
@@ -82,7 +93,9 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
             className={`inline-flex items-center justify-center w-28 h-28 rounded-[2rem] border mb-6 shadow-2xl overflow-hidden transition-all ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-100'}`}
             style={{ borderColor: companyInfo?.color_primario ? `${companyInfo.color_primario}40` : undefined }}
           >
-            {companyInfo?.url_logo ? (
+            {companyInfo?.url_favicon ? (
+              <img src={companyInfo.url_favicon} className="w-full h-full object-contain p-6" alt="Favicon" />
+            ) : companyInfo?.url_logo ? (
               <img src={companyInfo.url_logo} className="w-full h-full object-contain p-4" alt="Logo" />
             ) : (
               <ShieldCheck className="w-14 h-14 text-brand-primary" />
