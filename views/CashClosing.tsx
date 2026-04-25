@@ -5,7 +5,7 @@ import { dbGetCashClosings, dbCreateCashClosing, dbUpdateCashClosing } from '../
 import { 
   Calculator, Printer, Banknote, History, Save, Clock, CheckCircle2, 
   ChevronRight, List, Trash2, Eye, AlertTriangle, Plus, X, ArrowRight, 
-  RefreshCw, TrendingUp, CreditCard, TrendingDown, ShoppingBasket, ShieldCheck,
+  RefreshCw, TrendingUp, CreditCard, TrendingDown, ShieldCheck,
   Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -316,25 +316,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
               <div class="row bold"><span>TOTAL RECAUDADO:</span> <span>${currency} ${(report.cashSales + Object.values(report.otherSales).reduce((a, b) => a + b, 0)).toFixed(2)}</span></div>
 
               ${report.topCategories && report.topCategories.length > 0 ? `
-                  <div class="section-title">3. TOP CATEGORÍAS (INFO)</div>
-                  <table>
-                      <thead>
-                          <tr>
-                              <th>CATEGORIA</th>
-                              <th class="text-right">CANT</th>
-                              <th class="text-right">MONTO</th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          ${report.topCategories.slice(0, 5).map(cat => `
-                              <tr>
-                                  <td>${cat.name}</td>
-                                  <td class="text-right">${cat.quantity}</td>
-                                  <td class="text-right">${currency} ${cat.amount.toFixed(2)}</td>
-                              </tr>
-                          `).join('')}
-                      </tbody>
-                  </table>
+                  <div class="divider"></div>
               ` : ''}
 
               <div class="divider"></div>
@@ -507,29 +489,6 @@ const CashClosing: React.FC<CashClosingProps> = ({
                       </div>
                     )}
                   </div>
-                </div>
-              </div>
-
-              {/* Top Categories Card */}
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
-                  <ShoppingBasket size={20} className="text-amber-500" />
-                  Top de Categorías (Atención)
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {summary.topCategories.slice(0, 4).map((cat, idx) => (
-                    <div key={cat.name} className="flex items-center justify-between p-3 rounded-xl bg-amber-50/30 border border-amber-100 shadow-sm relative overflow-hidden">
-                       <div className="absolute -left-1 -bottom-1 opacity-10 text-amber-500 text-4xl font-black italic">#{idx+1}</div>
-                       <div className="z-10 ml-6">
-                         <p className="font-black text-sm text-amber-800">{cat.name}</p>
-                         <p className="text-[10px] font-bold text-amber-600/70">{cat.quantity} unidades procesadas</p>
-                       </div>
-                       <span className="font-black text-lg text-amber-700 z-10">{currency} {cat.amount.toFixed(2)}</span>
-                    </div>
-                  ))}
-                  {summary.topCategories.length === 0 && (
-                    <div className="col-span-full text-center py-4 text-gray-400 text-sm italic">Esperando primeras ventas...</div>
-                  )}
                 </div>
               </div>
 

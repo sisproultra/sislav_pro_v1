@@ -607,7 +607,10 @@ export default function App() {
                 const tId = params.get('t');
 
                 if (ownerSlug && window.location.pathname !== '/owner-login') {
-                    window.history.replaceState({}, '', '/owner-login' + window.location.search);
+                    // Solo cambiamos la URL visualmente si queremos mantener la estética, 
+                    // pero si da problemas de 404 al refrescar, es mejor dejarlo en la raíz.
+                    // Para mayor seguridad, permitimos que funcione en ambas rutas.
+                    // window.history.replaceState({}, '', '/owner-login' + window.location.search);
                 }
 
                 if (tId) {
