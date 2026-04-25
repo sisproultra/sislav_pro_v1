@@ -35,6 +35,7 @@ const COLORS = ['#4f8ef7', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDarkMode, toggleTheme }: OwnerDashboardProps) {
   const [data, setData] = useState<OwnerDashboardData | null>(null);
   const [branches, setBranches] = useState<any[]>([]);
+  const [holdingInfo, setHoldingInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState(30);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'logistics'>('dashboard');
@@ -44,12 +45,14 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
     setLoading(true);
     try {
       const holdingId = session.user.holding_id;
-      const [stats, sucursales] = await Promise.all([
+      const [stats, sucursales, hInfo] = await Promise.all([
         getOwnerDashboardStats(timeRange, holdingId),
-        getOwnerSucursales(holdingId)
+        getOwnerSucursales(holdingId),
+        supabase.from('empresas_holding').select('*').eq('id', holdingId).maybeSingle().then(res => res.data)
       ]);
       setData(stats || { diarias: [], participacion: [], por_hora: [], por_semana: [], actualizado_al: new Date().toISOString() });
       setBranches(sucursales || []);
+      setHoldingInfo(hInfo);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -148,9 +151,13 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
             >
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-white font-bold">
-                    {session.user.company_name?.charAt(0)}
-                  </div>
+                  {holdingInfo?.url_favicon ? (
+                    <img src={holdingInfo.url_favicon} className="w-10 h-10 object-contain rounded-xl" alt="Favicon" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-white font-bold">
+                      {session.user.company_name?.charAt(0)}
+                    </div>
+                  )}
                   <span className="font-bold text-sm">Menú Corporativo</span>
                 </div>
                 <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">
@@ -190,12 +197,24 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
                         onClick={() => { onSelectBranch(branch); setIsMobileMenuOpen(false); }}
                         className={`w-full px-4 py-3 rounded-xl text-sm font-medium border transition-all flex items-center gap-3 ${
                           isDarkMode 
-                            ? 'bg-bg border-white/5 hover:border-accent/50 text-text2 hover:text-white' 
-                            : 'bg-gray-50 border-gray-200 hover:border-accent text-gray-600 hover:text-accent'
+                            ? 'bg-bg border-white/5 hover:border-white/20 text-text2 hover:text-white' 
+                            : 'bg-white border-gray-100 text-gray-600'
                         }`}
+                        style={{ 
+                          borderColor: !isDarkMode && branch.color_primario ? `${branch.color_primario}20` : undefined,
+                          color: !isDarkMode && branch.color_primario ? branch.color_primario : undefined,
+                          backgroundColor: !isDarkMode && branch.color_secundario ? `${branch.color_secundario}05` : undefined
+                        }}
                       >
-                        <Store className="w-4 h-4" />
-                        {branch.nombre_sucursal}
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-white/5' : ''}`}
+                             style={{ backgroundColor: !isDarkMode && branch.color_primario ? `${branch.color_primario}10` : undefined }}>
+                          {branch.url_favicon ? (
+                            <img src={branch.url_favicon} className="w-5 h-5 object-contain" alt="Sucursal" />
+                          ) : (
+                            <Store className="w-4 h-4" />
+                          )}
+                        </div>
+                        <span className="truncate">{branch.nombre_sucursal}</span>
                       </button>
                     ))}
                   </div>
@@ -313,11 +332,23 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
                   onClick={() => onSelectBranch(branch)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-2 ${
                     isDarkMode 
-                      ? 'bg-bg border-white/5 hover:border-accent/50 text-text2 hover:text-white' 
-                      : 'bg-gray-100 border-gray-200 hover:border-accent text-gray-600 hover:text-accent'
+                      ? 'bg-bg border-white/5 hover:border-white/20 text-text2 hover:text-white' 
+                      : 'bg-white border-gray-200 text-gray-600'
                   }`}
+                  style={{ 
+                    borderColor: !isDarkMode && branch.color_primario ? `${branch.color_primario}20` : undefined,
+                    color: !isDarkMode && branch.color_primario ? branch.color_primario : undefined,
+                    backgroundColor: !isDarkMode && branch.color_secundario ? `${branch.color_secundario}05` : undefined
+                  }}
                 >
-                  <Store className="w-3.5 h-3.5" />
+                  <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-white/5' : ''}`}
+                       style={{ backgroundColor: !isDarkMode && branch.color_primario ? `${branch.color_primario}10` : undefined }}>
+                    {branch.url_favicon ? (
+                      <img src={branch.url_favicon} className="w-3.5 h-3.5 object-contain" alt="Sucursal" />
+                    ) : (
+                      <Store className="w-3 h-3" />
+                    )}
+                  </div>
                   {branch.nombre_sucursal}
                 </button>
               ))}
