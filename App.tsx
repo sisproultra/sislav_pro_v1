@@ -514,8 +514,8 @@ export default function App() {
                                 username: profile.username,
                                 name: profile.nombre_completo,
                                 role: profile.rol as UserRole,
-                                holding_id: profile.empresa_id,
-                                holding_name: profile.sucursales?.empresas_holding?.nombre_empresa,
+                                holding_id: profile.empresa_id || profile.empresa_holding_id,
+                                holding_name: profile.sucursales?.empresas_holding?.nombre_empresa || profile.nombre_empresa,
                                 sucursal_id: profile.sucursal_id,
                                 masterPassword: masterPassword, // Preservar el password maestro si existía
                                 permissions: profile.permisos_map || profile.permisos_json || {}

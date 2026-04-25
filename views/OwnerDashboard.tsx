@@ -21,6 +21,7 @@ import {
 } from '../services/dbService';
 import { createInitialHoldingUser } from '../services/saasService';
 import { UserRole } from '../types';
+import { supabase } from '../services/supabaseClient';
 
 interface OwnerDashboardProps {
   session: any;
@@ -50,7 +51,18 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
   const fetchData = async () => {
     setLoading(true);
     try {
-      const holdingId = session.user.holding_id;
+      // Robust holdingId identification
+      const holdingId = session.user.holding_id || 
+                       session.user.empresa_holding_id || 
+                       session.user.empresa_id || 
+                       localStorage.getItem('sislav_active_holding_uuid');
+
+      if (!holdingId) {
+        console.warn('OwnerDashboard: No holdingId found in session or localStorage');
+        setLoading(false);
+        return;
+      }
+
       const [stats, sucursales, hInfo] = await Promise.all([
         getOwnerDashboardStats(timeRange, holdingId),
         getOwnerSucursales(holdingId),
@@ -68,7 +80,7 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
 
   useEffect(() => {
     fetchData();
-  }, [timeRange]);
+  }, [timeRange, session.user.holding_id, session.user.empresa_id]);
 
   const selectedBranchName = useMemo(() => {
     return branches.find(b => b.id === selectedBranchId)?.nombre_sucursal;
@@ -400,42 +412,44 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
           </div>
 
           {/* BRANCH FILTER BUTTONS (SCROLLABLE ON MOBILE) */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-none snap-x snap-mandatory -mx-4 px-4 md:mx-0 md:px-0">
             <button
               onClick={() => setSelectedBranchId(null)}
-              className={`whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 shrink-0 ${
+              className={`whitespace-nowrap px-4 py-2.5 rounded-2xl text-xs font-bold border transition-all flex items-center gap-3 shrink-0 snap-start ${
                 !selectedBranchId 
-                  ? 'bg-accent border-accent text-white shadow-lg shadow-accent/20' 
-                  : (isDarkMode ? 'bg-bg border-white/5 text-text2 hover:text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300')
+                  ? 'bg-accent border-accent text-white shadow-xl shadow-accent/20' 
+                  : (isDarkMode ? 'bg-surface border-white/10 text-text2 hover:text-white hover:border-white/20' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400')
               }`}
             >
-              <Store className="w-4 h-4" />
+              <div className={`p-1.5 rounded-lg ${!selectedBranchId ? 'bg-white/20' : (isDarkMode ? 'bg-white/5' : 'bg-gray-100/50')}`}>
+                <Store className="w-4 h-4" />
+              </div>
               TODAS LAS SUCURSALES
             </button>
             {branches.map(branch => (
               <button
                 key={branch.id}
                 onClick={() => setSelectedBranchId(selectedBranchId === branch.id ? null : branch.id)}
-                className={`whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 shrink-0 ${
+                className={`whitespace-nowrap px-4 py-2.5 rounded-2xl text-xs font-bold border transition-all flex items-center gap-3 shrink-0 snap-start ${
                   selectedBranchId === branch.id 
-                    ? 'shadow-lg' 
-                    : (isDarkMode ? 'bg-bg border-white/5 text-text2 hover:text-white' : 'bg-white border-gray-200 text-gray-500')
+                    ? 'shadow-xl shadow-accent/20' 
+                    : (isDarkMode ? 'bg-surface border-white/10 text-text2 hover:text-white hover:border-white/20' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400')
                 }`}
                 style={{ 
-                  backgroundColor: selectedBranchId === branch.id ? branch.color_primario : undefined,
-                  borderColor: selectedBranchId === branch.id ? branch.color_primario : (!isDarkMode && branch.color_primario ? `${branch.color_primario}30` : undefined),
-                  color: selectedBranchId === branch.id ? '#fff' : (!isDarkMode && branch.color_primario ? branch.color_primario : undefined)
+                  backgroundColor: selectedBranchId === branch.id ? (branch.color_primario || '#4f46e5') : undefined,
+                  borderColor: selectedBranchId === branch.id ? (branch.color_primario || '#4f46e5') : (!isDarkMode && branch.color_primario ? `${branch.color_primario}40` : undefined),
+                  color: selectedBranchId === branch.id ? '#fff' : (!isDarkMode && branch.color_primario ? branch.color_primario : undefined),
+                  boxShadow: selectedBranchId === branch.id ? `0 10px 25px -5px ${branch.color_primario || '#4f46e5'}40` : undefined
                 }}
               >
-                <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${selectedBranchId === branch.id ? 'bg-white/20' : (isDarkMode ? 'bg-white/5' : '')}`}
-                     style={{ backgroundColor: selectedBranchId !== branch.id && !isDarkMode && branch.color_primario ? `${branch.color_primario}10` : undefined }}>
+                <div className="shrink-0 p-1 rounded-lg bg-white/20">
                   {branch.url_favicon ? (
-                    <img src={branch.url_favicon} className="w-4 h-4 object-contain" alt="Sucursal" />
+                    <img src={branch.url_favicon} className="w-5 h-5 object-contain rounded-md" alt="" />
                   ) : (
-                    <Store className="w-4 h-4" />
+                    <MapPin className="w-4 h-4" />
                   )}
                 </div>
-                {branch.nombre_sucursal}
+                {branch.nombre_sucursal.toUpperCase()}
               </button>
             ))}
           </div>
