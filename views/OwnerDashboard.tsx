@@ -39,6 +39,8 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
   const [holdingInfo, setHoldingInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState(30);
+  const [customRange, setCustomRange] = useState({ start: '', end: '' });
+  const [isCustomDate, setIsCustomDate] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'logistics'>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
@@ -63,8 +65,21 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
         return;
       }
 
+      // If custom date is used, calculate days back from today to the start date
+      // Note: This is a limitation of the current RPC which only accepts "days back"
+      let effectiveDays = timeRange;
+      if (isCustomDate && customRange.start) {
+        try {
+          const start = new Date(customRange.start);
+          const now = new Date();
+          effectiveDays = Math.max(1, Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+        } catch (e) {
+          console.error("Invalid custom date:", e);
+        }
+      }
+
       const [stats, sucursales, hInfo] = await Promise.all([
-        getOwnerDashboardStats(timeRange, holdingId),
+        getOwnerDashboardStats(effectiveDays, holdingId),
         getOwnerSucursales(holdingId),
         supabase.from('empresas_holding').select('*').eq('id', holdingId).maybeSingle().then(res => res.data)
       ]);
@@ -300,16 +315,20 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
             </button>
 
             <div className="flex items-center gap-3 shrink-0">
-              {session.user.logo_url ? (
-                <img src={session.user.logo_url} alt="Logo" className="h-10 w-auto object-contain" />
+              {holdingInfo?.url_logo || holdingInfo?.url_favicon ? (
+                <img 
+                  src={holdingInfo.url_logo || holdingInfo.url_favicon} 
+                  alt="Holding Logo" 
+                  className="h-9 md:h-11 w-auto object-contain rounded-lg" 
+                />
               ) : (
-                <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-white font-bold">
-                  {session.user.company_name?.charAt(0)}
+                <div className="w-9 h-9 md:w-11 md:h-11 rounded-xl bg-accent flex items-center justify-center text-white">
+                  <Store className="w-5 h-5 md:w-6 md:h-6" />
                 </div>
               )}
-              <div>
-                <h1 className="text-xl font-heading font-bold">{session.user.company_name}</h1>
-                <p className={`text-xs ${textSecondary}`}>Panel de Control Corporativo</p>
+              <div className="hidden sm:block">
+                <h1 className="text-lg md:text-xl font-heading font-bold leading-none">{session.user.holding_name || session.user.company_name}</h1>
+                <p className={`text-[10px] md:text-xs mt-1 ${textSecondary}`}>Panel Corporativo</p>
               </div>
             </div>
 
@@ -394,20 +413,66 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
               </p>
             </div>
             
-            <div className="flex items-center gap-1 md:gap-2 bg-surface p-1 rounded-xl border border-white/5 self-start sm:self-auto">
-              {[7, 30, 90].map(days => (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-1 md:gap-2 bg-surface p-1 rounded-xl border border-white/5 self-start sm:self-auto overflow-x-auto no-scrollbar max-w-full">
+                {[7, 30, 90, 180, 365].map(days => (
+                  <button
+                    key={days}
+                    onClick={() => {
+                      setTimeRange(days);
+                      setIsCustomDate(false);
+                    }}
+                    className={`whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-bold transition-all ${
+                      !isCustomDate && timeRange === days 
+                        ? 'bg-accent text-white shadow-lg shadow-accent/20' 
+                        : 'text-text2 hover:text-white'
+                    }`}
+                  >
+                    {days === 7 ? '7D' : days === 30 ? '30D' : days === 90 ? '90D' : days === 180 ? '6M' : '1A'}
+                  </button>
+                ))}
                 <button
-                  key={days}
-                  onClick={() => setTimeRange(days)}
-                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
-                    timeRange === days 
+                  onClick={() => setIsCustomDate(!isCustomDate)}
+                  className={`whitespace-nowrap px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-[10px] md:text-sm font-bold transition-all flex items-center gap-2 ${
+                    isCustomDate 
                       ? 'bg-accent text-white shadow-lg shadow-accent/20' 
                       : 'text-text2 hover:text-white'
                   }`}
                 >
-                  {days === 7 ? '7d' : days === 30 ? '30d' : '90d'}
+                  <Calendar className="w-3 h-3 md:w-4 md:h-4" />
+                  RANGO {isCustomDate ? '' : 'F.'}
                 </button>
-              ))}
+              </div>
+
+              {isCustomDate && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-2"
+                >
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${isDarkMode ? 'bg-bg border-white/5' : 'bg-white border-gray-100'}`}>
+                    <input 
+                      type="date" 
+                      value={customRange.start}
+                      onChange={(e) => setCustomRange({ ...customRange, start: e.target.value })}
+                      className="bg-transparent text-[10px] md:text-xs font-bold outline-none"
+                    />
+                    <span className="text-[10px] text-text3">-</span>
+                    <input 
+                      type="date" 
+                      value={customRange.end}
+                      onChange={(e) => setCustomRange({ ...customRange, end: e.target.value })}
+                      className="bg-transparent text-[10px] md:text-xs font-bold outline-none"
+                    />
+                  </div>
+                  <button 
+                    onClick={fetchData}
+                    className="p-2 bg-accent text-white rounded-xl shadow-lg shrink-0 active:scale-95 transition-transform"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </motion.div>
+              )}
             </div>
           </div>
 
@@ -415,14 +480,14 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
           <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-none snap-x snap-mandatory -mx-4 px-4 md:mx-0 md:px-0">
             <button
               onClick={() => setSelectedBranchId(null)}
-              className={`whitespace-nowrap px-4 py-2.5 rounded-2xl text-xs font-bold border transition-all flex items-center gap-3 shrink-0 snap-start ${
+              className={`whitespace-nowrap px-3 py-2 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-bold border transition-all flex items-center gap-2 md:gap-3 shrink-0 snap-start ${
                 !selectedBranchId 
                   ? 'bg-accent border-accent text-white shadow-xl shadow-accent/20' 
                   : (isDarkMode ? 'bg-surface border-white/10 text-text2 hover:text-white hover:border-white/20' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400')
               }`}
             >
-              <div className={`p-1.5 rounded-lg ${!selectedBranchId ? 'bg-white/20' : (isDarkMode ? 'bg-white/5' : 'bg-gray-100/50')}`}>
-                <Store className="w-4 h-4" />
+              <div className={`p-1 md:p-1.5 rounded-lg ${!selectedBranchId ? 'bg-white/20' : (isDarkMode ? 'bg-white/5' : 'bg-gray-100/50')}`}>
+                <Store className="w-3 h-3 md:w-4 md:h-4" />
               </div>
               TODAS LAS SUCURSALES
             </button>
@@ -430,7 +495,7 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
               <button
                 key={branch.id}
                 onClick={() => setSelectedBranchId(selectedBranchId === branch.id ? null : branch.id)}
-                className={`whitespace-nowrap px-4 py-2.5 rounded-2xl text-xs font-bold border transition-all flex items-center gap-3 shrink-0 snap-start ${
+                className={`whitespace-nowrap px-3 py-2 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-bold border transition-all flex items-center gap-2 md:gap-3 shrink-0 snap-start ${
                   selectedBranchId === branch.id 
                     ? 'shadow-xl shadow-accent/20' 
                     : (isDarkMode ? 'bg-surface border-white/10 text-text2 hover:text-white hover:border-white/20' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400')
@@ -444,9 +509,9 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
               >
                 <div className="shrink-0 p-1 rounded-lg bg-white/20">
                   {branch.url_favicon ? (
-                    <img src={branch.url_favicon} className="w-5 h-5 object-contain rounded-md" alt="" />
+                    <img src={branch.url_favicon} className="w-4 h-4 md:w-5 md:h-5 object-contain rounded-md" alt="" />
                   ) : (
-                    <MapPin className="w-4 h-4" />
+                    <MapPin className="w-3 h-3 md:w-4 md:h-4" />
                   )}
                 </div>
                 {branch.nombre_sucursal.toUpperCase()}
