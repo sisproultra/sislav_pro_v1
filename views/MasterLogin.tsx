@@ -92,7 +92,7 @@ const MasterLogin: React.FC<MasterLoginProps> = ({ onLoginSuccess, onCancel }) =
                                     value={user} 
                                     onChange={e => setUser(e.target.value)}
                                     className="w-full bg-black/40 border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-white outline-none focus:ring-2 focus:ring-indigo-600/50 transition-all font-bold placeholder:text-slate-700" 
-                                    placeholder="Username o Email Maestro"
+                                    placeholder="usuario"
                                 />
                             </div>
                             <div className="relative group">
@@ -124,9 +124,26 @@ const MasterLogin: React.FC<MasterLoginProps> = ({ onLoginSuccess, onCancel }) =
                     </form>
                 </div>
                 
-                <div className="mt-8 flex justify-center items-center gap-8 opacity-30">
-                    <div className="flex items-center gap-2"><Globe size={14}/><span className="text-[8px] font-bold uppercase tracking-widest">Global Master Node</span></div>
-                    <div className="flex items-center gap-2"><Zap size={14}/><span className="text-[8px] font-bold uppercase tracking-widest">SISLAV CORE</span></div>
+                <div className="mt-8 flex flex-col items-center gap-4">
+                    <div className="flex justify-center items-center gap-8 opacity-30">
+                        <div className="flex items-center gap-2"><Globe size={14}/><span className="text-[8px] font-bold uppercase tracking-widest">Global Master Node</span></div>
+                        <div className="flex items-center gap-2"><Zap size={14}/><span className="text-[8px] font-bold uppercase tracking-widest">SISLAV CORE</span></div>
+                    </div>
+                    
+                    <div className="flex flex-col items-center gap-2">
+                        <p className="text-slate-500 text-[9px] font-bold uppercase tracking-widest">
+                            SISLAV - +51931200353
+                        </p>
+                        <a 
+                            href="https://wa.me/51931200353" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/5 text-indigo-400 hover:bg-indigo-500/10 text-[8px] font-bold uppercase tracking-widest transition-all"
+                        >
+                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                            WHATSAPP DIRECTO
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>

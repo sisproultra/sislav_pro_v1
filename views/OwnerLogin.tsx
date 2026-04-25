@@ -121,7 +121,7 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className={`w-full border rounded-xl py-4 pl-12 pr-4 outline-none transition-all font-medium ${isDarkMode ? 'bg-bg border-white/5 text-white focus:border-brand-primary focus:ring-1 focus:ring-brand-primary' : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-brand-primary focus:ring-1 focus:ring-brand-primary'}`}
-                  placeholder="ejemplo (sin @sislav.com)"
+                  placeholder="usuario"
                 />
               </div>
             </div>
@@ -168,10 +168,19 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
           </form>
         </div>
 
-        <div className="mt-8 text-center">
-          <p className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-text3' : 'text-gray-400'}`}>
-            SISLAV SAAS &copy; 2026 - Todos los derechos reservados
+        <div className="mt-8 text-center flex flex-col items-center gap-3">
+          <p className={`text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-text3' : 'text-gray-400'}`}>
+            SISLAV - +51931200353
           </p>
+          <a 
+            href="https://wa.me/51931200353" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${isDarkMode ? 'bg-white/5 border-white/10 text-text2 hover:bg-white/10 hover:text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
+          >
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            Enviar Mensaje
+          </a>
         </div>
       </motion.div>
     </div>

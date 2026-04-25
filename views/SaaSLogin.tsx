@@ -107,7 +107,7 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
                 <input
                   type="text"
                   required
-                  placeholder="Nombre de usuario"
+                  placeholder="usuario"
                   value={user}
                   onChange={e => setUser(e.target.value)}
                   className="w-full bg-bg3/50 border border-text/10 rounded-2xl py-5 pl-14 pr-4 text-text outline-none focus:ring-2 focus:bg-bg2 transition-all font-bold placeholder:text-text3"
@@ -164,9 +164,20 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
           </form>
         </div>
 
-        <p className="mt-8 text-center text-text3 text-[10px] font-bold uppercase tracking-widest">
-          Sislav ultra v1.0 • 931200353 Jhon Obregon
-        </p>
+        <div className="mt-8 text-center flex flex-col items-center gap-3">
+          <p className="text-text3 text-[10px] font-bold uppercase tracking-widest">
+            SISLAV - +51931200353
+          </p>
+          <a 
+            href="https://wa.me/51931200353" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 text-text3 hover:bg-white/10 hover:text-text2 text-[9px] font-bold uppercase tracking-widest transition-all"
+          >
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            SOPORTE WHATSAPP
+          </a>
+        </div>
       </div>
     </div>
   );
