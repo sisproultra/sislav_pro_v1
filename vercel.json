@@ -10,6 +10,10 @@
       "destination": "https://apisu.sysventa.com/API_SUNAT/post.php"
     },
     {
+      "source": "/owner-login",
+      "destination": "/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

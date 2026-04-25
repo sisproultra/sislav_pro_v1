@@ -607,7 +607,8 @@ export default function App() {
                 const tId = params.get('t');
 
                 if (ownerSlug && window.location.pathname !== '/owner-login') {
-                    window.history.replaceState({}, '', '/owner-login' + window.location.search);
+                    // Eliminamos el replaceState que causaba 404 en refrescos si no estaba configurado en el servidor
+                    // window.history.replaceState({}, '', '/owner-login' + window.location.search);
                 }
 
                 if (tId) {
