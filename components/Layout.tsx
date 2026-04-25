@@ -25,6 +25,7 @@ interface LayoutProps {
   onLogout?: () => void;
   onRefresh?: () => void;
   onBackToMaster?: () => void;
+  onBackToOwner?: () => void;
   clients?: Client[];
   helpVideos?: GlobalHelpVideo[];
   isOwner?: boolean;
@@ -78,7 +79,7 @@ const NavSection: React.FC<{ label: string; isSidebarOpen: boolean }> = ({ label
 };
 
 const Layout: React.FC<LayoutProps> = ({ 
-  currentView, setView, company, children, onLogout, onRefresh, onBackToMaster, 
+  currentView, setView, company, children, onLogout, onRefresh, onBackToMaster, onBackToOwner, 
   clients = [], helpVideos = [], isOwner = false, isSaaSMaster = false, 
   globalModules = {}, sucursalModules = {},
   isDarkMode: propIsDarkMode, toggleTheme: propToggleTheme,
@@ -349,6 +350,23 @@ const Layout: React.FC<LayoutProps> = ({
               </button>
           )}
 
+          {isOwner && onBackToOwner && (
+              <button 
+                  onClick={onBackToOwner}
+                  className={`w-full flex items-center gap-3 p-2 rounded-lg transition-all group shrink-0 ${isDarkMode ? 'bg-accent-glow text-accent border border-accent/20' : 'bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm'}`}
+              >
+                  <div className={`p-1.5 rounded-md text-white shadow-lg ${isSidebarOpen ? '' : 'mx-auto'}`} style={{ backgroundColor: 'var(--brand-primary)' }}>
+                      <ArrowRight className="rotate-180" size={16} />
+                  </div>
+                  {isSidebarOpen && (
+                      <div className="flex flex-col items-start min-w-0">
+                          <span className="text-[9px] font-bold uppercase tracking-widest leading-none mb-0.5">Panel Owner</span>
+                          <span className="text-[7px] font-bold uppercase truncate opacity-70">SALIR DE SUCURSAL</span>
+                      </div>
+                  )}
+              </button>
+          )}
+
           <div className="relative">
               {isSidebarOpen ? (
                   <><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text3" size={14} /><input type="text" value={sidebarSearch} onChange={e => setSidebarSearch(e.target.value)} placeholder="Buscar..." className="w-full pl-9 pr-4 py-2 rounded-lg text-[11px] font-bold outline-none border border-border bg-bg3 focus:bg-surface transition-all text-text" /></>
@@ -417,7 +435,24 @@ const Layout: React.FC<LayoutProps> = ({
                   </p>
                 </div>
               )}
-              <button onClick={onLogout} className="text-text3 hover:text-rose-500 p-1.5 transition-colors"><LogOut size={16} /></button>
+              <div className="flex items-center gap-1">
+                {isOwner && onBackToOwner && (
+                  <button 
+                    onClick={onBackToOwner} 
+                    className="text-text3 hover:text-accent p-1.5 transition-colors" 
+                    title="Salir de Sucursal y volver al Panel"
+                  >
+                    <ArrowRight className="rotate-180" size={16} />
+                  </button>
+                )}
+                <button 
+                  onClick={onLogout} 
+                  className="text-text3 hover:text-rose-500 p-1.5 transition-colors"
+                  title="Cerrar sesión completamente"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
            </div>
         </div>
       </aside>
@@ -426,6 +461,15 @@ const Layout: React.FC<LayoutProps> = ({
         <header className={`h-[56px] flex items-center justify-between px-6 lg:px-8 z-10 border-b transition-colors duration-500 ${company?.sunatEnvironment === 'BETA' ? 'bg-emerald-500 text-white border-emerald-600 shadow-lg' : isDarkMode ? 'bg-bg2 border-border' : 'bg-white border-slate-100 shadow-sm'}`}>
           <div className="flex items-center gap-3">
              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={`p-2 rounded-lg transition-all ${company?.sunatEnvironment === 'BETA' ? 'hover:bg-white/10 text-white' : isDarkMode ? 'hover:bg-bg3 text-text' : 'hover:bg-slate-50 text-slate-600'}`}><Menu size={20} /></button>
+             {isOwner && onBackToOwner && (
+               <button 
+                onClick={onBackToOwner} 
+                className={`p-2 rounded-lg transition-all flex items-center gap-2 font-bold text-[9px] uppercase tracking-widest ${company?.sunatEnvironment === 'BETA' ? 'bg-white/10 hover:bg-white/20 text-white border-white/20' : isDarkMode ? 'bg-bg3 hover:bg-surface text-text3 border border-border shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-400 border border-slate-200'}`}
+               >
+                  <ArrowRight className="rotate-180" size={16} />
+                  <span className="hidden sm:inline">Volver al Panel</span>
+               </button>
+             )}
              <div className="flex gap-2 items-center">
                 {company?.sunatEnvironment === 'PRODUCTION' ? (
                   <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-green-500/10 text-green-600 text-[8px] font-bold border border-green-500/20 uppercase">

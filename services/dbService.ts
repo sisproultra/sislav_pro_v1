@@ -279,6 +279,34 @@ export const dbMasterAuth = async (user: string, pass: string): Promise<AuthSess
 /**
  * Autenticación para dueños de holding (Bypass DEV incluido)
  */
+/**
+ * Sincroniza proactivamente el perfil del dueño en usuarios_login para asegurar que RLS funcione.
+ */
+export const dbSyncOwnerProfile = async (userId: string, email: string, holdingId: string, holdingName: string) => {
+    try {
+        const { data: existing } = await supabase.from('usuarios_login').select('id').eq('id', userId).maybeSingle();
+        if (!existing) {
+            console.log("🔄 Sincronización proactiva de perfil de dueño...");
+            await supabase.rpc('create_user_profile', {
+                p_id: userId,
+                p_auth_user_id: userId,
+                p_sucursal_id: null,
+                p_empresa_id: holdingId,
+                p_nombre_completo: holdingName,
+                p_username: email,
+                p_rol: UserRole.OWNER,
+                p_telefono: null,
+                p_url_foto: null,
+                p_permisos_json: { all: true, owner: true },
+                p_password_hash: '',
+                p_nombre_empresa: holdingName
+            });
+        }
+    } catch (e) {
+        console.warn("Error en sincronización proactiva:", e);
+    }
+};
+
 export const dbOwnerAuth = async (email: string, pass: string): Promise<AuthSession | null> => {
     try {
         let authData: any = null;
@@ -319,6 +347,38 @@ export const dbOwnerAuth = async (email: string, pass: string): Promise<AuthSess
         
         console.log("✅ Empresa encontrada:", company.nombre_empresa);
         companyData = company;
+
+        // --- SINCRONIZACIÓN DE PERFIL PARA RLS ---
+        // Muchos sistemas usan usuarios_login como fuente de verdad para RLS.
+        // Si el dueño no está ahí, el RLS le devolverá 0 filas en todas las consultas.
+        try {
+            const { data: existingProfile } = await supabase
+                .from('usuarios_login')
+                .select('id')
+                .eq('id', authData.user.id)
+                .maybeSingle();
+
+            if (!existingProfile) {
+                console.log("🔄 Sincronizando perfil de dueño en usuarios_login para habilitar RLS...");
+                await supabase.rpc('create_user_profile', {
+                    p_id: authData.user.id,
+                    p_auth_user_id: authData.user.id,
+                    p_sucursal_id: null,
+                    p_empresa_id: companyData.id,
+                    p_nombre_completo: companyData.nombre_empresa,
+                    p_username: email,
+                    p_rol: UserRole.OWNER,
+                    p_telefono: companyData.telefono || null,
+                    p_url_foto: null,
+                    p_permisos_json: { all: true, owner: true },
+                    p_password_hash: '',
+                    p_nombre_empresa: companyData.nombre_empresa
+                });
+                console.log("✅ Perfil de dueño sincronizado.");
+            }
+        } catch (syncErr) {
+            console.warn("⚠️ Advertencia en sincronización de perfil (Dueño):", syncErr);
+        }
 
         const session: AuthSession = {
             user: {

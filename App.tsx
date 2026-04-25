@@ -44,7 +44,8 @@ import {
     dbDeleteSupply,
     dbGetActiveCashClosing,
     dbOpenCashClosing,
-    dbGetBirthdaysToday
+    dbGetBirthdaysToday,
+    dbSyncOwnerProfile
 } from './services/dbService';
 import { getSaasGlobalConfig } from './services/saasService';
 import { sendBillToSunat, sendSummaryToSunat } from './services/sunatService';
@@ -1692,6 +1693,17 @@ export default function App() {
                 const holdingId = normalized.empresa_holding_id 
                                || normalized.empresa_id 
                                || b.empresa_id;  // fallback directo al objeto original
+                
+                // Sincronización proactiva para dueños (Fix RLS)
+                if (authSession?.user) {
+                    dbSyncOwnerProfile(
+                        authSession.user.id, 
+                        authSession.user.username, 
+                        holdingId, 
+                        authSession.user.holding_name || normalized.holding_name || ''
+                    );
+                }
+
                 setActiveSucursal(normalized);
                 setDbBranchContext(normalized.id, holdingId);
                 setCurrentView('view:dashboard');
@@ -1765,6 +1777,17 @@ export default function App() {
                     const holdingId = normalized.empresa_holding_id 
                                    || normalized.empresa_id 
                                    || b.empresa_id;  // fallback directo al objeto original
+                    
+                    // Sincronización proactiva para dueños (Fix RLS)
+                    if (authSession?.user) {
+                        dbSyncOwnerProfile(
+                            authSession.user.id, 
+                            authSession.user.username, 
+                            holdingId, 
+                            authSession.user.holding_name || normalized.holding_name || ''
+                        );
+                    }
+
                     setActiveSucursal(normalized);
                     setDbBranchContext(normalized.id, holdingId);
                     setCurrentView('view:dashboard');
@@ -1799,6 +1822,10 @@ export default function App() {
             onLogout={handleLogout} 
             onRefresh={() => refreshData(true)}
             onBackToMaster={authSession?.user?.isMasterBypass ? () => setIsMasterMode(true) : undefined} 
+            onBackToOwner={authSession?.user?.role === UserRole.OWNER ? () => {
+                setActiveSucursal(null as any);
+                setCurrentView('view:owner_dashboard');
+            } : undefined}
             helpVideos={globalConfig?.defaultHelpVideos || []}
             globalModules={globalConfig?.globalModules}
             isOwner={authSession?.user?.role === UserRole.OWNER}
