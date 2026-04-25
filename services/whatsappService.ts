@@ -432,6 +432,54 @@ export const generateWhatsAppLink = (invoice: Invoice, company: Company, phoneNu
 };
 
 /**
+ * Envía una notificación de que el pedido está listo para recoger.
+ */
+export const sendReadyNotification = async (
+  invoice: Invoice,
+  company: Company,
+  phoneNumber: string
+): Promise<{ success: boolean; message: string; fallbackUrl?: string }> => {
+  const baseUrl = company.whatsapp_instance?.trim();
+  const apiKey = company.whatsapp_token?.trim();
+  const instance = company.whatsapp_instance_name?.trim();
+
+  const clientName = (invoice.client.name || 'Cliente').toUpperCase();
+  const orden = invoice.ordenNumber || 'S/N';
+  const text = `*${company.razonSocial}*\n\nEstimado(a) *${clientName}*,\n\nLe informamos que su pedido con orden *#${orden}* ya se encuentra *LISTO* ✅.\n\nPuede pasar a recogerlo en nuestro local en: ${company.address.toUpperCase()}.\n\n¡Le esperamos! 🧺✨`;
+  
+  const fallbackUrl = `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+
+  if (!baseUrl || !apiKey || !instance) {
+    return { success: false, message: 'Configuración incompleta.', fallbackUrl };
+  }
+
+  try {
+    const cleanNumber = phoneNumber.replace(/\D/g, '');
+    const payload = {
+      "number": cleanNumber,
+      "text": text,
+      "delay": 1200
+    };
+
+    let finalBaseUrl = baseUrl;
+    if (!finalBaseUrl.startsWith('http')) finalBaseUrl = `https://${finalBaseUrl}`;
+    const finalEndpoint = `${finalBaseUrl}/message/sendText/${instance}`;
+    const proxiedUrl = `${PROXY_URL}${encodeURIComponent(finalEndpoint)}`;
+
+    const response = await fetch(proxiedUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.ok) return { success: true, message: 'Notificación enviada' };
+    return { success: false, message: 'Error en API', fallbackUrl };
+  } catch (e: any) {
+    return { success: false, message: e.message, fallbackUrl };
+  }
+};
+
+/**
  * Convierte una URL de archivo a Base64 usando el proxy
  */
 const getBase64FromUrl = async (url: string): Promise<string> => {

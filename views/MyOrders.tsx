@@ -131,6 +131,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     const [payAmount, setPayAmount] = useState('');
     const [payments, setPayments] = useState<PaymentEntry[]>([]);
     const [localDiscount, setLocalDiscount] = useState('');
+    const [showDiscount, setShowDiscount] = useState(false);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
@@ -139,6 +140,10 @@ const MyOrders: React.FC<MyOrdersProps> = ({
 
     const [sendingWaId, setSendingWaId] = useState<string | null>(null);
     const [sentSuccessIds, setSentSuccessIds] = useState<Set<string>>(new Set());
+
+    const [selectedReportDate, setSelectedReportDate] = useState<string | null>(null);
+    const [dailySalesTotal, setDailySalesTotal] = useState<number>(0);
+    const [isCalculatingDailyTotal, setIsCalculatingDailyTotal] = useState(false);
 
     const [missingInfoOrder, setMissingInfoOrder] = useState<Invoice | null>(null);
     const [quickPhone, setQuickPhone] = useState('');
@@ -259,6 +264,34 @@ const MyOrders: React.FC<MyOrdersProps> = ({
             utils.book_append_sheet(wb, ws, 'Ordenes');
             writeFile(wb, `Reporte_Ordenes_${new Date().toISOString().split('T')[0]}.xlsx`);
         } finally { setIsExporting(false); }
+    };
+
+    const handleDailySalesReport = async (dateStr: string) => {
+        setSelectedReportDate(dateStr);
+        setIsCalculatingDailyTotal(true);
+        setIsReportModalOpen(false);
+        try {
+            // Activar búsqueda real en el API
+            onSearch(1, dateStr);
+            
+            const allData = await dbGetInvoicesForReport('ALL');
+            // Filtrar por la fecha seleccionada (YYYY-MM-DD) para el KPI
+            const dailyInvoices = allData.filter(inv => {
+                const invDate = new Date(inv.date).toISOString().split('T')[0];
+                return invDate === dateStr;
+            });
+            const total = dailyInvoices.reduce((sum, inv) => sum + (inv.totals.total), 0);
+            setDailySalesTotal(total);
+        } catch (e) {
+            console.error("Error calculating daily total:", e);
+        } finally {
+            setIsCalculatingDailyTotal(false);
+        }
+    };
+
+    const clearDailyReport = () => {
+        setSelectedReportDate(null);
+        onSearch(1, ''); // Limpiar búsqueda
     };
 
     const handlePrintSummary = async () => {
@@ -611,6 +644,33 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                        {selectedReportDate && (
+                            <motion.div 
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="bg-white border-2 border-brand-primary px-4 py-2 rounded-2xl flex flex-col items-center justify-center min-w-[130px] shadow-lg shadow-brand-primary/10 relative overflow-hidden group"
+                            >
+                                <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:scale-125 transition-transform">
+                                    <DollarSign size={30} className="text-brand-primary" />
+                                </div>
+                                <div className="flex items-center gap-2 mb-0.5">
+                                    <span className="text-[8px] font-black text-brand-primary uppercase tracking-widest">
+                                        Venta: {selectedReportDate === new Date().toISOString().split('T')[0] ? 'HOY' : selectedReportDate}
+                                    </span>
+                                    <button onClick={clearDailyReport} className="p-0.5 hover:bg-slate-100 rounded-full text-slate-400">
+                                        <X size={10} />
+                                    </button>
+                                </div>
+                                <span className="text-sm font-black text-slate-800 tabular-nums">
+                                    {isCalculatingDailyTotal ? (
+                                        <Loader2 size={14} className="animate-spin text-brand-primary" />
+                                    ) : (
+                                        `${currency} ${dailySalesTotal.toFixed(2)}`
+                                    )}
+                                </span>
+                            </motion.div>
+                        )}
+
                         <button 
                             onClick={() => {
                                 setSelectedSummaryFilter('NONE');
@@ -1033,27 +1093,59 @@ const MyOrders: React.FC<MyOrdersProps> = ({
 
                                 <div className="space-y-3 shrink-0">
                                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1 flex items-center gap-2">
-                                            <Tag size={12} className="text-indigo-600" /> Descuento Adicional
-                                        </label>
-                                        <div className="relative">
-                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 font-bold text-base md:text-xl">{currency}</span>
-                                            <input 
-                                                type="number" 
-                                                value={localDiscount} 
-                                                onChange={e => setLocalDiscount(e.target.value)} 
-                                                className="w-full bg-white border-2 border-slate-100 rounded-xl px-12 py-2.5 md:py-3 text-lg md:text-xl font-bold outline-none focus:border-indigo-500 transition-all shadow-sm text-slate-800" 
-                                                placeholder="0.00" 
-                                            />
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                                                <Tag size={12} className="text-indigo-600" /> Aplicar Descuento
+                                            </label>
+                                            <button 
+                                                onClick={() => setShowDiscount(!showDiscount)}
+                                                className={`w-10 h-5 rounded-full transition-all relative ${showDiscount ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                                            >
+                                                <div className={`absolute top-0.5 h-4 w-4 bg-white rounded-full transition-all ${showDiscount ? 'left-5.5' : 'left-0.5'}`} />
+                                            </button>
                                         </div>
+                                        
+                                        <AnimatePresence>
+                                            {showDiscount && (
+                                                <motion.div 
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    className="overflow-hidden"
+                                                >
+                                                    <div className="relative pt-2">
+                                                        <span className="absolute left-4 top-[58%] -translate-y-1/2 text-slate-300 font-bold text-base md:text-xl">{currency}</span>
+                                                        <input 
+                                                            type="number" 
+                                                            value={localDiscount} 
+                                                            onChange={e => setLocalDiscount(e.target.value)} 
+                                                            className="w-full bg-white border-2 border-slate-100 rounded-xl px-12 py-2.5 md:py-3 text-lg md:text-xl font-bold outline-none focus:border-indigo-500 transition-all shadow-sm text-slate-800" 
+                                                            placeholder="0.00" 
+                                                        />
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                     </div>
+
                                     <div className="relative">
+                                        <style>{`
+                                            @keyframes neon-pulse {
+                                                0% { box-shadow: 0 0 5px #4f46e5, 0 0 10px #4f46e5; border-color: #4f46e5; }
+                                                50% { box-shadow: 0 0 15px #4f46e5, 0 0 25px #6366f1; border-color: #6366f1; }
+                                                100% { box-shadow: 0 0 5px #4f46e5, 0 0 10px #4f46e5; border-color: #4f46e5; }
+                                            }
+                                            .neon-pulse-input {
+                                                animation: neon-pulse 1.5s infinite;
+                                            }
+                                        `}</style>
                                         <input
                                             type="number"
                                             value={payAmount}
                                             onChange={e => setPayAmount(e.target.value)}
                                             placeholder={pendingInModal > 0 ? `Cobro (${currency} ${pendingInModal.toFixed(2)})` : "0.00"}
-                                            className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-2.5 md:py-3 text-lg md:text-xl font-bold text-slate-800 outline-none focus:bg-white focus:border-indigo-500 transition-all shadow-inner"
+                                            className="w-full bg-white border-4 border-indigo-500 rounded-2xl px-5 py-3 md:py-4 text-2xl md:text-3xl font-black text-slate-900 outline-none transition-all shadow-2xl neon-pulse-input text-center placeholder:text-slate-300"
+                                            autoFocus
                                         />
                                     </div>
                                     <div className="flex md:grid md:grid-cols-5 gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
@@ -1121,39 +1213,64 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                     return (
                                         <div
                                             key={it.id}
-                                            className={`p-3 rounded-2xl border-2 transition-all flex items-center justify-between ${isDelivered ? 'bg-slate-200 border-slate-200 opacity-60 cursor-not-allowed' :
+                                            className={`p-3 rounded-2xl border-2 transition-all flex flex-col gap-2 ${isDelivered ? 'bg-slate-200 border-slate-200 opacity-60 cursor-not-allowed' :
                                                 isSelected ? 'bg-white border-emerald-500 shadow-md ring-4 ring-emerald-50/50' :
                                                     'bg-white border-white hover:border-slate-200 shadow-sm'
                                                 }`}
                                         >
-                                            <div className="flex items-center gap-3 grow" onClick={() => !isDelivered && toggleItemDelivery(it.id)}>
-                                                <div className="cursor-pointer shrink-0">
-                                                    {isDelivered ? <CheckCircle2 size={18} className="text-slate-400" /> :
-                                                        isSelected ? <CheckSquare size={18} className="text-emerald-600" /> :
-                                                            <Square size={18} className="text-slate-200" />}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className={`font-bold text-[11px] md:text-xs uppercase truncate max-w-[120px] md:max-w-[200px] ${isSelected ? 'text-emerald-900' : 'text-slate-700'}`}>{it.quantity} x {it.name}</p>
-                                                    <div className="flex items-center gap-2 mt-0.5">
-                                                        <span className={`text-[7px] md:text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${isDelivered ? 'bg-slate-300 text-slate-600' :
-                                                            isReady ? 'bg-emerald-100 text-emerald-600' :
-                                                                'bg-orange-100 text-orange-600'
-                                                            }`}>
-                                                            {isDelivered ? 'ENTREGADO' : isReady ? 'LISTO' : 'PROCESANDO'}
-                                                        </span>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3 grow" onClick={() => !isDelivered && toggleItemDelivery(it.id)}>
+                                                    <div className="cursor-pointer shrink-0">
+                                                        {isDelivered ? <CheckCircle2 size={18} className="text-slate-400" /> :
+                                                            isSelected ? <CheckSquare size={18} className="text-emerald-600" /> :
+                                                                <Square size={18} className="text-slate-200" />}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className={`font-bold text-[11px] md:text-xs uppercase truncate max-w-[120px] md:max-w-[180px] ${isSelected ? 'text-emerald-900' : 'text-slate-700'}`}>{it.quantity} x {it.name}</p>
+                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                            <span className={`text-[7px] md:text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${isDelivered ? 'bg-slate-300 text-slate-600' :
+                                                                isReady ? 'bg-emerald-100 text-emerald-600' :
+                                                                    'bg-orange-100 text-orange-600'
+                                                                }`}>
+                                                                {isDelivered ? 'ENTREGADO' : isReady ? 'LISTO' : 'PROCESANDO'}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <div className="text-right mr-2">
+                                                        <p className="text-[8px] font-bold text-slate-400 leading-none mb-0.5">{currency} {(it.price || 0).toFixed(2)} <span className="text-[7px] opacity-70 italic">c/u</span></p>
+                                                        <p className="text-[11px] font-black text-slate-900 leading-none">{currency} {(it.subtotal || 0).toFixed(2)}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setAuditItemId(it.id); setAuditItemName(it.name); }}
+                                                        className="p-1.5 rounded-lg bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-white transition-all shadow-sm border border-transparent hover:border-indigo-100"
+                                                        title="Historial de Auditoría"
+                                                    >
+                                                        <History size={14} />
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); setAuditItemId(it.id); setAuditItemName(it.name); }}
-                                                    className="p-1.5 rounded-lg bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-white transition-all shadow-sm border border-transparent hover:border-indigo-100"
-                                                    title="Historial de Auditoría"
-                                                >
-                                                    <History size={14} />
-                                                </button>
-                                                <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-300'}`}><Shirt size={14} /></div>
-                                            </div>
+                                            
+                                            {/* Detalles Multimedia */}
+                                            {(it.photoUrl || it.voiceNoteUrl) && (
+                                                <div className="flex items-center gap-2 pl-8 pt-1 border-t border-slate-50 mt-1">
+                                                    {it.photoUrl && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); setViewerPhotos([it.photoUrl!]); setCurrentPhotoIndex(0); }}
+                                                            className="w-10 h-10 rounded-lg overflow-hidden border border-slate-100 shadow-sm hover:scale-105 transition-transform"
+                                                        >
+                                                            <img src={it.photoUrl} className="w-full h-full object-cover" alt="Detalle" referrerPolicy="no-referrer" />
+                                                        </button>
+                                                    )}
+                                                    {it.voiceNoteUrl && (
+                                                        <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
+                                                            <Smartphone size={12} className="text-indigo-600" />
+                                                            <audio src={it.voiceNoteUrl} controls className="h-6 w-32 scale-90" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -1170,16 +1287,28 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                     <button
                                         onClick={handleConfirmUnifiedAction}
                                         disabled={isProcessingPayment || (payments.length === 0 && selectedItemsToDeliver.size === 0 && discountVal === (selectedOrderToPay.descuento || 0))}
-                                        className="bg-white text-indigo-900 px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-bold text-[8px] md:text-[9px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 shrink-0"
+                                        className="bg-white text-indigo-900 px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-bold text-[8px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 shrink-0"
                                     >
-                                        {isProcessingPayment ? <Loader2 size={14} className="animate-spin" /> : <><Check size={14} strokeWidth={4} /> PROCESAR</>}
+                                        {isProcessingPayment ? <Loader2 size={14} className="animate-spin" /> : (
+                                            <>
+                                                <Check size={14} strokeWidth={4} /> 
+                                                {(() => {
+                                                    const hasPayments = payments.length > 0;
+                                                    const hasDeliveries = selectedItemsToDeliver.size > 0;
+                                                    if (hasPayments && hasDeliveries) return "ENTREGAR Y COBRAR";
+                                                    if (hasPayments) return "COBRAR";
+                                                    if (hasDeliveries) return "ENTREGAR";
+                                                    return "PROCESAR";
+                                                })()}
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                                 <button 
                                     onClick={() => setSelectedOrderToPay(null)} 
-                                    className="w-full mt-3 md:mt-4 py-2.5 md:py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-2xl font-bold text-[9px] md:text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-sm flex items-center justify-center gap-2"
+                                    className="w-full mt-3 md:mt-4 py-3 md:py-4 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl font-black text-xs md:text-sm uppercase tracking-[0.2em] transition-all active:scale-95 shadow-xl flex items-center justify-center gap-3 border-b-4 border-slate-950"
                                 >
-                                    <ArrowLeft size={14} strokeWidth={3} /> Volver
+                                    <ArrowLeft size={18} strokeWidth={3} /> VOLVER AL LISTADO
                                 </button>
                             </div>
                         </div>
@@ -1341,32 +1470,58 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                             </div>
 
                             <div className="p-6 space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <button
-                                        disabled={isExporting}
-                                        onClick={handleExportExcel}
-                                        className="flex flex-col items-center justify-center p-6 bg-white border border-gray-100 rounded-3xl hover:bg-emerald-50 hover:border-emerald-200 transition-all group disabled:opacity-50 shadow-sm"
-                                    >
-                                        {isExporting ? <Loader2 className="animate-spin text-emerald-600 mb-2" /> : (
-                                            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-all shadow-lg border border-emerald-100 group-hover:border-emerald-200">
-                                                <div className="w-10 h-10 bg-[#217346] rounded-lg flex items-center justify-center text-white shadow-sm ring-4 ring-emerald-50">
-                                                    <FileSpreadsheet size={24} />
-                                                </div>
+                                 {/* Reportes Diarios */}
+                                <div className="space-y-3 pt-2">
+                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Reporte de Ventas Diarias</h4>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button 
+                                            onClick={() => handleDailySalesReport(new Date().toISOString().split('T')[0])}
+                                            className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-50 hover:border-indigo-200 transition-all group"
+                                        >
+                                            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                                                <Clock size={20} />
                                             </div>
-                                        )}
-                                        <span className="text-sm font-bold text-gray-700">Excel</span>
-                                        <span className="text-[10px] text-gray-400 mt-1 uppercase font-black">Exportar reporte</span>
-                                    </button>
+                                            <div className="text-left">
+                                                <div className="text-xs font-black text-slate-800">HOY</div>
+                                                <div className="text-[9px] font-bold text-slate-400">Ventas de hoy</div>
+                                            </div>
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                const yesterday = new Date();
+                                                yesterday.setDate(yesterday.getDate() - 1);
+                                                handleDailySalesReport(yesterday.toISOString().split('T')[0]);
+                                            }}
+                                            className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-50 hover:border-indigo-200 transition-all group"
+                                        >
+                                            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                                                <History size={20} />
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="text-xs font-black text-slate-800">AYER</div>
+                                                <div className="text-[9px] font-bold text-slate-400">Ventas de ayer</div>
+                                            </div>
+                                        </button>
+                                    </div>
                                     
-                                    <button
-                                        disabled={isExporting}
-                                        onClick={handlePrintSummary}
-                                        className="flex flex-col items-center justify-center p-6 bg-blue-50 border border-blue-100 rounded-2xl hover:bg-blue-100 transition-all group disabled:opacity-50"
-                                    >
-                                        {isExporting ? <Loader2 className="animate-spin text-blue-600 mb-2" /> : <Printer className="text-blue-600 mb-2 group-hover:scale-110 transition-transform" size={32} />}
-                                        <span className="text-sm font-bold text-blue-700">Ticket</span>
-                                        <span className="text-[10px] text-blue-500 mt-1 uppercase font-black">Imprimir Resumen</span>
-                                    </button>
+                                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-center justify-between group hover:bg-indigo-50 hover:border-indigo-200 transition-all">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                                                <Search size={20} />
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="text-xs font-black text-slate-800 uppercase">Otro día</div>
+                                                <div className="text-[9px] font-bold text-slate-400">Buscar por fecha</div>
+                                            </div>
+                                        </div>
+                                        <input 
+                                            type="date" 
+                                            onChange={(e) => {
+                                                if (e.target.value) handleDailySalesReport(e.target.value);
+                                            }}
+                                            className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
+                                        />
+                                    </div>
                                 </div>
 
                                 {selectedSummaryFilter === 'TO_COLLECT' && (
@@ -1403,7 +1558,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                     >
                                         <div className="flex items-center gap-4 text-white">
                                             <div className="p-2 bg-white/20 rounded-xl group-hover:rotate-12 transition-transform">
-                                                <MessageSquare size={24} />
+                                                <img src="https://iili.io/BWIGQGs.png" alt="WA" className="w-6 h-6 object-contain brightness-0 invert" />
                                             </div>
                                             <div className="text-left">
                                                 <div className="font-black text-base leading-none">Campaña Recordatorio</div>

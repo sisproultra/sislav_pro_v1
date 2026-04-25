@@ -206,6 +206,8 @@ export interface CartItem extends Product {
     valor_unitario?: number;
     igv_item?: number;
     descuento_item?: number;
+    photoUrl?: string;
+    voiceNoteUrl?: string;
 }
 
 export interface ItemDetalle {

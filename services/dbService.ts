@@ -1511,46 +1511,54 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
 
         if (searchTerm) {
             let intelligentSearch = searchTerm.trim().toUpperCase();
-            const ticketPattern = /^([A-Z]+)[-]?([0-9]+)$/i;
-            const match = intelligentSearch.match(ticketPattern);
-            let searchPattern = `%${intelligentSearch}%`;
             
-            if (match) {
-                // Si es algo como H3, buscamos H%3 para que coincida con H-00003
-                searchPattern = `%${match[1]}%${match[2]}%`;
+            // Check if it's a date pattern (YYYY-MM-DD)
+            const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+            if (datePattern.test(intelligentSearch)) {
+                query = query.gte('fecha_recepcion', `${intelligentSearch}T00:00:00`)
+                             .lte('fecha_recepcion', `${intelligentSearch}T23:59:59`);
+            } else {
+                const ticketPattern = /^([A-Z]+)[-]?([0-9]+)$/i;
+                const match = intelligentSearch.match(ticketPattern);
+                let searchPattern = `%${intelligentSearch}%`;
+                
+                if (match) {
+                    // Si es algo como H3, buscamos H%3 para que coincida con H-00003
+                    searchPattern = `%${match[1]}%${match[2]}%`;
+                }
+
+                // 1. Buscar IDs de clientes que coincidan
+                const { data: matchedClients } = await supabase
+                    .from('clientes')
+                    .select('id')
+                    .or(`nombres.ilike.%${searchTerm}%,apellidos.ilike.%${searchTerm}%,telefono.ilike.%${searchTerm}%`)
+                    .eq('sucursal_id', branchId);
+                const clientIds = matchedClients?.map(c => c.id) || [];
+
+                // 2. Construir filtros para columnas de TEXTO (ilike funciona nativamente)
+                // codigo_orden y serie son texto.
+                let filters = [
+                    `codigo_orden.ilike.${searchPattern}`,
+                    `serie.ilike.%${searchTerm}%`
+                ];
+
+                // 3. Agregar búsqueda por clientes si hay coincidencias
+                if (clientIds.length > 0) {
+                    const idsString = clientIds.map(id => `"${id}"`).join(',');
+                    filters.push(`cliente_id.in.(${idsString})`);
+                }
+
+                // 4. Si el término de búsqueda es PURAMENTE numérico, podemos buscar en correlativos numéricos
+                // Pero como ilike requiere texto, y PostgREST no permite cast dentro del OR string de forma sencilla,
+                // nos apoyamos en codigo_orden que ya suele contener el número formateado.
+                const numericSearch = searchTerm.replace(/[^0-9]/g, '');
+                if (numericSearch && /^\d+$/.test(searchTerm.trim())) {
+                    filters.push(`correlativo.eq.${numericSearch}`);
+                    filters.push(`correlativo_interno.eq.${numericSearch}`);
+                }
+
+                query = query.or(filters.join(','));
             }
-
-            // 1. Buscar IDs de clientes que coincidan
-            const { data: matchedClients } = await supabase
-                .from('clientes')
-                .select('id')
-                .or(`nombres.ilike.%${searchTerm}%,apellidos.ilike.%${searchTerm}%,telefono.ilike.%${searchTerm}%`)
-                .eq('sucursal_id', branchId);
-            const clientIds = matchedClients?.map(c => c.id) || [];
-
-            // 2. Construir filtros para columnas de TEXTO (ilike funciona nativamente)
-            // codigo_orden y serie son texto.
-            let filters = [
-                `codigo_orden.ilike.${searchPattern}`,
-                `serie.ilike.%${searchTerm}%`
-            ];
-
-            // 3. Agregar búsqueda por clientes si hay coincidencias
-            if (clientIds.length > 0) {
-                const idsString = clientIds.map(id => `"${id}"`).join(',');
-                filters.push(`cliente_id.in.(${idsString})`);
-            }
-
-            // 4. Si el término de búsqueda es PURAMENTE numérico, podemos buscar en correlativos numéricos
-            // Pero como ilike requiere texto, y PostgREST no permite cast dentro del OR string de forma sencilla,
-            // nos apoyamos en codigo_orden que ya suele contener el número formateado.
-            const numericSearch = searchTerm.replace(/[^0-9]/g, '');
-            if (numericSearch && /^\d+$/.test(searchTerm.trim())) {
-                filters.push(`correlativo.eq.${numericSearch}`);
-                filters.push(`correlativo_interno.eq.${numericSearch}`);
-            }
-
-            query = query.or(filters.join(','));
         }
 
         const { data: ventas, count, error: vError } = await query
