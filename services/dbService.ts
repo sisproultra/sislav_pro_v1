@@ -1512,9 +1512,15 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
         if (searchTerm) {
             let intelligentSearch = searchTerm.trim().toUpperCase();
             
-            // Check if it's a date pattern (YYYY-MM-DD)
+            // Check if it's a date pattern (YYYY-MM-DD) or range (YYYY-MM-DD:YYYY-MM-DD)
             const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-            if (datePattern.test(intelligentSearch)) {
+            const rangePattern = /^(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})$/;
+
+            if (rangePattern.test(intelligentSearch)) {
+                const [, start, end] = intelligentSearch.match(rangePattern)!;
+                query = query.gte('fecha_recepcion', `${start}T00:00:00`)
+                             .lte('fecha_recepcion', `${end}T23:59:59`);
+            } else if (datePattern.test(intelligentSearch)) {
                 query = query.gte('fecha_recepcion', `${intelligentSearch}T00:00:00`)
                              .lte('fecha_recepcion', `${intelligentSearch}T23:59:59`);
             } else {

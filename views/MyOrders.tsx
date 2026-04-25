@@ -3,7 +3,7 @@ import { utils, writeFile } from 'xlsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { Invoice, OrderStatus, Company, Client, PaymentMethodConfig, CartItem, InvoiceType, Contact } from '../types';
 import {
-    Search, Clock, CheckCircle2, Package, Trash2, Printer, Camera, X,
+    Search, Clock, CheckCircle2, Package, Trash2, Printer, Camera, X, Calendar,
     AlertTriangle, Phone, Eye, Image as ImageIcon, MessageSquare,
     ListFilter, Shirt, Check, Store, Truck, Smartphone, Loader2, Navigation,
     MoreVertical, PackageCheck, Send, Edit, Waves, Wind, DollarSign, Save, CreditCard, Banknote, QrCode, Landmark, Wallet,
@@ -142,6 +142,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     const [sentSuccessIds, setSentSuccessIds] = useState<Set<string>>(new Set());
 
     const [selectedReportDate, setSelectedReportDate] = useState<string | null>(null);
+    const [reportEndDate, setReportEndDate] = useState<string | null>(null);
     const [dailySalesTotal, setDailySalesTotal] = useState<number>(0);
     const [isCalculatingDailyTotal, setIsCalculatingDailyTotal] = useState(false);
 
@@ -266,18 +267,21 @@ const MyOrders: React.FC<MyOrdersProps> = ({
         } finally { setIsExporting(false); }
     };
 
-    const handleDailySalesReport = async (dateStr: string) => {
+    const handleDailySalesReport = async (dateStr: string, endDateStr?: string) => {
         setSelectedReportDate(dateStr);
+        setReportEndDate(endDateStr || null);
         setIsCalculatingDailyTotal(true);
         setIsReportModalOpen(false);
         try {
-            // Activar búsqueda real en el API
-            onSearch(1, dateStr);
+            const searchVal = endDateStr ? `${dateStr}:${endDateStr}` : dateStr;
+            onSearch(1, searchVal);
             
             const allData = await dbGetInvoicesForReport('ALL');
-            // Filtrar por la fecha seleccionada (YYYY-MM-DD) para el KPI
             const dailyInvoices = allData.filter(inv => {
                 const invDate = new Date(inv.date).toISOString().split('T')[0];
+                if (endDateStr) {
+                    return invDate >= dateStr && invDate <= endDateStr;
+                }
                 return invDate === dateStr;
             });
             const total = dailyInvoices.reduce((sum, inv) => sum + (inv.totals.total), 0);
@@ -291,7 +295,8 @@ const MyOrders: React.FC<MyOrdersProps> = ({
 
     const clearDailyReport = () => {
         setSelectedReportDate(null);
-        onSearch(1, ''); // Limpiar búsqueda
+        setReportEndDate(null);
+        onSearch(1, ''); 
     };
 
     const handlePrintSummary = async () => {
@@ -655,7 +660,8 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                 </div>
                                 <div className="flex items-center gap-2 mb-0.5">
                                     <span className="text-[8px] font-black text-brand-primary uppercase tracking-widest">
-                                        Venta: {selectedReportDate === new Date().toISOString().split('T')[0] ? 'HOY' : selectedReportDate}
+                                        Venta: {selectedReportDate === new Date().toISOString().split('T')[0] && !reportEndDate ? 'HOY' : 
+                                               reportEndDate ? `${selectedReportDate} al ${reportEndDate}` : selectedReportDate}
                                     </span>
                                     <button onClick={clearDailyReport} className="p-0.5 hover:bg-slate-100 rounded-full text-slate-400">
                                         <X size={10} />
@@ -1504,23 +1510,41 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                         </button>
                                     </div>
                                     
-                                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-center justify-between group hover:bg-indigo-50 hover:border-indigo-200 transition-all">
+                                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3 group hover:bg-indigo-50 hover:border-indigo-200 transition-all">
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                                                <Search size={20} />
+                                                <Calendar size={20} />
                                             </div>
                                             <div className="text-left">
-                                                <div className="text-xs font-black text-slate-800 uppercase">Otro día</div>
-                                                <div className="text-[9px] font-bold text-slate-400">Buscar por fecha</div>
+                                                <div className="text-xs font-black text-slate-800 uppercase">Rango de Fechas</div>
+                                                <div className="text-[9px] font-bold text-slate-400">Seleccionar desde / hasta</div>
                                             </div>
                                         </div>
-                                        <input 
-                                            type="date" 
-                                            onChange={(e) => {
-                                                if (e.target.value) handleDailySalesReport(e.target.value);
-                                            }}
-                                            className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
-                                        />
+                                        <div className="flex items-center gap-2">
+                                            <input 
+                                                type="date" 
+                                                defaultValue={new Date().toISOString().split('T')[0]}
+                                                id="report-start"
+                                                className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
+                                            />
+                                            <span className="text-slate-400 text-[10px] font-bold">al</span>
+                                            <input 
+                                                type="date" 
+                                                defaultValue={new Date().toISOString().split('T')[0]}
+                                                id="report-end"
+                                                className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
+                                            />
+                                            <button 
+                                                onClick={() => {
+                                                    const start = (document.getElementById('report-start') as HTMLInputElement)?.value;
+                                                    const end = (document.getElementById('report-end') as HTMLInputElement)?.value;
+                                                    if (start && end) handleDailySalesReport(start, end);
+                                                }}
+                                                className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700"
+                                            >
+                                                <Search size={14} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
