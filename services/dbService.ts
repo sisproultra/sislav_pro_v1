@@ -344,6 +344,11 @@ export const dbOwnerAuth = async (email: string, pass: string): Promise<AuthSess
             await supabase.auth.signOut();
             throw new Error("Se autenticó correctamente, pero este correo no está vinculado a ninguna empresa en la base de datos.");
         }
+                // ✅ AGREGAR ESTO — Validación cruzada email Auth vs email empresa
+        if (authData.user.email?.toLowerCase().trim() !== company.correo_login.toLowerCase().trim()) {
+          await supabase.auth.signOut();
+          throw new Error("Credenciales no autorizadas para este panel.");
+        }
         
         console.log("✅ Empresa encontrada:", company.nombre_empresa);
         companyData = company;
