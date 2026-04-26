@@ -15,12 +15,22 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [companyInfo, setCompanyInfo] = useState<any>(null);
+  const [companyInfo, setCompanyInfo] = useState<any>(() => {
+    return (window as any).__SUCURSAL_BRANDING__ || null;
+  });
+
+  const brandingStatus = (window as any).__BRANDING_STATUS__;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ownerId = params.get('o');
     if (ownerId) {
+      // Si ya tenemos branding pre-cargado, no hace falta re-fetch
+      if ((window as any).__SUCURSAL_BRANDING__) {
+        setCompanyInfo((window as any).__SUCURSAL_BRANDING__);
+        return;
+      }
+
       supabase.from('empresas_holding').select('*').eq('id', ownerId).maybeSingle()
         .then(({ data }) => {
           if (data) {
@@ -38,6 +48,15 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
         });
     }
   }, []);
+
+  // Si se espera branding de owner pero aún está cargando
+  if (!companyInfo && brandingStatus === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#0d0f14] flex items-center justify-center">
+        <Loader2 className="animate-spin text-white/20" size={48} />
+      </div>
+    );
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

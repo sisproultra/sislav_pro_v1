@@ -24,6 +24,13 @@ export interface AuthSession {
     };
 }
 
+declare global {
+  interface Window {
+    __SUCURSAL_BRANDING__?: any;
+    __BRANDING_STATUS__?: 'none' | 'loading' | 'ready' | 'failed';
+  }
+}
+
 export interface BaseEntity {
     id: string;
     sucursal_id: string;

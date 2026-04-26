@@ -10,6 +10,9 @@ interface SaaSLoginProps {
 }
 
 const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLogin, hideMasterAdmin }) => {
+  const [localSucursal, setLocalSucursal] = useState<any>(() => {
+    return sucursal || (window as any).__SUCURSAL_BRANDING__ || null;
+  });
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -19,13 +22,32 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
     return saved === 'dark' ? true : false;
   });
 
+  const brandingStatus = (window as any).__BRANDING_STATUS__;
+
+  useEffect(() => {
+    if (sucursal) {
+      setLocalSucursal(sucursal);
+    } else if ((window as any).__SUCURSAL_BRANDING__) {
+      setLocalSucursal((window as any).__SUCURSAL_BRANDING__);
+    }
+  }, [sucursal]);
+
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
     localStorage.setItem('sislav_login_theme', !isDarkMode ? 'dark' : 'light');
   };
 
-  const brandPrimary = sucursal?.color_primario || '#6366f1';
-  const brandSecondary = sucursal?.color_secundario || '#ec4899';
+  const brandPrimary = localSucursal?.color_primario || '#6366f1';
+  const brandSecondary = localSucursal?.color_secundario || '#ec4899';
+
+  // Si se espera branding pero aún está cargando el script del index.html, no mostrar nada genérico
+  if (!localSucursal && brandingStatus === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#0d0f14] flex items-center justify-center">
+        <Loader2 className="animate-spin text-white/20" size={48} />
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,8 +104,8 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
                 style={{ background: brandPrimary }}
               ></div>
               <div className="relative w-full h-full bg-white backdrop-blur-md rounded-[3rem] flex items-center justify-center p-6 shadow-2xl transform group-hover:scale-110 transition-transform duration-700 ease-out border border-black/5">
-                {sucursal?.url_logo ? (
-                  <img src={sucursal.url_logo} className="max-w-full h-auto object-contain drop-shadow-lg" alt="Logo" referrerPolicy="no-referrer" />
+                {localSucursal?.url_logo ? (
+                  <img src={localSucursal.url_logo} className="max-w-full h-auto object-contain drop-shadow-lg" alt="Logo" referrerPolicy="no-referrer" />
                 ) : (
                   <Store size={56} style={{ color: brandPrimary }} />
                 )}
@@ -91,7 +113,7 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
             </div>
 
             <h1 className="text-3xl font-display font-bold text-text uppercase tracking-tight leading-none mb-3 drop-shadow-sm">
-              {sucursal?.nombre_sucursal || 'SISLAV POWER'}
+              {localSucursal?.nombre_sucursal || 'SISLAV POWER'}
             </h1>
             <div className="flex items-center justify-center gap-2">
               <div className="h-px w-8 bg-text/10"></div>

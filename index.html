@@ -83,21 +83,22 @@
       (function() {
         const params = new URLSearchParams(window.location.search);
         const slug = params.get('s');
-        const branchId = params.get('o'); // El usuario mencionó que usan 'o' para el UUID de sucursal
+        const ownerId = params.get('o');
         
         const SUPABASE_URL = 'https://yvgshdypqanlcgxdyvls.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2Z3NoZHlwcWFubGNneGR5dmxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NjYyODIsImV4cCI6MjA4NTE0MjI4Mn0.B65RRA4u5-a_6E-blMvQXMKf39521esSif4XODdzfNE';
 
-        if (slug || branchId) {
-          console.log('⚡ [Pre-load] Detectado branding dinámico:', { slug, branchId });
+        if (slug || ownerId) {
+          window.__BRANDING_STATUS__ = 'loading';
           
-          let queryUrl = `${SUPABASE_URL}/rest/v1/sucursales?select=*,empresas_holding(nombre_empresa)`;
+          let table = slug ? 'sucursales' : 'empresas_holding';
+          let queryUrl = `${SUPABASE_URL}/rest/v1/${table}?select=*`;
+          
           if (slug) {
             queryUrl += `&slug=eq.${slug}`;
-          } else if (branchId) {
-            // Intentar por ID si es UUID, o por slug como fallback si 'o' trae un slug
-            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branchId);
-            queryUrl += isUuid ? `&id=eq.${branchId}` : `&slug=eq.${branchId}`;
+          } else if (ownerId) {
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerId);
+            queryUrl += isUuid ? `&id=eq.${ownerId}` : `&slug=eq.${ownerId}`;
           }
           queryUrl += '&limit=1';
 
@@ -112,8 +113,8 @@
           .then(data => {
             const s = Array.isArray(data) ? data[0] : data;
             if (s) {
-              console.log('✅ [Pre-load] Branding aplicado:', s.nombre_sucursal);
               window.__SUCURSAL_BRANDING__ = s;
+              window.__BRANDING_STATUS__ = 'ready';
               
               const primary = s.color_primario || '#0054A6';
               const secondary = s.color_secundario || '#10B981';
@@ -124,12 +125,18 @@
               root.style.setProperty('--accent', primary);
               root.style.setProperty('--primary-color', primary);
               
-              // Actualizar título inmediatamente
-              const razonSocial = s.nombre_sucursal || s.razon_social || 'SISLAV';
+              const razonSocial = s.nombre_sucursal || s.nombre_empresa || s.razon_social || 'SISLAV';
               document.title = `${razonSocial} - CONTROL TOTAL`;
+            } else {
+              window.__BRANDING_STATUS__ = 'failed';
             }
           })
-          .catch(e => console.error('❌ [Pre-load] Error:', e));
+          .catch(e => {
+            console.error('❌ [Pre-load] Error:', e);
+            window.__BRANDING_STATUS__ = 'failed';
+          });
+        } else {
+          window.__BRANDING_STATUS__ = 'none';
         }
       })();
     </script>

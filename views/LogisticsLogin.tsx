@@ -17,6 +17,28 @@ export default function LogisticsLogin({ onLogin, isDarkMode, toggleTheme, sucur
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [localSucursal, setLocalSucursal] = useState<any>(() => {
+    return sucursal || (window as any).__SUCURSAL_BRANDING__ || null;
+  });
+
+  const brandingStatus = (window as any).__BRANDING_STATUS__;
+
+  React.useEffect(() => {
+    if (sucursal) setLocalSucursal(sucursal);
+    else if ((window as any).__SUCURSAL_BRANDING__) setLocalSucursal((window as any).__SUCURSAL_BRANDING__);
+  }, [sucursal]);
+
+  const brandPrimary = localSucursal?.color_primario || '#4f8ef7';
+
+  // Si se espera branding pero aún está cargando
+  if (!localSucursal && brandingStatus === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#0d0f14] flex items-center justify-center">
+        <Loader2 className="animate-spin text-white/20" size={48} />
+      </div>
+    );
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,10 +46,10 @@ export default function LogisticsLogin({ onLogin, isDarkMode, toggleTheme, sucur
     setError(null);
 
     try {
-      if (!sucursal?.id) {
+      if (!localSucursal?.id) {
         throw new Error('Sucursal no detectada para el acceso logístico.');
       }
-      const session = await dbGlobalLogin(username, password, sucursal.id);
+      const session = await dbGlobalLogin(username, password, localSucursal.id);
 
       if (session) {
         if (session.user.role !== UserRole.DELIVERY) {
@@ -61,18 +83,18 @@ export default function LogisticsLogin({ onLogin, isDarkMode, toggleTheme, sucur
         className="w-full max-w-md"
       >
         <div className="text-center mb-8">
-          <div className={`inline-flex items-center justify-center w-20 h-20 rounded-3xl border mb-4 shadow-xl overflow-hidden ${isDarkMode ? 'bg-accent/10 border-accent/20' : 'bg-white border-gray-100'}`}>
-            {sucursal?.logoUrl ? (
-              <img src={sucursal.logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
+          <div className={`inline-flex items-center justify-center w-20 h-20 rounded-3xl border mb-4 shadow-xl overflow-hidden ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-100'}`} style={{ borderColor: brandPrimary + '40' }}>
+            {localSucursal?.url_logo ? (
+              <img src={localSucursal.url_logo} alt="Logo" className="w-full h-full object-contain p-2" />
             ) : (
-              <ShieldCheck className="w-10 h-10 text-accent" />
+              <ShieldCheck className="w-10 h-10" style={{ color: brandPrimary }} />
             )}
           </div>
           <h1 className={`text-3xl font-heading font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-            {sucursal?.nombre_sucursal || 'Panel de Logística'}
+            {localSucursal?.nombre_sucursal || 'Panel de Logística'}
           </h1>
           <p className={isDarkMode ? 'text-text2' : 'text-gray-500'}>
-            {sucursal ? 'Acceso para Choferes y Delivery' : 'Acceso exclusivo para Choferes y Delivery'}
+            {localSucursal ? 'Acceso para Choferes y Delivery' : 'Acceso exclusivo para Choferes y Delivery'}
           </p>
         </div>
 
@@ -81,13 +103,14 @@ export default function LogisticsLogin({ onLogin, isDarkMode, toggleTheme, sucur
             <div>
               <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-text2' : 'text-gray-600'}`}>Usuario de Chofer</label>
               <div className="relative group">
-                <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${isDarkMode ? 'text-text3 group-focus-within:text-accent' : 'text-gray-400 group-focus-within:text-accent'}`} />
+                <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${isDarkMode ? 'text-text3 group-focus-within:text-brand-primary' : 'text-gray-400 group-focus-within:text-brand-primary'}`} style={{ color: isDarkMode ? undefined : brandPrimary }} />
                 <input
                   type="text"
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className={`w-full border rounded-xl py-3 pl-12 pr-4 outline-none transition-all ${isDarkMode ? 'bg-bg border-white/5 text-white focus:border-accent focus:ring-1 focus:ring-accent' : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-accent focus:ring-1 focus:ring-accent'}`}
+                  className={`w-full border rounded-xl py-3 pl-12 pr-4 outline-none transition-all ${isDarkMode ? 'bg-bg border-white/5 text-white focus:border-brand-primary focus:ring-1 focus:ring-brand-primary' : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-brand-primary focus:ring-1 focus:ring-brand-primary'}`}
+                  style={{ '--brand-primary': brandPrimary } as any}
                   placeholder="usuario"
                 />
               </div>
@@ -96,13 +119,14 @@ export default function LogisticsLogin({ onLogin, isDarkMode, toggleTheme, sucur
             <div>
               <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-text2' : 'text-gray-600'}`}>PIN / Contraseña</label>
               <div className="relative group">
-                <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${isDarkMode ? 'text-text3 group-focus-within:text-accent' : 'text-gray-400 group-focus-within:text-accent'}`} />
+                <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${isDarkMode ? 'text-text3 group-focus-within:text-brand-primary' : 'text-gray-400 group-focus-within:text-brand-primary'}`} style={{ color: isDarkMode ? undefined : brandPrimary }} />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={`w-full border rounded-xl py-3 pl-12 pr-4 outline-none transition-all ${isDarkMode ? 'bg-bg border-white/5 text-white focus:border-accent focus:ring-1 focus:ring-accent' : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-accent focus:ring-1 focus:ring-accent'}`}
+                  className={`w-full border rounded-xl py-3 pl-12 pr-4 outline-none transition-all ${isDarkMode ? 'bg-bg border-white/5 text-white focus:border-brand-primary focus:ring-1 focus:ring-brand-primary' : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-brand-primary focus:ring-1 focus:ring-brand-primary'}`}
+                  style={{ '--brand-primary': brandPrimary } as any}
                   placeholder="••••••••"
                 />
               </div>
@@ -121,7 +145,8 @@ export default function LogisticsLogin({ onLogin, isDarkMode, toggleTheme, sucur
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-accent hover:bg-accent/90 disabled:opacity-50 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all group"
+              className="w-full hover:brightness-110 disabled:opacity-50 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all group shadow-lg"
+              style={{ background: brandPrimary }}
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
