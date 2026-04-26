@@ -13,40 +13,47 @@ export default async function handler(req: any, res: any) {
   let startUrl = '/';
 
   try {
-    if (slug || ownerId) {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      
-      let data: any = null;
-      if (slug) {
-        const { data: sucursal } = await supabase
-          .from('sucursales')
-          .select('nombre_sucursal, url_logo, url_favicon, color_primario')
-          .eq('slug', slug)
-          .maybeSingle();
-        data = sucursal;
-        if (data) startUrl = `/?s=${slug}`;
-      } else if (ownerId) {
-        const { data: empresa } = await supabase
-          .from('empresas_holding')
-          .select('nombre_empresa, url_logo, color_primario')
-          .eq('id', ownerId)
-          .maybeSingle();
-        if (empresa) {
-          data = {
-            nombre_sucursal: empresa.nombre_empresa,
-            url_logo: empresa.url_logo,
-            color_primario: empresa.color_primario
-          };
-          startUrl = `/?o=${ownerId}`;
-        }
-      }
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    let data: any = null;
+    if (ownerId) {
+      const { data: empresa } = await supabase
+        .from('empresas_holding')
+        .select('nombre_empresa, url_logo, url_favicon, color_primario')
+        .eq('id', (ownerId as string).trim())
+        .maybeSingle();
 
-      if (data) {
-        name = `${data.nombre_sucursal} - CONTROL TOTAL`;
-        shortName = data.nombre_sucursal;
-        themeColor = data.color_primario || themeColor;
-        logoUrl = data.url_favicon || data.url_logo || logoUrl;
+      if (empresa) {
+        data = {
+          nombre: empresa.nombre_empresa,
+          logo: empresa.url_favicon || empresa.url_logo,
+          color: empresa.color_primario,
+          start: `/?o=${(ownerId as string).trim()}`
+        };
       }
+    } else if (slug) {
+      const { data: sucursal } = await supabase
+        .from('sucursales')
+        .select('nombre_sucursal, url_logo, url_favicon, color_primario')
+        .eq('slug', (slug as string).trim())
+        .maybeSingle();
+      
+      if (sucursal) {
+        data = {
+          nombre: sucursal.nombre_sucursal,
+          logo: sucursal.url_favicon || sucursal.url_logo,
+          color: sucursal.color_primario,
+          start: `/?s=${(slug as string).trim()}`
+        };
+      }
+    }
+
+    if (data) {
+      name = `${data.nombre} - CONTROL TOTAL`;
+      shortName = data.nombre;
+      themeColor = data.color || themeColor;
+      logoUrl = data.logo || logoUrl;
+      startUrl = data.start || startUrl;
     }
   } catch (error) {
     console.error('Error generating manifest:', error);
@@ -64,14 +71,12 @@ export default async function handler(req: any, res: any) {
       {
         "src": logoUrl,
         "sizes": "192x192",
-        "type": "image/png",
-        "purpose": "any"
+        "type": "image/png"
       },
       {
         "src": logoUrl,
         "sizes": "512x512",
-        "type": "image/png",
-        "purpose": "any"
+        "type": "image/png"
       }
     ],
     "orientation": "portrait",
@@ -79,6 +84,6 @@ export default async function handler(req: any, res: any) {
   };
 
   res.setHeader('Content-Type', 'application/manifest+json');
-  res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=1200');
-  res.status(200).send(JSON.stringify(manifest, null, 2));
+  res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=1200');
+  res.status(200).send(JSON.stringify(manifest));
 }

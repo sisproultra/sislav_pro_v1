@@ -64,40 +64,45 @@ async function startServer() {
     let logoUrl = 'https://lavanderiasislav.com/logo-sislav.png';
     let name = 'SISLAV';
     let themeColor = '#4f8ef7';
+    let startUrl = '/';
 
     try {
-      if (slug) {
+      if (ownerId) {
+        const { data } = await supabaseAdmin
+          .from('empresas_holding')
+          .select('url_logo, url_favicon, nombre_empresa, color_primario')
+          .eq('id', ownerId.trim())
+          .maybeSingle();
+        
+        if (data) {
+          logoUrl = data.url_favicon || data.url_logo || logoUrl;
+          name = data.nombre_empresa || name;
+          themeColor = data.color_primario || themeColor;
+          startUrl = `/?o=${ownerId.trim()}`;
+        }
+      } else if (slug) {
         const { data } = await supabaseAdmin
           .from('sucursales')
           .select('url_logo, url_favicon, nombre_sucursal, color_primario')
-          .eq('slug', slug)
+          .eq('slug', slug.trim())
           .maybeSingle();
         
         if (data) {
           logoUrl = data.url_favicon || data.url_logo || logoUrl;
           name = data.nombre_sucursal || name;
           themeColor = data.color_primario || themeColor;
-        }
-      } else if (ownerId) {
-        const { data } = await supabaseAdmin
-          .from('empresas_holding')
-          .select('url_logo, nombre_empresa, color_primario')
-          .eq('id', ownerId)
-          .maybeSingle();
-        
-        if (data) {
-          logoUrl = data.url_logo || logoUrl;
-          name = data.nombre_empresa || name;
-          themeColor = data.color_primario || themeColor;
+          startUrl = `/?s=${slug.trim()}`;
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Error generating manifest:', e);
+    }
 
     res.json({
       "name": `${name} - CONTROL TOTAL`,
       "short_name": name,
       "description": `Sistema de gestión integral para ${name}`,
-      "start_url": slug ? `/?s=${slug}` : (ownerId ? `/?o=${ownerId}` : "/"),
+      "start_url": startUrl,
       "display": "standalone",
       "background_color": "#0d0f14",
       "theme_color": themeColor,
@@ -105,16 +110,16 @@ async function startServer() {
         {
           "src": logoUrl,
           "sizes": "192x192",
-          "type": "image/png",
-          "purpose": "any"
+          "type": "image/png"
         },
         {
           "src": logoUrl,
           "sizes": "512x512",
-          "type": "image/png",
-          "purpose": "any"
+          "type": "image/png"
         }
-      ]
+      ],
+      "orientation": "portrait",
+      "scope": "/"
     });
   });
 
@@ -144,13 +149,14 @@ async function startServer() {
           } else if (ownerId) {
             const { data } = await supabaseAdmin
               .from('empresas_holding')
-              .select('nombre_empresa, url_logo, color_primario')
+              .select('nombre_empresa, url_logo, url_favicon, color_primario')
               .eq('id', ownerId)
               .maybeSingle();
             if (data) {
               b = {
                 nombre_sucursal: data.nombre_empresa,
                 url_logo: data.url_logo,
+                url_favicon: data.url_favicon,
                 color_primario: data.color_primario
               };
             }
@@ -163,7 +169,7 @@ async function startServer() {
               let html = content.toString();
               const title = `${b.nombre_sucursal} - CONTROL TOTAL`;
               const themeColor = b.color_primario || '#4f8ef7';
-              const manifestUrl = slug ? `/manifest.json?s=${slug}` : `/manifest.json?o=${ownerId}`;
+              const manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
               
               html = html.replace(/<title>.*?<\/title>/g, `<title>${title}</title>`);
               html = html.replace(/<meta property="og:title" content=".*?" \/>/g, `<meta property="og:title" content="${title}" />`);
@@ -203,13 +209,14 @@ async function startServer() {
           } else if (ownerId) {
             const { data } = await supabaseAdmin
               .from('empresas_holding')
-              .select('nombre_empresa, url_logo, color_primario')
+              .select('nombre_empresa, url_logo, url_favicon, color_primario')
               .eq('id', ownerId)
               .maybeSingle();
             if (data) {
               b = {
                 nombre_sucursal: data.nombre_empresa,
                 url_logo: data.url_logo,
+                url_favicon: data.url_favicon,
                 color_primario: data.color_primario
               };
             }
@@ -219,7 +226,7 @@ async function startServer() {
             const logo = b.url_favicon || b.url_logo || 'https://lavanderiasislav.com/logo-sislav.png';
             const title = `${b.nombre_sucursal} - CONTROL TOTAL`;
             const themeColor = b.color_primario || '#4f8ef7';
-            const manifestUrl = slug ? `/manifest.json?s=${slug}` : `/manifest.json?o=${ownerId}`;
+            const manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
             
             html = html.replace(/<title>.*?<\/title>/g, `<title>${title}</title>`);
             html = html.replace(/<meta property="og:title" content=".*?" \/>/g, `<meta property="og:title" content="${title}" />`);
