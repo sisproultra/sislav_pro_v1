@@ -77,7 +77,64 @@
         --accent: #4f8ef7;
         --accent-glow: rgba(79,142,247,0.15);
       }
+    </style>
 
+    <script>
+      (function() {
+        const params = new URLSearchParams(window.location.search);
+        const slug = params.get('s');
+        const branchId = params.get('o'); // El usuario mencionó que usan 'o' para el UUID de sucursal
+        
+        const SUPABASE_URL = 'https://yvgshdypqanlcgxdyvls.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2Z3NoZHlwcWFubGNneGR5dmxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NjYyODIsImV4cCI6MjA4NTE0MjI4Mn0.B65RRA4u5-a_6E-blMvQXMKf39521esSif4XODdzfNE';
+
+        if (slug || branchId) {
+          console.log('⚡ [Pre-load] Detectado branding dinámico:', { slug, branchId });
+          
+          let queryUrl = `${SUPABASE_URL}/rest/v1/sucursales?select=*,empresas_holding(nombre_empresa)`;
+          if (slug) {
+            queryUrl += `&slug=eq.${slug}`;
+          } else if (branchId) {
+            // Intentar por ID si es UUID, o por slug como fallback si 'o' trae un slug
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branchId);
+            queryUrl += isUuid ? `&id=eq.${branchId}` : `&slug=eq.${branchId}`;
+          }
+          queryUrl += '&limit=1';
+
+          fetch(queryUrl, {
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              'Range': '0-0'
+            }
+          })
+          .then(r => r.json())
+          .then(data => {
+            const s = Array.isArray(data) ? data[0] : data;
+            if (s) {
+              console.log('✅ [Pre-load] Branding aplicado:', s.nombre_sucursal);
+              window.__SUCURSAL_BRANDING__ = s;
+              
+              const primary = s.color_primario || '#0054A6';
+              const secondary = s.color_secundario || '#10B981';
+              
+              const root = document.documentElement;
+              root.style.setProperty('--brand-primary', primary);
+              root.style.setProperty('--brand-secondary', secondary);
+              root.style.setProperty('--accent', primary);
+              root.style.setProperty('--primary-color', primary);
+              
+              // Actualizar título inmediatamente
+              const razonSocial = s.nombre_sucursal || s.razon_social || 'SISLAV';
+              document.title = `${razonSocial} - CONTROL TOTAL`;
+            }
+          })
+          .catch(e => console.error('❌ [Pre-load] Error:', e));
+        }
+      })();
+    </script>
+
+    <style>
       /* Light Theme Overrides */
       .light-theme {
         --bg: #f1f5f9;

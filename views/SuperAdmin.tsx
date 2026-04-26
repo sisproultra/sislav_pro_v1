@@ -624,7 +624,7 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
     const [brMonedaSimbolo, setBrMonedaSimbolo] = useState('S/');
     const [brUseOrderReset, setBrUseOrderReset] = useState(false);
     const [brLimiteReconteo, setBrLimiteReconteo] = useState('10000');
-    const [brModulosConfig, setBrModulosConfig] = useState<Record<string, boolean>>({});
+    const [brModulosConfig, setBrModulosConfig] = useState<Record<string, any>>({});
     const [editingCatalogId, setEditingCatalogId] = useState<string | null>(null);
     const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
     const [isCatalogDeleteModalOpen, setIsCatalogDeleteModalOpen] = useState(false);
@@ -827,12 +827,6 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
         setIsBranchModalOpen(true);
     };
 
-    const toggleModule = (moduleId: string) => {
-        setBrModulosConfig(prev => ({
-            ...prev,
-            [moduleId]: !prev[moduleId]
-        }));
-    };
 
     const handleCopyUrl = (slug: string) => {
         const url = `${window.location.origin}/?s=${slug}`;
@@ -2495,32 +2489,114 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
 
                             {branchModalTab === 'MODULOS' && (
                                 <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
-                                    <div className="bg-indigo-900 text-white p-8 rounded-[3rem] shadow-2xl relative overflow-hidden group">
-                                        <div className="absolute top-0 right-0 p-10 opacity-10 group-hover:scale-110 transition-transform"><LayoutGrid size={120} /></div>
+                                    <div className="bg-[#0f172a] text-white p-8 rounded-[3rem] shadow-2xl relative overflow-hidden group border border-white/5">
+                                        <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 transition-transform"><LayoutGrid size={120} /></div>
                                         <div className="relative z-10">
                                             <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.3em] mb-2">Activación de Módulos</h4>
-                                            <p className="text-slate-400 text-xs font-bold uppercase mb-6">Habilite o deshabilite funciones específicas para esta sucursal.</p>
+                                            <p className="text-slate-500 text-xs font-bold uppercase mb-8">Habilite o deshabilite funciones específicas para esta sucursal.</p>
                                             
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                                 {['PRINCIPAL', 'GESTIÓN', 'LOGÍSTICA', 'MARKETING', 'ADMINISTRACIÓN', 'SISTEMA'].map(category => (
                                                     <div key={category} className="space-y-4">
-                                                        <h5 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/10 pb-2">{category}</h5>
-                                                        <div className="space-y-2">
-                                                            {AVAILABLE_MODULES.filter(m => m.category === category).map(module => (
-                                                                <div key={module.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all">
-                                                                    <div className="flex flex-col">
-                                                                        <span className="text-[10px] font-bold text-white uppercase tracking-tight">{module.label}</span>
-                                                                        <span className="text-[8px] font-bold text-slate-500 font-mono">{module.id}</span>
+                                                        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+                                                            <div className="w-6 h-6 rounded bg-indigo-600/20 flex items-center justify-center text-indigo-400">
+                                                                <LayoutGrid size={12} />
+                                                            </div>
+                                                            <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{category}</h5>
+                                                        </div>
+                                                        <div className="space-y-3">
+                                                            {AVAILABLE_MODULES.filter(m => m.category === category).map(module => {
+                                                                const config = brModulosConfig[module.id];
+                                                                const isObject = typeof config === 'object';
+                                                                const isActive = isObject ? config.isActive : !!config;
+                                                                const isNew = isObject ? config.isNew : false;
+                                                                const allowedRoles = isObject && Array.isArray(config.allowedRoles) ? config.allowedRoles : [];
+
+                                                                return (
+                                                                    <div key={module.id} className="flex flex-col gap-3 p-4 bg-white/[0.03] rounded-[2rem] border border-white/5 hover:bg-white/[0.05] transition-all group">
+                                                                        <div className="flex items-center justify-between gap-4">
+                                                                            <div className="flex flex-col min-w-0">
+                                                                                <span className="text-[10px] font-black text-white uppercase tracking-tight group-hover:text-indigo-400 transition-colors truncate">{module.label}</span>
+                                                                                <span className="text-[8px] font-bold text-slate-500 font-mono truncate">{module.id}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-3 shrink-0">
+                                                                                <div className="flex flex-col items-center gap-1">
+                                                                                    <span className="text-[6px] font-bold text-slate-500 uppercase tracking-widest">NUEVO</span>
+                                                                                    <button 
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            setBrModulosConfig(prev => ({
+                                                                                                ...prev,
+                                                                                                [module.id]: {
+                                                                                                    isActive: isObject ? prev[module.id].isActive : !!prev[module.id],
+                                                                                                    allowedRoles: isObject ? prev[module.id].allowedRoles : [],
+                                                                                                    isNew: !isNew
+                                                                                                }
+                                                                                            }));
+                                                                                        }}
+                                                                                        className={`relative w-8 h-4 rounded-full transition-all ${isNew ? 'bg-indigo-500' : 'bg-slate-700'}`}
+                                                                                    >
+                                                                                        <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isNew ? 'left-4.5' : 'left-0.5'}`} />
+                                                                                    </button>
+                                                                                </div>
+                                                                                <div className="h-6 w-px bg-white/10" />
+                                                                                <div className="flex flex-col items-center gap-1">
+                                                                                    <span className="text-[6px] font-bold text-slate-500 uppercase tracking-widest">ACTIVO</span>
+                                                                                    <button 
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            setBrModulosConfig(prev => ({
+                                                                                                ...prev,
+                                                                                                [module.id]: {
+                                                                                                    isNew: isObject ? prev[module.id].isNew : false,
+                                                                                                    allowedRoles: isObject ? prev[module.id].allowedRoles : [],
+                                                                                                    isActive: !isActive
+                                                                                                }
+                                                                                            }));
+                                                                                        }}
+                                                                                        className={`relative w-8 h-4 rounded-full transition-all ${isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                                                                                    >
+                                                                                        <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isActive ? 'left-4.5' : 'left-0.5'}`} />
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        
+                                                                        <div className="flex flex-wrap gap-1 pt-2 border-t border-white/5">
+                                                                            {['OWNER', 'ADMIN', 'CAJERO', 'OPERARIO', 'DELIVERY', 'CONTABILIDAD'].map(role => {
+                                                                                const isRoleAllowed = allowedRoles.includes(role);
+                                                                                return (
+                                                                                    <button
+                                                                                        key={role}
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            const nextRoles = isRoleAllowed 
+                                                                                                ? allowedRoles.filter((r: string) => r !== role)
+                                                                                                : [...allowedRoles, role];
+                                                                                            
+                                                                                            setBrModulosConfig(prev => ({
+                                                                                                ...prev,
+                                                                                                [module.id]: {
+                                                                                                    isActive: isObject ? prev[module.id].isActive : !!prev[module.id],
+                                                                                                    isNew: isObject ? prev[module.id].isNew : false,
+                                                                                                    allowedRoles: nextRoles
+                                                                                                }
+                                                                                            }));
+                                                                                        }}
+                                                                                        className={`px-1.5 py-0.5 rounded-lg text-[6px] font-black uppercase tracking-tighter transition-all border ${
+                                                                                            isRoleAllowed 
+                                                                                            ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-400' 
+                                                                                            : 'bg-white/5 border-white/5 text-slate-500 hover:border-white/20'
+                                                                                        }`}
+                                                                                    >
+                                                                                        {role}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </div>
                                                                     </div>
-                                                                    <button 
-                                                                        type="button" 
-                                                                        onClick={() => toggleModule(module.id)} 
-                                                                        className={`relative w-12 h-6 rounded-full transition-all ${brModulosConfig[module.id] ? 'bg-indigo-600' : 'bg-slate-700'}`}
-                                                                    >
-                                                                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-all ${brModulosConfig[module.id] ? 'translate-x-7' : 'translate-x-1'}`} />
-                                                                    </button>
-                                                                </div>
-                                                            ))}
+                                                                );
+                                                            })}
                                                         </div>
                                                     </div>
                                                 ))}

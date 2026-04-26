@@ -91,7 +91,7 @@ export interface Company extends BaseEntity {
     holding_name?: string;
     activo?: boolean;
     cobranza?: boolean;
-    modulos_config?: Record<string, boolean>;
+    modulos_config?: Record<string, any>;
     mostrar_codigo_barras?: boolean;
     doc_enforce_enabled?: boolean;
     doc_enforce_threshold?: number;

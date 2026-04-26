@@ -125,7 +125,11 @@ export default function App() {
     });
     
     const [authSession, setAuthSession] = useState<AuthSession | null>(null);
-    const [activeSucursal, setActiveSucursal] = useState<any | null>(null);
+    const [activeSucursal, setActiveSucursal] = useState<any | null>(() => {
+        const preloaded = (window as any).__SUCURSAL_BRANDING__;
+        if (preloaded) return normalizeSucursal(preloaded);
+        return null;
+    });
     const [globalConfig, setGlobalConfig] = useState<SaasGlobalConfig | null>(null);
     const [isResolving, setIsResolving] = useState(true);
     
@@ -619,28 +623,36 @@ export default function App() {
 
                 if (slug) {
                     const cleanSlug = slug.trim();
-                    const currentSucursal = JSON.parse(localStorage.getItem('sislav_active_sucursal') || 'null');
+                    const preloaded = (window as any).__SUCURSAL_BRANDING__;
                     
-                    if (currentSucursal?.slug !== cleanSlug) {
-                        console.log(`🔍 Resolviendo sucursal por slug: ${cleanSlug}`);
-                        const branch = await dbGetSucursalBySlug(cleanSlug).catch((err) => {
-                            console.error("❌ Error crítico en dbGetSucursalBySlug:", err);
-                            return null;
-                        });
-                        
-                        if (branch) {
-                            console.log("✅ Sucursal resuelta:", branch.nombre_sucursal);
-                            setActiveSucursal(branch);
-                            setDbBranchContext(branch.id, branch.empresa_id, authSession?.user?.id);
-                            localStorage.setItem('sislav_active_sucursal', JSON.stringify(branch));
-                        } else {
-                            console.warn(`⚠️ No se pudo resolver la sucursal '${cleanSlug}'. Verifique RLS.`);
-                            setResolveError(`La sucursal '${cleanSlug}' no está disponible o no existe.`);
+                    if (preloaded && preloaded.slug === cleanSlug) {
+                        console.log("⚡ [resolvePortal] Usando branding pre-cargado:", preloaded.nombre_sucursal);
+                        const branch = normalizeSucursal(preloaded);
+                        setActiveSucursal(branch);
+                        setDbBranchContext(branch.id, branch.empresa_id, authSession?.user?.id);
+                    } else {
+                        const currentSucursal = JSON.parse(localStorage.getItem('sislav_active_sucursal') || 'null');
+                        if (currentSucursal?.slug !== cleanSlug) {
+                            console.log(`🔍 Resolviendo sucursal por slug: ${cleanSlug}`);
+                            const branch = await dbGetSucursalBySlug(cleanSlug).catch((err) => {
+                                console.error("❌ Error crítico en dbGetSucursalBySlug:", err);
+                                return null;
+                            });
+                            
+                            if (branch) {
+                                console.log("✅ Sucursal resuelta:", branch.nombre_sucursal);
+                                setActiveSucursal(branch);
+                                setDbBranchContext(branch.id, branch.empresa_id, authSession?.user?.id);
+                                localStorage.setItem('sislav_active_sucursal', JSON.stringify(branch));
+                            } else {
+                                console.warn(`⚠️ No se pudo resolver la sucursal '${cleanSlug}'. Verifique RLS.`);
+                                setResolveError(`La sucursal '${cleanSlug}' no está disponible o no existe.`);
+                            }
+                        } else if (currentSucursal) {
+                            console.log("✅ Usando sucursal activa de sesión previa:", currentSucursal.nombre_sucursal);
+                            setActiveSucursal(currentSucursal);
+                            setDbBranchContext(currentSucursal.id, currentSucursal.empresa_id, authSession?.user?.id);
                         }
-                    } else if (currentSucursal) {
-                        console.log("✅ Usando sucursal activa de sesión previa:", currentSucursal.nombre_sucursal);
-                        setActiveSucursal(currentSucursal);
-                        setDbBranchContext(currentSucursal.id, currentSucursal.empresa_id, authSession?.user?.id);
                     }
                 }
             } catch (e) {

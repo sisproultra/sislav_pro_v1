@@ -31,7 +31,7 @@ interface LayoutProps {
   isOwner?: boolean;
   isSaaSMaster?: boolean;
   globalModules?: Record<string, GlobalModuleConfig>;
-  sucursalModules?: Record<string, boolean>;
+  sucursalModules?: Record<string, any>;
   isDarkMode?: boolean;
   toggleTheme?: () => void;
   currentUser?: AuthSession['user'];
@@ -132,13 +132,17 @@ const Layout: React.FC<LayoutProps> = ({
       }
 
       // 2. Verificar si el módulo está activo para esta sucursal específica
-      const isSucursalActive = sucursalModules[permId];
+      const branchCfg = sucursalModules[permId];
+      // Soporte para legacy (boolean) y nuevo formato (objeto)
+      const isSucursalActive = typeof branchCfg === 'object' ? branchCfg.isActive : branchCfg;
       
       // REGLA ABSOLUTA: Si el SaaS Master desactivó el switch para esta sucursal, NADIE lo ve en la sucursal
       if (isSucursalActive === false) return { isVisible: false, isNew: false };
 
       // 3. Si es SaaS Master, tiene acceso total a todo lo que no esté desactivado globalmente o por sede
-      if (isSaaSMaster) return { isVisible: true, isNew: !!globalCfg?.isNew };
+      // Preferir el badge "NUEVO" de la sucursal si existe, sino el global
+      const isNew = typeof branchCfg === 'object' ? (branchCfg.isNew ?? !!globalCfg?.isNew) : !!globalCfg?.isNew;
+      if (isSaaSMaster) return { isVisible: true, isNew };
 
       // 4. Verificar permisos específicos del usuario (Matriz de Permisos)
       if (!isSaaSMaster && !isOwner && currentUser?.permissions) {
@@ -167,15 +171,15 @@ const Layout: React.FC<LayoutProps> = ({
       
       // Si es un módulo básico, es visible a menos que se apague explícitamente (manejado arriba en el paso 2)
       if (basicModules.includes(permId)) {
-          return { isVisible: true, isNew: !!globalCfg?.isNew };
+          return { isVisible: true, isNew };
       }
 
       // Para módulos premium/extra, solo son visibles si están activos en sucursalModules
       // Si no hay configuración específica (objeto vacío), los mostramos por defecto para evitar confusión inicial
       if (Object.keys(sucursalModules).length === 0) {
-          return { isVisible: true, isNew: !!globalCfg?.isNew };
+          return { isVisible: true, isNew };
       }
-      return { isVisible: !!isSucursalActive, isNew: !!globalCfg?.isNew };
+      return { isVisible: !!isSucursalActive, isNew };
   };
 
   useEffect(() => {
