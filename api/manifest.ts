@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req: any, res: any) {
-  const { s: slug, o: ownerId } = req.query;
+  const { s: slug, o: ownerId, type } = req.query;
+  const isLogistica = type === 'logistica';
   
   const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://yvgshdypqanlcgxdyvls.supabase.co';
   const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2Z3NoZHlwcWFubGNneGR5dmxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NjYyODIsImV4cCI6MjA4NTE0MjI4Mn0.B65RRA4u5-a_6E-blMvQXMKf39521esSif4XODdzfNE';
@@ -10,7 +11,7 @@ export default async function handler(req: any, res: any) {
   let shortName = 'SISLAV';
   let themeColor = '#4f8ef7';
   let logoUrl = 'https://lavanderiasislav.com/logo-sislav.png';
-  let startUrl = '/';
+  let startUrl = isLogistica ? '/logistica' : '/';
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -19,31 +20,31 @@ export default async function handler(req: any, res: any) {
     if (ownerId) {
       const { data: empresa } = await supabase
         .from('empresas_holding')
-        .select('nombre_empresa, url_logo, url_favicon, color_primario')
+        .select('nombre_empresa, url_logo, url_favicon, url_favicon_logistica, color_primario')
         .eq('id', (ownerId as string).trim())
         .maybeSingle();
 
       if (empresa) {
         data = {
-          nombre: empresa.nombre_empresa,
-          logo: empresa.url_favicon || empresa.url_logo,
+          nombre: isLogistica ? `LOGÍSTICA ${empresa.nombre_empresa}` : empresa.nombre_empresa,
+          logo: isLogistica ? (empresa.url_favicon_logistica || empresa.url_favicon || empresa.url_logo) : (empresa.url_favicon || empresa.url_logo),
           color: empresa.color_primario,
-          start: `/?o=${(ownerId as string).trim()}`
+          start: isLogistica ? `/logistica?o=${(ownerId as string).trim()}` : `/?o=${(ownerId as string).trim()}`
         };
       }
     } else if (slug) {
       const { data: sucursal } = await supabase
         .from('sucursales')
-        .select('nombre_sucursal, url_logo, url_favicon, color_primario')
+        .select('nombre_sucursal, url_logo, url_favicon, url_favicon_logistica, color_primario')
         .eq('slug', (slug as string).trim())
         .maybeSingle();
       
       if (sucursal) {
         data = {
-          nombre: sucursal.nombre_sucursal,
-          logo: sucursal.url_favicon || sucursal.url_logo,
+          nombre: isLogistica ? `LOGÍSTICA ${sucursal.nombre_sucursal}` : sucursal.nombre_sucursal,
+          logo: isLogistica ? (sucursal.url_favicon_logistica || sucursal.url_favicon || sucursal.url_logo) : (sucursal.url_favicon || sucursal.url_logo),
           color: sucursal.color_primario,
-          start: `/?s=${(slug as string).trim()}`
+          start: isLogistica ? `/logistica?s=${(slug as string).trim()}` : `/?s=${(slug as string).trim()}`
         };
       }
     }

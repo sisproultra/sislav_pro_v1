@@ -72,12 +72,13 @@ async function startServer() {
       if (ownerId) {
         const { data } = await supabaseAdmin
           .from('empresas_holding')
-          .select('url_logo, url_favicon, nombre_empresa, color_primario')
+          .select('url_logo, url_favicon, url_favicon_logistica, nombre_empresa, color_primario')
           .eq('id', ownerId.trim())
           .maybeSingle();
         
         if (data) {
-          logoUrl = data.url_favicon || data.url_logo || logoUrl;
+          logoUrl = isLogistica ? (data.url_favicon_logistica || data.url_favicon || data.url_logo) : (data.url_favicon || data.url_logo);
+          logoUrl = logoUrl || 'https://lavanderiasislav.com/logo-sislav.png';
           name = data.nombre_empresa || name;
           themeColor = data.color_primario || themeColor;
           startUrl = isLogistica ? `/logistica?o=${ownerId.trim()}` : `/?o=${ownerId.trim()}`;
@@ -85,12 +86,13 @@ async function startServer() {
       } else if (slug) {
         const { data } = await supabaseAdmin
           .from('sucursales')
-          .select('url_logo, url_favicon, nombre_sucursal, color_primario')
+          .select('url_logo, url_favicon, url_favicon_logistica, nombre_sucursal, color_primario')
           .eq('slug', slug.trim())
           .maybeSingle();
         
         if (data) {
-          logoUrl = data.url_favicon || data.url_logo || logoUrl;
+          logoUrl = isLogistica ? (data.url_favicon_logistica || data.url_favicon || data.url_logo) : (data.url_favicon || data.url_logo);
+          logoUrl = logoUrl || 'https://lavanderiasislav.com/logo-sislav.png';
           name = data.nombre_sucursal || name;
           themeColor = data.color_primario || themeColor;
           startUrl = isLogistica ? `/logistica?s=${slug.trim()}` : `/?s=${slug.trim()}`;
@@ -148,14 +150,14 @@ async function startServer() {
           if (slug) {
             const { data } = await supabaseAdmin
               .from('sucursales')
-              .select('nombre_sucursal, url_logo, url_favicon, color_primario')
+              .select('nombre_sucursal, url_logo, url_favicon, url_favicon_logistica, color_primario')
               .eq('slug', slug)
               .maybeSingle();
             b = data;
           } else if (ownerId) {
             const { data } = await supabaseAdmin
               .from('empresas_holding')
-              .select('nombre_empresa, url_logo, url_favicon, color_primario')
+              .select('nombre_empresa, url_logo, url_favicon, url_favicon_logistica, color_primario')
               .eq('id', ownerId)
               .maybeSingle();
             if (data) {
@@ -163,13 +165,15 @@ async function startServer() {
                 nombre_sucursal: data.nombre_empresa,
                 url_logo: data.url_logo,
                 url_favicon: data.url_favicon,
+                url_favicon_logistica: data.url_favicon_logistica,
                 color_primario: data.color_primario
               };
             }
           }
           
           if (b) {
-            const logo = b.url_favicon || b.url_logo || 'https://lavanderiasislav.com/logo-sislav.png';
+            const isLogistica = req.url.includes('/logistica');
+            const logo = isLogistica ? (b.url_favicon_logistica || b.url_favicon || b.url_logo) : (b.url_favicon || b.url_logo || 'https://lavanderiasislav.com/logo-sislav.png');
             const originalSend = res.send;
             res.send = function(content) {
               let html = content.toString();
@@ -212,14 +216,14 @@ async function startServer() {
           if (slug) {
             const { data } = await supabaseAdmin
               .from('sucursales')
-              .select('nombre_sucursal, url_logo, url_favicon, color_primario')
+              .select('nombre_sucursal, url_logo, url_favicon, url_favicon_logistica, color_primario')
               .eq('slug', slug)
               .maybeSingle();
             b = data;
           } else if (ownerId) {
             const { data } = await supabaseAdmin
               .from('empresas_holding')
-              .select('nombre_empresa, url_logo, url_favicon, color_primario')
+              .select('nombre_empresa, url_logo, url_favicon, url_favicon_logistica, color_primario')
               .eq('id', ownerId)
               .maybeSingle();
             if (data) {
@@ -227,13 +231,15 @@ async function startServer() {
                 nombre_sucursal: data.nombre_empresa,
                 url_logo: data.url_logo,
                 url_favicon: data.url_favicon,
+                url_favicon_logistica: data.url_favicon_logistica,
                 color_primario: data.color_primario
               };
             }
           }
             
           if (b) {
-            const logo = b.url_favicon || b.url_logo || 'https://lavanderiasislav.com/logo-sislav.png';
+            const isLogistica = req.url.includes('/logistica');
+            const logo = isLogistica ? (b.url_favicon_logistica || b.url_favicon || b.url_logo) : (b.url_favicon || b.url_logo || 'https://lavanderiasislav.com/logo-sislav.png');
             const isLogistica = req.url.includes('/logistica');
             const title = isLogistica ? `LOGÍSTICA ${b.nombre_sucursal}` : `${b.nombre_sucursal} - CONTROL TOTAL`;
             const themeColor = b.color_primario || '#4f8ef7';

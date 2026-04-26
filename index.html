@@ -137,11 +137,23 @@
               root.style.setProperty('--primary-color', primary);
               
               const razonSocial = s.nombre_sucursal || s.nombre_empresa || s.razon_social || 'SISLAV';
-              document.title = `${razonSocial} - CONTROL TOTAL`;
+              const isLogistica = window.location.pathname.includes('/logistica');
+              document.title = isLogistica ? `LOGÍSTICA ${razonSocial}` : `${razonSocial} - CONTROL TOTAL`;
+              
+              if (isLogistica) {
+                const logo = s.url_favicon_logistica || s.url_favicon || s.url_logo;
+                if (logo) {
+                  const linkIcon = document.querySelector('link[rel="icon"]');
+                  if (linkIcon) linkIcon.setAttribute('href', logo);
+                }
+              }
 
               // Inyección dinámica del manifest para PWA corregida
               const manifestLink = document.querySelector('link[rel="manifest"]');
-              const manifestUrl = slug ? `/manifest.json?s=${slug}` : `/manifest.json?o=${ownerId}`;
+              let manifestUrl = slug ? `/manifest.json?s=${slug}` : (ownerId ? `/manifest.json?o=${ownerId}` : '/manifest.json');
+              if (isLogistica) {
+                manifestUrl += (manifestUrl.includes('?') ? '&' : '?') + 'type=logistica';
+              }
               if (manifestLink) {
                 manifestLink.setAttribute('href', manifestUrl);
               } else {
