@@ -70,19 +70,32 @@ const LogisticsHub: React.FC = () => {
     const loadGuias = async () => {
         setIsLoading(true);
         try {
-            let filter: any = {};
+            let data: GuiaRemision[] = [];
+            
             if (activeTab === 'INCOMING') {
-                filter.sucursal_destino_id = currentBranchId;
-                filter.estado = 'EN_TRANSITO';
+                data = await dbGetGuiasRemision({
+                    sucursal_destino_id: currentBranchId!,
+                    estado: 'EN_TRANSITO'
+                });
             } else if (activeTab === 'OUTGOING') {
-                filter.sucursal_origen_id = currentBranchId;
-                filter.estado = 'EN_TRANSITO';
+                // Salientes: Pendientes y En Tránsito
+                const pending = await dbGetGuiasRemision({
+                    sucursal_origen_id: currentBranchId!,
+                    estado: 'PENDIENTE'
+                });
+                const transit = await dbGetGuiasRemision({
+                    sucursal_origen_id: currentBranchId!,
+                    estado: 'EN_TRANSITO'
+                });
+                data = [...pending, ...transit];
             } else {
-                // Historia: Cualquier guía donde participe la sucursal y esté ENTREGADA
-                filter.estado = 'ENTREGADO';
+                // Historia: Entregadas
+                data = await dbGetGuiasRemision({
+                    sucursal_id: currentBranchId!,
+                    estado: 'ENTREGADO'
+                });
             }
             
-            const data = await dbGetGuiasRemision(filter);
             setGuias(data);
         } catch (error) {
             console.error("Error loading guias:", error);
@@ -104,7 +117,7 @@ const LogisticsHub: React.FC = () => {
             if (activeTab === 'INCOMING') {
                 const initialChecked: Record<string, boolean> = {};
                 items.forEach((it: any) => {
-                    if (it.estado_item !== 'FALTANTE') initialChecked[it.item_id] = true;
+                    if (it.estado_item !== 'FALTANTE') initialChecked[it.item_venta_id] = true;
                 });
                 setCheckedItems(initialChecked);
             }
@@ -127,7 +140,7 @@ const LogisticsHub: React.FC = () => {
         if (checkedItems[itemId]) setCheckedItems(prev => ({ ...prev, [itemId]: false }));
     };
 
-    const allItemsProcessed = guiaItems.length > 0 && guiaItems.every(it => checkedItems[it.item_id] || missingItems[it.item_id]);
+    const allItemsProcessed = guiaItems.length > 0 && guiaItems.every(it => checkedItems[it.item_venta_id] || missingItems[it.item_venta_id]);
 
     const handleReceiveGuia = async () => {
         if (!selectedGuia) return;
@@ -164,8 +177,8 @@ const LogisticsHub: React.FC = () => {
     const groupedItems = guiaItems.reduce((acc: any, item: any) => {
         const orderId = item.items_venta?.ventas?.id || 'no-order';
         if (!acc[orderId]) acc[orderId] = { 
-            orderNumber: item.items_venta?.ventas?.orden_number,
-            client: item.items_venta?.ventas?.clientes?.nombre_completo,
+            orderNumber: item.items_venta?.ventas?.codigo_orden || '---',
+            client: item.items_venta?.ventas?.clientes?.nombre_completo || item.items_venta?.ventas?.clientes?.nombres,
             items: [] 
         };
         acc[orderId].items.push(item);
@@ -260,6 +273,12 @@ const LogisticsHub: React.FC = () => {
                                             }`}>
                                                 {guia.tipo_guia}
                                             </span>
+                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
+                                                guia.estado === 'PENDIENTE' ? 'bg-amber-100 text-amber-600' : 
+                                                guia.estado === 'EN_TRANSITO' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
+                                            }`}>
+                                                {guia.estado}
+                                            </span>
                                         </div>
                                         <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                             <span className="flex items-center gap-1"><MapPin size={10} /> {guia.sucursal_origen?.nombre_sucursal}</span>
@@ -321,29 +340,29 @@ const LogisticsHub: React.FC = () => {
                                                 {group.items.map((item: any, idx: number) => (
                                                     <div 
                                                         key={idx} 
-                                                        onClick={() => toggleItemCheck(item.item_id)}
+                                                        onClick={() => toggleItemCheck(item.item_venta_id)}
                                                         className={`bg-white p-4 rounded-2xl border transition-all shadow-sm flex items-center gap-4 ${activeTab === 'INCOMING' ? 'cursor-pointer' : ''} ${
-                                                            checkedItems[item.item_id] ? 'border-emerald-200 bg-emerald-50/30' : 
-                                                            missingItems[item.item_id] ? 'border-rose-200 bg-rose-50/30' : 'border-slate-100'
+                                                            checkedItems[item.item_venta_id] ? 'border-emerald-200 bg-emerald-50/30' : 
+                                                            missingItems[item.item_venta_id] ? 'border-rose-200 bg-rose-50/30' : 'border-slate-100'
                                                         }`}
                                                     >
                                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                                                            checkedItems[item.item_id] ? 'bg-emerald-100 text-emerald-600' : 
-                                                            missingItems[item.item_id] ? 'bg-rose-100 text-rose-600' : 'bg-slate-50 text-slate-400'
+                                                            checkedItems[item.item_venta_id] ? 'bg-emerald-100 text-emerald-600' : 
+                                                            missingItems[item.item_venta_id] ? 'bg-rose-100 text-rose-600' : 'bg-slate-50 text-slate-400'
                                                         }`}>
-                                                            {checkedItems[item.item_id] ? <CheckCircle2 size={20} /> : 
-                                                             missingItems[item.item_id] ? <XCircle size={20} /> : <Package size={20} />}
+                                                            {checkedItems[item.item_venta_id] ? <CheckCircle2 size={20} /> : 
+                                                             missingItems[item.item_venta_id] ? <XCircle size={20} /> : <Package size={20} />}
                                                         </div>
                                                         <div className="flex-1">
-                                                            <p className="text-sm font-black text-slate-800 leading-tight">{item.items_venta?.name}</p>
+                                                            <p className="text-sm font-black text-slate-800 leading-tight">{item.items_venta?.descripcion}</p>
                                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                                                {item.items_venta?.quantity} {item.items_venta?.unit_code}
+                                                                {item.items_venta?.cantidad} {item.items_venta?.codigo_unidad}
                                                             </p>
                                                         </div>
                                                         {activeTab === 'INCOMING' && (
                                                             <button 
-                                                                onClick={(e) => { e.stopPropagation(); toggleItemMissing(item.item_id); }}
-                                                                className={`p-2 rounded-lg transition-colors ${missingItems[item.item_id] ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-rose-100 hover:text-rose-600'}`}
+                                                                onClick={(e) => { e.stopPropagation(); toggleItemMissing(item.item_venta_id); }}
+                                                                className={`p-2 rounded-lg transition-colors ${missingItems[item.item_venta_id] ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-rose-100 hover:text-rose-600'}`}
                                                             >
                                                                 <AlertTriangle size={16} />
                                                             </button>

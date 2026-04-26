@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Truck, MapPin, User, CheckCircle2, Loader2, Package, ArrowRight, AlertTriangle, Search } from 'lucide-react';
 import { Invoice, CartItem, GuiaRemision, UserRole } from '../types';
+import LogisticsGuidePrint from './LogisticsGuidePrint';
 import { dbGetLogisticsDrivers, dbCreateGuiaRemision, getActiveBranchId } from '../services/dbService';
 import { getOwnerSucursales } from '../src/services/ownerService';
 
@@ -21,6 +22,8 @@ const LogisticsDispatchModal: React.FC<LogisticsDispatchModalProps> = ({ isOpen,
     const [notes, setNotes] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [showPrintPreview, setShowPrintPreview] = useState(false);
+    const [createdGuia, setCreatedGuia] = useState<GuiaRemision | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     const currentBranchId = getActiveBranchId();
@@ -121,12 +124,34 @@ const LogisticsDispatchModal: React.FC<LogisticsDispatchModalProps> = ({ isOpen,
                 chofer_id: selectedDriverId,
                 tipo_guia: isDestCentral ? 'RECOJO' : 'RETORNO',
                 notas: notes,
+                estado: 'PENDIENTE',
                 codigo_guia: `G-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
             };
 
-            await dbCreateGuiaRemision(guia, Array.from(selectedItems));
+            const itemsPayload = Array.from(selectedItems).map(id => ({
+                id,
+                venta_id: invoice.id
+            }));
+
+            const results = await dbCreateGuiaRemision(guia, itemsPayload);
+            
+            const driver = drivers.find(d => d.id === selectedDriverId);
+            const allBranches = await getOwnerSucursales();
+            const destBranchObj = allBranches.find(b => b.id === selectedDestBranchId);
+            const originBranch = allBranches.find(b => b.id === currentBranchId);
+
+            const guiaForPrint: GuiaRemision = {
+                ...results,
+                sucursal_origen: originBranch,
+                sucursal_destino: destBranchObj,
+                chofer: driver,
+                fecha_registro: new Date().toISOString()
+            };
+
+            setCreatedGuia(guiaForPrint);
+            setShowPrintPreview(true);
+            
             if (onSuccess) onSuccess();
-            onClose();
         } catch (error) {
             console.error("Error creating logistics guide:", error);
             alert("Error al generar la guía de remisión.");
@@ -136,6 +161,19 @@ const LogisticsDispatchModal: React.FC<LogisticsDispatchModalProps> = ({ isOpen,
     };
 
     if (!isOpen) return null;
+
+    if (showPrintPreview && createdGuia) {
+        return (
+            <LogisticsGuidePrint 
+                guia={createdGuia}
+                items={invoice.items.filter(it => selectedItems.has(it.id))}
+                onClose={() => {
+                    setShowPrintPreview(false);
+                    onClose();
+                }}
+            />
+        );
+    }
 
     return (
         <div className="fixed inset-0 bg-slate-950/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">

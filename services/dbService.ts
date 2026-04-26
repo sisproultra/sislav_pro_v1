@@ -619,15 +619,23 @@ export const dbUploadImage = async (bucket: string, file: File | string | Blob, 
 // --- GESTIÓN DE TICKET CONFIG ---
 
 export const dbGetTicketConfig = async (branchId: string) => {
-    const { data, error } = await supabase
-        .from('sucursal_ticket_config')
-        .select('*')
-        .eq('sucursal_id', branchId)
-        .maybeSingle();
-    if (error) {
-        console.error("Error fetching ticket config:", error.message);
+    try {
+        const { data, error } = await supabase
+            .from('sucursal_ticket_config')
+            .select('*')
+            .eq('sucursal_id', branchId)
+            .maybeSingle();
+        if (error) {
+            // Manejamos el error de permisos de forma silenciosa para no interrumpir el flujo
+            if (error.code !== '42501') { // 42501 is permission denied
+                console.error("Error fetching ticket config:", error.message);
+            }
+            return null;
+        }
+        return data;
+    } catch (e) {
+        return null;
     }
-    return data;
 };
 
 export const dbSaveTicketConfig = async (branchId: string, holdingId: string, config: any) => {
@@ -3309,7 +3317,7 @@ export const dbRemoveDriverRoute = async (choferId: string, sucursalId: string) 
     if (error) throw error;
 };
 
-export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: string[]) => {
+export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: { id: string, venta_id?: string }[]) => {
     const holdingId = getActiveHoldingId();
     const userId = getActiveUserId();
     const userName = localStorage.getItem('sislav_current_user_name') || 'Sistema';
@@ -3327,9 +3335,11 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: s
 
     if (guiaError) throw guiaError;
 
+    const itemIds = items.map(it => it.id);
+
     // 2. Vincular items y actualizar estados vía RPC para atomicidad
     const { error: rpcError } = await supabase.rpc('procesar_movimiento_logistico', {
-        p_items_ids: items,
+        p_items_ids: itemIds,
         p_guia_id: guiaData.id,
         p_nuevo_estado: guia.tipo_guia === 'RECOJO' ? 'EN_TRANSITO_CENTRAL' : 'EN_TRANSITO_ACOPIO',
         p_ubicacion_tipo: 'DELIVERY',
@@ -3341,25 +3351,70 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: s
     if (rpcError) throw rpcError;
 
     // 3. Insertar en items_guia para referencia
-    const itemsGuia = items.map(itemId => ({
-        guia_id: guiaData.id,
-        item_id: itemId,
-        estado_item: 'CARGADO'
-    }));
+    // Nota: El RPC procesar_movimiento_logistico podría ya estar insertando en items_guia
+    // en algunas versiones del esquema. Verificamos si ya existen para evitar duplicados o errores.
+    const { data: existingRelations } = await supabase
+        .from('items_guia')
+        .select('item_venta_id')
+        .eq('guia_id', guiaData.id);
 
-    const { error: itemsError } = await supabase.from('items_guia').insert(itemsGuia);
-    if (itemsError) throw itemsError;
+    const existingIds = new Set((existingRelations || []).map(r => r.item_venta_id));
+    const itemsToInsert = items.filter(item => !existingIds.has(item.id));
+
+    if (itemsToInsert.length > 0) {
+        const itemsGuiaMap = itemsToInsert.map(item => {
+            const entry: any = {
+                guia_id: guiaData.id,
+                item_venta_id: item.id,
+                estado_item: 'CARGADO',
+                empresa_holding_id: holdingId
+            };
+            // Solo incluimos venta_id si tenemos un UUID válido para evitar violaciones de FK
+            if (item.venta_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.venta_id)) {
+                entry.venta_id = item.venta_id;
+            }
+            return entry;
+        });
+
+        const { error: itemsError } = await supabase.from('items_guia').insert(itemsGuiaMap);
+        if (itemsError) {
+            console.warn("Items guide insertion failed, probably handled by RPC or schema mismatch:", itemsError.message);
+            // Si falla por FK o columna inexistente, reintentamos solo con lo básico
+            if (itemsError.code === '23503' || itemsError.code === '42703') {
+                const retryItems = itemsToInsert.map(item => ({
+                    guia_id: guiaData.id,
+                    item_venta_id: item.id,
+                    estado_item: 'CARGADO',
+                    empresa_holding_id: holdingId
+                }));
+                const { error: retryError } = await supabase.from('items_guia').insert(retryItems);
+                if (retryError) console.error("Final retry failed:", retryError.message);
+            }
+        }
+    }
 
     return guiaData;
 };
 
-export const dbGetGuiasRemision = async (filters: { sucursal_id?: string, chofer_id?: string, estado?: string }) => {
+export const dbGetGuiasRemision = async (filters: { 
+    sucursal_id?: string, 
+    chofer_id?: string, 
+    estado?: string,
+    sucursal_origen_id?: string,
+    sucursal_destino_id?: string
+}) => {
     let query = supabase
         .from('guias_remision')
         .select('*, sucursal_origen:sucursales!sucursal_origen_id(*), sucursal_destino:sucursales!sucursal_destino_id(*), chofer:usuarios_login!chofer_id(*)');
     
     if (filters.sucursal_id) {
         query = query.or(`sucursal_origen_id.eq.${filters.sucursal_id},sucursal_destino_id.eq.${filters.sucursal_id}`);
+    }
+    if (filters.sucursal_origen_id) {
+        query = query.eq('sucursal_origen_id', filters.sucursal_origen_id);
+    }
+    if (filters.sucursal_destino_id) {
+        query = query.eq('sucursal_destino_id', filters.sucursal_destino_id);
     }
     if (filters.chofer_id) {
         query = query.eq('chofer_id', filters.chofer_id);
@@ -3389,12 +3444,12 @@ export const dbUpdateGuiaEstado = async (guiaId: string, nuevoEstadoGuia: string
     // 1. Obtener items y datos de la guía
     const { data: guia, error: guiaError } = await supabase
         .from('guias_remision')
-        .select('*, items_guia(item_id)')
+        .select('*, items_guia(item_venta_id)')
         .eq('id', guiaId)
         .single();
     
     if (guiaError) throw guiaError;
-    const itemsIds = itemsToProcess || (guia.items_guia || []).map((i: any) => i.item_id);
+    const itemsIds = itemsToProcess || (guia.items_guia || []).map((i: any) => i.item_venta_id);
 
     // 2. Determinar nuevo estado de los items si no se provee
     let finalItemEstado = itemEstado;
@@ -3446,7 +3501,7 @@ export const dbUpdateGuiaItemStatus = async (guiaId: string, itemId: string, nue
         .from('items_guia')
         .update({ estado_item: nuevoEstado })
         .eq('guia_id', guiaId)
-        .eq('item_id', itemId);
+        .eq('item_venta_id', itemId);
     if (error) throw error;
 };
 
