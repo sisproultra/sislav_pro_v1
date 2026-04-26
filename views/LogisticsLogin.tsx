@@ -96,7 +96,9 @@ export default function LogisticsLogin({ onLogin, isDarkMode, toggleTheme, sucur
       >
         <div className="text-center mb-8">
           <div className={`inline-flex items-center justify-center w-20 h-20 rounded-3xl border mb-4 shadow-xl overflow-hidden ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-100'}`} style={{ borderColor: brandPrimary + '40' }}>
-            {localSucursal?.url_logo ? (
+            {localSucursal?.faviconLogisticaUrl || localSucursal?.url_favicon_logistica ? (
+              <img src={localSucursal.faviconLogisticaUrl || localSucursal.url_favicon_logistica} alt="Logo" className="w-full h-full object-contain p-2" />
+            ) : localSucursal?.url_logo ? (
               <img src={localSucursal.url_logo} alt="Logo" className="w-full h-full object-contain p-2" />
             ) : (
               <ShieldCheck className="w-10 h-10" style={{ color: brandPrimary }} />

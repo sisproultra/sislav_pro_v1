@@ -137,9 +137,9 @@ export const dbGlobalLogin = async (username: string, pass: string, expectedSucu
             return null;
         }
 
-        // VALIDACIÓN DE PERTENENCIA A SUCURSAL
-        if (profile.sucursal_id !== expectedSucursalId && profile.rol !== UserRole.SAAS_MASTER) {
-            console.warn(`⛔ Acceso Denegado: El usuario ${profile.username} pertenece a la sucursal ${profile.sucursal_id}, no a ${expectedSucursalId}`);
+        // VALIDACIÓN DE PERTENENCIA A SUCURSAL O HOLDING
+        if (profile.sucursal_id !== expectedSucursalId && profile.empresa_holding_id !== expectedSucursalId && profile.rol !== UserRole.SAAS_MASTER) {
+            console.warn(`⛔ Acceso Denegado: El usuario ${profile.username} no pertenece a la sucursal/holding ${expectedSucursalId}`);
             await supabase.auth.signOut();
             throw new Error("ERROR: No pertenece a esta sucursal");
         }
