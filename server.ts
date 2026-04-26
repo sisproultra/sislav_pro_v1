@@ -60,20 +60,35 @@ async function startServer() {
   // Endpoint: Dynamic Manifest for PWA
   app.get('/manifest.json', async (req, res) => {
     const slug = req.query.s as string;
+    const ownerId = req.query.o as string;
     let logoUrl = 'https://lavanderiasislav.com/logo-sislav.png';
     let name = 'SISLAV';
+    let themeColor = '#4f8ef7';
 
     try {
       if (slug) {
         const { data } = await supabaseAdmin
           .from('sucursales')
-          .select('url_logo, url_favicon, nombre_sucursal')
+          .select('url_logo, url_favicon, nombre_sucursal, color_primario')
           .eq('slug', slug)
           .maybeSingle();
         
         if (data) {
           logoUrl = data.url_favicon || data.url_logo || logoUrl;
           name = data.nombre_sucursal || name;
+          themeColor = data.color_primario || themeColor;
+        }
+      } else if (ownerId) {
+        const { data } = await supabaseAdmin
+          .from('empresas_holding')
+          .select('url_logo, nombre_empresa, color_primario')
+          .eq('id', ownerId)
+          .maybeSingle();
+        
+        if (data) {
+          logoUrl = data.url_logo || logoUrl;
+          name = data.nombre_empresa || name;
+          themeColor = data.color_primario || themeColor;
         }
       }
     } catch (e) {}
@@ -82,10 +97,10 @@ async function startServer() {
       "name": `${name} - CONTROL TOTAL`,
       "short_name": name,
       "description": `Sistema de gestión integral para ${name}`,
-      "start_url": slug ? `/?s=${slug}` : "/",
+      "start_url": slug ? `/?s=${slug}` : (ownerId ? `/?o=${ownerId}` : "/"),
       "display": "standalone",
       "background_color": "#0d0f14",
-      "theme_color": "#4f8ef7",
+      "theme_color": themeColor,
       "icons": [
         {
           "src": logoUrl,
@@ -112,32 +127,50 @@ async function startServer() {
     
     // Middleware para inyectar metadata en desarrollo
     app.use(async (req, res, next) => {
-      const isHtml = req.url === '/' || req.url.endsWith('.html');
+      const isHtml = req.url === '/' || req.url.startsWith('/?') || req.url.endsWith('.html');
       const slug = req.query.s as string;
+      const ownerId = req.query.o as string;
 
-      if (isHtml && slug) {
+      if (isHtml && (slug || ownerId)) {
         try {
-          const { data: b } = await supabaseAdmin
-            .from('sucursales')
-            .select('nombre_sucursal, url_logo, url_favicon')
-            .eq('slug', slug)
-            .maybeSingle();
+          let b: any = null;
+          if (slug) {
+            const { data } = await supabaseAdmin
+              .from('sucursales')
+              .select('nombre_sucursal, url_logo, url_favicon, color_primario')
+              .eq('slug', slug)
+              .maybeSingle();
+            b = data;
+          } else if (ownerId) {
+            const { data } = await supabaseAdmin
+              .from('empresas_holding')
+              .select('nombre_empresa, url_logo, color_primario')
+              .eq('id', ownerId)
+              .maybeSingle();
+            if (data) {
+              b = {
+                nombre_sucursal: data.nombre_empresa,
+                url_logo: data.url_logo,
+                color_primario: data.color_primario
+              };
+            }
+          }
           
           if (b) {
             const logo = b.url_favicon || b.url_logo || 'https://lavanderiasislav.com/logo-sislav.png';
-            const originalNext = next;
-            
-            // Interceptamos la respuesta de Vite para inyectar metadata
             const originalSend = res.send;
             res.send = function(content) {
               let html = content.toString();
               const title = `${b.nombre_sucursal} - CONTROL TOTAL`;
+              const themeColor = b.color_primario || '#4f8ef7';
+              const manifestUrl = slug ? `/manifest.json?s=${slug}` : `/manifest.json?o=${ownerId}`;
               
               html = html.replace(/<title>.*?<\/title>/g, `<title>${title}</title>`);
               html = html.replace(/<meta property="og:title" content=".*?" \/>/g, `<meta property="og:title" content="${title}" />`);
               html = html.replace(/<meta property="og:image" content=".*?" \/>/g, `<meta property="og:image" content="${logo}" />`);
+              html = html.replace(/<meta name="theme-color" content=".*?" \/>/g, `<meta name="theme-color" content="${themeColor}" />`);
               html = html.replace(/<link rel="icon".*?>/g, `<link rel="icon" href="${logo}" />`);
-              html = html.replace(/<link rel="manifest".*?>/g, `<link rel="manifest" href="/manifest.json?s=${slug}" />`);
+              html = html.replace(/<link rel="manifest".*?>/g, `<link rel="manifest" href="${manifestUrl}" />`);
               
               return originalSend.call(this, html);
             };
@@ -152,28 +185,49 @@ async function startServer() {
     
     app.get('*all', async (req, res) => {
       const slug = req.query.s as string;
+      const ownerId = req.query.o as string;
       const indexPath = path.join(distPath, 'index.html');
       
       try {
         let html = await fs.promises.readFile(indexPath, 'utf-8');
         
-        if (slug) {
-          const { data: b } = await supabaseAdmin
-            .from('sucursales')
-            .select('nombre_sucursal, url_logo, url_favicon')
-            .eq('slug', slug)
-            .maybeSingle();
+        if (slug || ownerId) {
+          let b: any = null;
+          if (slug) {
+            const { data } = await supabaseAdmin
+              .from('sucursales')
+              .select('nombre_sucursal, url_logo, url_favicon, color_primario')
+              .eq('slug', slug)
+              .maybeSingle();
+            b = data;
+          } else if (ownerId) {
+            const { data } = await supabaseAdmin
+              .from('empresas_holding')
+              .select('nombre_empresa, url_logo, color_primario')
+              .eq('id', ownerId)
+              .maybeSingle();
+            if (data) {
+              b = {
+                nombre_sucursal: data.nombre_empresa,
+                url_logo: data.url_logo,
+                color_primario: data.color_primario
+              };
+            }
+          }
             
           if (b) {
             const logo = b.url_favicon || b.url_logo || 'https://lavanderiasislav.com/logo-sislav.png';
             const title = `${b.nombre_sucursal} - CONTROL TOTAL`;
+            const themeColor = b.color_primario || '#4f8ef7';
+            const manifestUrl = slug ? `/manifest.json?s=${slug}` : `/manifest.json?o=${ownerId}`;
             
             html = html.replace(/<title>.*?<\/title>/g, `<title>${title}</title>`);
             html = html.replace(/<meta property="og:title" content=".*?" \/>/g, `<meta property="og:title" content="${title}" />`);
             html = html.replace(/<meta property="og:description" content=".*?" \/>/g, `<meta property="og:description" content="Sistema de gestión integral para ${b.nombre_sucursal}." />`);
             html = html.replace(/<meta property="og:image" content=".*?" \/>/g, `<meta property="og:image" content="${logo}" />`);
+            html = html.replace(/<meta name="theme-color" content=".*?" \/>/g, `<meta name="theme-color" content="${themeColor}" />`);
             html = html.replace(/<link rel="icon".*?>/g, `<link rel="icon" href="${logo}" />`);
-            html = html.replace(/<link rel="manifest".*?>/g, `<link rel="manifest" href="/manifest.json?s=${slug}" />`);
+            html = html.replace(/<link rel="manifest".*?>/g, `<link rel="manifest" href="${manifestUrl}" />`);
           }
         }
         res.send(html);

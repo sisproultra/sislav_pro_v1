@@ -2,6 +2,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/manifest.json",
+      "destination": "/api/manifest"
+    },
+    {
       "source": "/api-proxy/decolecta/:path*",
       "destination": "https://api.decolecta.com/v1/:path*"
     },

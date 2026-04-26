@@ -127,6 +127,18 @@
               
               const razonSocial = s.nombre_sucursal || s.nombre_empresa || s.razon_social || 'SISLAV';
               document.title = `${razonSocial} - CONTROL TOTAL`;
+
+              // Inyección dinámica del manifest para PWA corregida
+              const manifestLink = document.querySelector('link[rel="manifest"]');
+              const manifestUrl = slug ? `/manifest.json?s=${slug}` : `/manifest.json?o=${ownerId}`;
+              if (manifestLink) {
+                manifestLink.setAttribute('href', manifestUrl);
+              } else {
+                const link = document.createElement('link');
+                link.rel = 'manifest';
+                link.href = manifestUrl;
+                document.head.appendChild(link);
+              }
             } else {
               window.__BRANDING_STATUS__ = 'failed';
             }
