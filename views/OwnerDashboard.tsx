@@ -782,7 +782,8 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
           textSecondary={textSecondary} 
           cardClass={cardClass}
           branches={branches}
-          holdingId={session.user.holding_id}
+          holdingId={holdingInfo?.id}
+          holdingInfo={holdingInfo}
           session={session}
         />
       )}
@@ -957,7 +958,7 @@ const LinkingAnimation = ({ from, to, onComplete }: { from: DOMRect, to: DOMRect
   );
 };
 
-function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, holdingId, session }: any) {
+function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, holdingId, session, holdingInfo }: any) {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDriver, setSelectedDriver] = useState<any>(null);
@@ -1227,12 +1228,12 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
                   <input 
                     type="text" 
                     readOnly 
-                    value={`${window.location.origin}/?mode=logistics`}
+                    value={`${window.location.origin}/?mode=logistics${holdingInfo?.id ? `&h=${holdingInfo.id}` : ''}`}
                     className={`flex-1 px-3 py-2 rounded-lg text-[10px] border ${isDarkMode ? 'bg-bg border-white/10 text-text2' : 'bg-white border-gray-200 text-gray-600'}`}
                   />
                   <button 
                     onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/?mode=logistics`);
+                      navigator.clipboard.writeText(`${window.location.origin}/?mode=logistics${holdingInfo?.id ? `&h=${holdingInfo.id}` : ''}`);
                       alert('Link copiado al portapapeles');
                     }}
                     className="p-2 bg-accent text-white rounded-lg hover:scale-105 transition-all"

@@ -427,6 +427,27 @@ export const normalizeRelation = (data: any) => {
     return data || null;
 };
 
+export const dbGetHoldingBranding = async (holdingId: string) => {
+    const { data, error } = await supabase
+        .from('empresas_holding')
+        .select('*')
+        .eq('id', holdingId)
+        .maybeSingle();
+
+    if (error || !data) return null;
+
+    // Convert to branding format compatible with LogisticsLogin
+    return {
+        id: data.id,
+        nombre_sucursal: data.nombre_empresa,
+        url_logo: data.url_logo,
+        url_favicon: data.url_favicon,
+        url_favicon_logistica: data.url_favicon_logistica,
+        color_primario: data.color_primario,
+        color_secundario: data.color_secundario
+    };
+};
+
 export const normalizeSucursal = (s: any): any => {
     if (!s) return null;
     const name = s.nombre_sucursal ?? s.name ?? 'SISLAV SUCURSAL';

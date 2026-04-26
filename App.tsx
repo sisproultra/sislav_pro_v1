@@ -46,7 +46,8 @@ import {
     dbGetActiveCashClosing,
     dbOpenCashClosing,
     dbGetBirthdaysToday,
-    dbSyncOwnerProfile
+    dbSyncOwnerProfile,
+    dbGetHoldingBranding
 } from './services/dbService';
 import { getSaasGlobalConfig } from './services/saasService';
 import { sendBillToSunat, sendSummaryToSunat } from './services/sunatService';
@@ -612,6 +613,16 @@ export default function App() {
                 const slug = params.get('s');
                 const ownerSlug = params.get('o');
                 const tId = params.get('t');
+                const holdingBrandId = params.get('h');
+
+                if (holdingBrandId && params.get('mode') === 'logistics') {
+                    console.log(`🔍 Resolviendo branding de holding por ID: ${holdingBrandId}`);
+                    const brand = await dbGetHoldingBranding(holdingBrandId).catch(() => null);
+                    if (brand) {
+                        console.log("✅ Branding de holding resuelto:", brand.nombre_sucursal);
+                        setActiveSucursal(brand);
+                    }
+                }
 
                 if (ownerSlug && window.location.pathname !== '/owner-login') {
                     // Eliminamos el replaceState que causaba 404 en refrescos si no estaba configurado en el servidor
