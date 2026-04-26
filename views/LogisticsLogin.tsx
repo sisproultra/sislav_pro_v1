@@ -31,6 +31,18 @@ export default function LogisticsLogin({ onLogin, isDarkMode, toggleTheme, sucur
 
   const brandPrimary = localSucursal?.color_primario || '#4f8ef7';
 
+  React.useEffect(() => {
+    // Sincronizar Favicon Logística
+    const faviconUrl = localSucursal?.faviconLogisticaUrl || localSucursal?.url_favicon_logistica;
+    if (faviconUrl) {
+      const link: HTMLLinkElement = document.querySelector("link[rel*='icon']") || document.createElement('link');
+      link.type = 'image/x-icon';
+      link.rel = 'shortcut icon';
+      link.href = faviconUrl;
+      document.getElementsByTagName('head')[0].appendChild(link);
+    }
+  }, [localSucursal]);
+
   // Si se espera branding pero aún está cargando
   if (!localSucursal && brandingStatus === 'loading') {
     return (

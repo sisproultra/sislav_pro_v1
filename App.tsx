@@ -4,7 +4,8 @@ import {
     AuthSession, UserRole, Sucursal, Product, Client, Invoice, Category, 
     CartItem, InvoiceType, OrderStatus, SaasGlobalConfig, Machine, Expense, 
     Supply, Purchase, PaymentMethodConfig, PausedSale, Employee, 
-    CampaignStatus, Contact, CampaignTemplate, PickupRequest, SunatResponse
+    CampaignStatus, Contact, CampaignTemplate, PickupRequest, SunatResponse,
+    SaasCompany, SaasBranch
 } from './types';
 import {
     dbGetSucursalBySlug, dbGlobalLogin, setDbBranchContext, getActiveBranchId, getActiveHoldingId, withTimeout,
@@ -1025,6 +1026,35 @@ export default function App() {
         }
     };
 
+    const handleSelectOwner = (company: SaasCompany) => {
+        if (!company) return;
+        setResolveError(null);
+        
+        // Limpiamos sucursal previa para que cargue el dashboard de dueño
+        setActiveSucursal(null as any);
+        localStorage.removeItem('sislav_active_sucursal');
+        
+        if (authSession) {
+            const bypassSession: AuthSession = {
+                user: {
+                    ...authSession.user,
+                    id: `owner_${company.id}`,
+                    username: `owner_${company.id}`,
+                    name: `PROPIETARIO: ${company.name}`,
+                    role: UserRole.OWNER,
+                    holding_id: company.id,
+                    holding_name: company.name,
+                    isMasterBypass: true
+                }
+            };
+            setAuthSession(bypassSession);
+            localStorage.setItem('sislav_auth_session', JSON.stringify(bypassSession));
+            setIsMasterMode(false);
+            setShowMasterLogin(false);
+            setCurrentView('view:owner_dashboard');
+        }
+    };
+
     const handleLogin = async (u: string, p: string) => {
         try {
             if (!activeSucursal?.id) {
@@ -1682,7 +1712,7 @@ export default function App() {
         setIsMasterMode(true);
         setShowMasterLogin(false);
     }} onCancel={() => setShowMasterLogin(false)} />;
-    if (isMasterMode) return <SuperAdmin onLogout={handleLogout} onSelectTenant={handleSelectTenant} />;
+    if (isMasterMode) return <SuperAdmin onLogout={handleLogout} onSelectTenant={handleSelectTenant} onSelectOwner={handleSelectOwner} />;
     
     if (isOwnerPath && !authSession) {
         return <OwnerLogin 
@@ -1777,7 +1807,7 @@ export default function App() {
     }
     if (!activeSucursal) {
         if (authSession?.user?.role === UserRole.SAAS_MASTER) {
-            return <SuperAdmin onLogout={handleLogout} onSelectTenant={handleSelectTenant} />;
+            return <SuperAdmin onLogout={handleLogout} onSelectTenant={handleSelectTenant} onSelectOwner={handleSelectOwner} />;
         }
         if (authSession?.user?.role === UserRole.OWNER) {
             return <OwnerDashboard 

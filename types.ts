@@ -563,6 +563,7 @@ export interface SaasCompany {
     name: string;
     logoUrl?: string;
     faviconUrl?: string;
+    faviconLogisticaUrl?: string;
     primaryColor?: string;
     secondaryColor?: string;
     ownerName: string;

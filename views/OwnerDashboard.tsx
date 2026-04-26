@@ -792,6 +792,171 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
   );
 }
 
+const PersistentLinks = ({ logisticsSubTab, selectedSourceBranch, selectedDriver, connections, driverRoutes, branches }: any) => {
+  const [paths, setPaths] = useState<any[]>([]);
+
+  useEffect(() => {
+    const updatePaths = () => {
+      const newPaths: any[] = [];
+      
+      if (logisticsSubTab === 'network' && selectedSourceBranch) {
+        const fromEl = document.getElementById(`source-branch-${selectedSourceBranch.id}`);
+        if (fromEl) {
+          const fromRect = fromEl.getBoundingClientRect();
+          const connectedDestIds = connections
+            .filter((c: any) => c.sucursal_origen_id === selectedSourceBranch.id)
+            .map((c: any) => c.sucursal_destino_id);
+
+          connectedDestIds.forEach((destId: string) => {
+            const toEl = document.getElementById(`network-dest-${destId}`);
+            if (toEl) {
+              const toRect = toEl.getBoundingClientRect();
+              newPaths.push({ from: fromRect, to: toRect, id: `net-${selectedSourceBranch.id}-${destId}` });
+            }
+          });
+        }
+      } else if (logisticsSubTab === 'drivers' && selectedDriver) {
+        const fromEl = document.getElementById(`driver-card-${selectedDriver.id}`);
+        if (fromEl) {
+          const fromRect = fromEl.getBoundingClientRect();
+          const assignedBranchIds = driverRoutes.map((r: any) => r.sucursal_id);
+
+          assignedBranchIds.forEach((branchId: string) => {
+            const toEl = document.getElementById(`driver-dest-${branchId}`);
+            if (toEl) {
+              const toRect = toEl.getBoundingClientRect();
+              newPaths.push({ from: fromRect, to: toRect, id: `dr-${selectedDriver.id}-${branchId}` });
+            }
+          });
+        }
+      }
+      setPaths(newPaths);
+    };
+
+    const interval = setInterval(updatePaths, 100); // Poll for layout changes
+    return () => clearInterval(interval);
+  }, [logisticsSubTab, selectedSourceBranch, selectedDriver, connections, driverRoutes]);
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[50]">
+      <svg className="w-full h-full overflow-visible">
+        <defs>
+          <linearGradient id="persistentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#4f8ef7" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="#10b981" stopOpacity="0.8" />
+          </linearGradient>
+        </defs>
+        {paths.map(p => {
+          const isStacked = Math.abs(p.from.left - p.to.left) < 60;
+          
+          let startX, startY, endX, endY, cp1x, cp1y, cp2x, cp2y;
+
+          if (isStacked) {
+            // Stacked layout (Mobile)
+            startX = p.from.left + p.from.width / 2;
+            startY = p.from.top + p.from.height;
+            endX = p.to.left + p.to.width / 2;
+            endY = p.to.top;
+
+            cp1x = startX;
+            cp1y = startY + (endY - startY) * 0.5;
+            cp2x = endX;
+            cp2y = startY + (endY - startY) * 0.5;
+          } else {
+            // Horizontal layout (Desktop)
+            startX = p.from.left + p.from.width;
+            startY = p.from.top + p.from.height / 2;
+            endX = p.to.left;
+            endY = p.to.top + p.to.height / 2;
+
+            cp1x = startX + (endX - startX) * 0.5;
+            cp1y = startY;
+            cp2x = startX + (endX - startX) * 0.5;
+            cp2y = endY;
+          }
+
+          const d = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
+
+          return (
+            <path
+              key={p.id}
+              d={d}
+              fill="none"
+              stroke="url(#persistentGrad)"
+              strokeWidth="3"
+            />
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
+const LinkingAnimation = ({ from, to, onComplete }: { from: DOMRect, to: DOMRect, onComplete: () => void }) => {
+  const startX = from.left + from.width / 2;
+  const startY = from.top + from.height / 2;
+  const endX = to.left + to.width / 2;
+  const endY = to.top + to.height / 2;
+
+  // Tree-like curvy bezier curve
+  const cp1x = startX + (endX - startX) * 0.5;
+  const cp1y = startY;
+  const cp2x = startX + (endX - startX) * 0.5;
+  const cp2y = endY;
+
+  const path = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[1000]">
+      <svg className="w-full h-full overflow-visible">
+        <motion.path
+          d={path}
+          fill="none"
+          stroke="url(#linkGrad)"
+          strokeWidth="3"
+          initial={{ pathLength: 0, opacity: 0 }}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{ duration: 0.8, ease: "easeInOut" }}
+          onAnimationComplete={() => {
+            setTimeout(onComplete, 400);
+          }}
+        />
+        <defs>
+          <linearGradient id="linkGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#4f8ef7" />
+            <stop offset="100%" stopColor="#10b981" />
+          </linearGradient>
+        </defs>
+      </svg>
+      
+      {/* Moving cart icon along the path */}
+      <motion.div
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          offsetPath: `path('${path}')`,
+          width: '32px',
+          height: '32px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+        initial={{ offsetDistance: "0%", opacity: 0, scale: 0.5 }}
+        animate={{ 
+          offsetDistance: "100%", 
+          opacity: [0, 1, 1, 0],
+          scale: [0.5, 1.2, 1.2, 0.5]
+        }}
+        transition={{ duration: 0.8, ease: "easeInOut" }}
+        className="bg-accent text-white rounded-full shadow-lg z-[1001]"
+      >
+        <Truck size={16} />
+      </motion.div>
+    </div>
+  );
+};
+
 function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, holdingId, session }: any) {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -844,20 +1009,51 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
     fetchRoutes(driver.id);
   };
 
-  const toggleRoute = async (sucursalId: string) => {
+  const toggleRoute = async (sucursalId: string, e: React.MouseEvent) => {
     if (!selectedDriver) return;
     const isAssigned = driverRoutes.some(r => r.sucursal_id === sucursalId);
+    
+    // Optimismo
+    const oldRoutes = [...driverRoutes];
+    if (isAssigned) {
+      setDriverRoutes(prev => prev.filter(r => r.sucursal_id !== sucursalId));
+    } else {
+      setDriverRoutes(prev => [...prev, { sucursal_id: sucursalId, chofer_id: selectedDriver.id }]);
+      
+      // Animación
+      const fromEl = document.getElementById(`driver-card-${selectedDriver.id}`);
+      const toEl = e.currentTarget;
+      if (fromEl && toEl) {
+        setLinkAnim({
+          from: fromEl.getBoundingClientRect(),
+          to: toEl.getBoundingClientRect(),
+          id: Date.now()
+        });
+      }
+    }
+
     try {
       if (isAssigned) {
         await dbRemoveDriverRoute(selectedDriver.id, sucursalId);
       } else {
         await dbAssignDriverRoute(selectedDriver.id, sucursalId);
       }
+      // Sincronizar por si acaso, pero ya es asíncrono e instantáneo para el usuario
       fetchRoutes(selectedDriver.id);
     } catch (error) {
       console.error('Error toggling driver route:', error);
+      setDriverRoutes(oldRoutes); // Rollback
     }
   };
+
+  const [linkAnim, setLinkAnim] = useState<{ from: DOMRect, to: DOMRect, id: number } | null>(null);
+  const [needsRescale, setNeedsRescale] = useState(0);
+
+  useEffect(() => {
+    const handleResize = () => setNeedsRescale(prev => prev + 1);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleAddDriver = async () => {
     if (!newDriver.name || !newDriver.username || !newDriver.password) return;
@@ -880,11 +1076,30 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
     }
   };
 
-  const toggleConnection = async (destinoId: string) => {
+  const toggleConnection = async (destinoId: string, e: React.MouseEvent) => {
     if (!selectedSourceBranch) return;
     if (selectedSourceBranch.id === destinoId) return;
 
     const isConnected = connections.some(c => c.sucursal_origen_id === selectedSourceBranch.id && c.sucursal_destino_id === destinoId);
+    
+    // Optimismo
+    const oldConnections = [...connections];
+    if (isConnected) {
+      setConnections(prev => prev.filter(c => !(c.sucursal_origen_id === selectedSourceBranch.id && c.sucursal_destino_id === destinoId)));
+    } else {
+      setConnections(prev => [...prev, { sucursal_origen_id: selectedSourceBranch.id, sucursal_destino_id: destinoId, empresa_holding_id: holdingId }]);
+      
+      // Animación
+      const fromEl = document.getElementById(`source-branch-${selectedSourceBranch.id}`);
+      const toEl = e.currentTarget;
+      if (fromEl && toEl) {
+        setLinkAnim({
+          from: fromEl.getBoundingClientRect(),
+          to: toEl.getBoundingClientRect(),
+          id: Date.now()
+        });
+      }
+    }
     
     try {
       if (isConnected) {
@@ -895,11 +1110,32 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
       fetchConnections();
     } catch (error) {
       console.error('Error toggling connection:', error);
+      setConnections(oldConnections); // Rollback
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative" id="logistics-container">
+      {linkAnim && (
+        <LinkingAnimation 
+          key={linkAnim.id} 
+          from={linkAnim.from} 
+          to={linkAnim.to} 
+          onComplete={() => setLinkAnim(null)} 
+        />
+      )}
+      
+      {/* Persistent Links Layer */}
+      <PersistentLinks 
+        key={`persistent-${needsRescale}`}
+        logisticsSubTab={logisticsSubTab}
+        selectedSourceBranch={selectedSourceBranch}
+        selectedDriver={selectedDriver}
+        connections={connections}
+        driverRoutes={driverRoutes}
+        branches={branches}
+      />
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl md:text-2xl font-heading font-bold">Gestión de Logística Hub</h2>
@@ -949,6 +1185,7 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
                       drivers.map(driver => (
                         <button
                           key={driver.id}
+                          id={`driver-card-${driver.id}`}
                           onClick={() => handleSelectDriver(driver)}
                           className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center justify-between group ${
                             selectedDriver?.id === driver.id 
@@ -1039,13 +1276,14 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
                     <Store className="w-4 h-4 text-accent" />
                     Sucursales Asignadas
                   </h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {branches.map((branch: any) => {
                       const isAssigned = driverRoutes.some(r => r.sucursal_id === branch.id);
                       return (
                         <button
                           key={branch.id}
-                          onClick={() => toggleRoute(branch.id)}
+                          id={`driver-dest-${branch.id}`}
+                          onClick={(e) => toggleRoute(branch.id, e)}
                           className={`p-4 rounded-2xl border transition-all text-left flex items-center justify-between ${
                             isAssigned 
                               ? 'bg-accent/5 border-accent/30' 
@@ -1053,8 +1291,12 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isAssigned ? 'bg-accent text-white' : 'bg-bg2 text-text2'}`}>
-                              <Store className="w-4 h-4" />
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden ${isAssigned ? 'bg-accent text-white' : 'bg-bg2 text-text2'}`}>
+                              {branch.url_favicon ? (
+                                <img src={branch.url_favicon} className="w-full h-full object-contain" alt="" />
+                              ) : (
+                                <Store className="w-4 h-4" />
+                              )}
                             </div>
                             <div>
                               <p className="font-bold text-sm">{branch.nombre_sucursal}</p>
@@ -1094,6 +1336,7 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
               {branches.map((branch: any) => (
                 <button
                   key={branch.id}
+                  id={`source-branch-${branch.id}`}
                   onClick={() => setSelectedSourceBranch(branch)}
                   className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center justify-between group ${
                     selectedSourceBranch?.id === branch.id 
@@ -1102,10 +1345,14 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold overflow-hidden ${
                       selectedSourceBranch?.id === branch.id ? 'bg-accent text-white' : 'bg-bg2 text-text2'
                     }`}>
-                      <Store size={20} />
+                      {branch.url_favicon ? (
+                        <img src={branch.url_favicon} className="w-full h-full object-contain" alt="" />
+                      ) : (
+                        <Store size={20} />
+                      )}
                     </div>
                     <div>
                       <p className="font-bold text-sm">{branch.nombre_sucursal}</p>
@@ -1149,13 +1396,14 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
                     <ArrowDownLeft className="w-4 h-4 text-accent" />
                     Destinos Permitidos
                   </h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {branches.filter((b: any) => b.id !== selectedSourceBranch.id).map((branch: any) => {
                       const isConnected = connections.some(c => c.sucursal_origen_id === selectedSourceBranch.id && c.sucursal_destino_id === branch.id);
                       return (
                         <button
                           key={branch.id}
-                          onClick={() => toggleConnection(branch.id)}
+                          id={`network-dest-${branch.id}`}
+                          onClick={(e) => toggleConnection(branch.id, e)}
                           className={`p-4 rounded-2xl border transition-all text-left flex items-center justify-between ${
                             isConnected 
                               ? 'bg-emerald-500/5 border-emerald-500/30' 
@@ -1163,8 +1411,12 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isConnected ? 'bg-emerald-500 text-white' : 'bg-bg2 text-text2'}`}>
-                              <Store className="w-4 h-4" />
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden ${isConnected ? 'bg-emerald-500 text-white' : 'bg-bg2 text-text2'}`}>
+                              {branch.url_favicon ? (
+                                <img src={branch.url_favicon} className="w-full h-full object-contain" alt="" />
+                              ) : (
+                                <Store className="w-4 h-4" />
+                              )}
                             </div>
                             <div>
                               <p className="font-bold text-sm">{branch.nombre_sucursal}</p>

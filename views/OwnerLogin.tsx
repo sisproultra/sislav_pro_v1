@@ -40,30 +40,6 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
               link.rel = 'icon';
               link.href = data.url_favicon;
               document.getElementsByTagName('head')[0].appendChild(link);
-              const iconUrl = data.url_favicon || data.url_logo;
-              if (iconUrl) {
-                const manifest = {
-                  name: data.nombre_empresa || 'SISLAV',
-                  short_name: data.nombre_empresa || 'SISLAV',
-                  start_url: window.location.href,
-                  display: 'standalone',
-                  background_color: '#0d0f14',
-                  theme_color: data.color_primario || '#4f8ef7',
-                  icons: [
-                    { src: iconUrl, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-                    { src: iconUrl, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
-                  ]
-                };
-                const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-                const manifestURL = URL.createObjectURL(blob);
-                let manifestLink = document.querySelector("link[rel='manifest']") as HTMLLinkElement;
-                if (!manifestLink) {
-                  manifestLink = document.createElement('link');
-                  manifestLink.rel = 'manifest';
-                  document.head.appendChild(manifestLink);
-                }
-                manifestLink.href = manifestURL;
-              }
             }
             if (data.nombre_empresa) {
               document.title = `${data.nombre_empresa} - Panel de Propietario`;

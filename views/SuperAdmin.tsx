@@ -526,7 +526,11 @@ const UsersListView: React.FC = () => {
     );
 };
 
-export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: SaasBranch, isMasterBypass: boolean) => void }> = ({ onLogout, onSelectTenant }) => {
+export const SuperAdmin: React.FC<{ 
+    onLogout: () => void; 
+    onSelectTenant: (t: SaasBranch, isMasterBypass: boolean) => void;
+    onSelectOwner: (company: SaasCompany) => void;
+}> = ({ onLogout, onSelectTenant, onSelectOwner }) => {
     const [view, setView] = useState<'ACCOUNTS' | 'GLOBAL' | 'SETTINGS' | 'LOGS' | 'USERS' | 'BULK_MODULOS'>('ACCOUNTS');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [activeAccordion, setActiveAccordion] = useState<string | null>('APIS_MAESTRAS');
@@ -580,6 +584,7 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
     const [compPassword, setCompPassword] = useState('');
     const [compLogoUrl, setCompLogoUrl] = useState('');
     const [compFaviconUrl, setCompFaviconUrl] = useState('');
+    const [compFaviconLogisticaUrl, setCompFaviconLogisticaUrl] = useState('');
     const [compPrimaryColor, setCompPrimaryColor] = useState('#4f46e5');
     const [compSecondaryColor, setCompSecondaryColor] = useState('#0f172a');
     const [compIsActive, setCompIsActive] = useState(true);
@@ -913,7 +918,7 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
         }
     };
 
-    const handleCompanyAssetUpload = async (field: 'LOGO' | 'FAVICON', e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleCompanyAssetUpload = async (field: 'LOGO' | 'FAVICON' | 'LOGISTICA_FAVICON', e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -922,9 +927,10 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
         
         setIsUploadingAsset(true);
         try {
-            const url = await uploadCompanyAsset(file, identifier, field);
+            const url = await uploadCompanyAsset(file, identifier, field === 'LOGISTICA_FAVICON' ? 'FAVICON' : field);
             if (field === 'LOGO') setCompLogoUrl(url);
-            else setCompFaviconUrl(url);
+            else if (field === 'FAVICON') setCompFaviconUrl(url);
+            else setCompFaviconLogisticaUrl(url);
         } catch (err: any) {
             console.error(`Error subiendo ${field}:`, err);
             alert(`Error subiendo ${field.toLowerCase()} de la empresa: ${err.message || 'Error desconocido'}`);
@@ -943,6 +949,7 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
         setCompEmail(company.email || '');
         setCompLogoUrl(company.logoUrl || '');
         setCompFaviconUrl(company.faviconUrl || '');
+        setCompFaviconLogisticaUrl(company.faviconLogisticaUrl || '');
         setCompPrimaryColor(company.primaryColor || '#4f46e5');
         setCompSecondaryColor(company.secondaryColor || '#0f172a');
         setCompIsActive(company.isActive);
@@ -961,6 +968,7 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
         setCompPassword('');
         setCompLogoUrl('');
         setCompFaviconUrl('');
+        setCompFaviconLogisticaUrl('');
         setCompPrimaryColor('#4f46e5');
         setCompSecondaryColor('#0f172a');
         setCompIsActive(true);
@@ -990,6 +998,7 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
                 password: compPassword,
                 logoUrl: compLogoUrl,
                 faviconUrl: compFaviconUrl,
+                faviconLogisticaUrl: compFaviconLogisticaUrl,
                 primaryColor: compPrimaryColor,
                 secondaryColor: compSecondaryColor,
                 isActive: compIsActive
@@ -1485,20 +1494,8 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
                                                                 </button>
                                                                 <button 
                                                                     onClick={() => {
-                                                                        // Bypass para entrar como OWNER de esta empresa
-                                                                        const ownerSession = {
-                                                                            user: {
-                                                                                id: `owner_${company.id}`,
-                                                                                username: `owner_${company.id}`,
-                                                                                name: `PROPIETARIO: ${company.name}`,
-                                                                                role: UserRole.OWNER,
-                                                                                holding_id: company.id,
-                                                                                holding_name: company.name,
-                                                                                isMasterBypass: true
-                                                                            }
-                                                                        };
-                                                                        localStorage.setItem('sislav_auth_session', JSON.stringify(ownerSession));
-                                                                        window.location.reload();
+                                                                        // Bypass para entrar como OWNER de esta empresa usando el nuevo controlador centralizado
+                                                                        onSelectOwner(company);
                                                                     }}
                                                                     className="bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white px-2 py-1 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all border border-emerald-500/20 flex items-center gap-1"
                                                                     title="Acceso Directo como Propietario"
@@ -2096,6 +2093,31 @@ export const SuperAdmin: React.FC<{ onLogout: () => void; onSelectTenant: (t: Sa
                                                 <input 
                                                     value={compFaviconUrl} 
                                                     onChange={e => setCompFaviconUrl(e.target.value)} 
+                                                    className="w-full bg-slate-800 border border-white/5 rounded-xl px-4 py-2 text-[10px] text-indigo-300 font-mono outline-none focus:border-indigo-500/50" 
+                                                    placeholder="https://..." 
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* LOGISTICA FAVICON SECTION */}
+                                    <div className="space-y-4">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Favicon Logística (Login Choferes)</label>
+                                        <div className="flex flex-col gap-4">
+                                            <div className="flex items-center gap-4 bg-black/20 p-3 md:p-4 rounded-2xl md:rounded-3xl border border-white/5">
+                                                <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-slate-800 flex items-center justify-center p-2 border border-white/10 shrink-0 overflow-hidden">
+                                                    {isUploadingAsset ? <Loader2 className="animate-spin text-indigo-500" /> : compFaviconLogisticaUrl ? <img src={compFaviconLogisticaUrl} className="w-full h-full object-contain" /> : <ShieldCheck size={20} className="text-slate-600 md:w-6 md:h-6" />}
+                                                </div>
+                                                <label className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 md:py-3 rounded-xl font-bold text-[9px] md:text-[10px] uppercase tracking-widest cursor-pointer text-center transition-all shadow-lg active:scale-95">
+                                                    SUBIR FAVICON LOGÍSTICA
+                                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleCompanyAssetUpload('LOGISTICA_FAVICON', e)} />
+                                                </label>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-2">O pegar URL del Favicon Logística</label>
+                                                <input 
+                                                    value={compFaviconLogisticaUrl} 
+                                                    onChange={e => setCompFaviconLogisticaUrl(e.target.value)} 
                                                     className="w-full bg-slate-800 border border-white/5 rounded-xl px-4 py-2 text-[10px] text-indigo-300 font-mono outline-none focus:border-indigo-500/50" 
                                                     placeholder="https://..." 
                                                 />

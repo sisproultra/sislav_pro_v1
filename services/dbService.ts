@@ -345,12 +345,6 @@ export const dbOwnerAuth = async (email: string, pass: string): Promise<AuthSess
             throw new Error("Se autenticó correctamente, pero este correo no está vinculado a ninguna empresa en la base de datos.");
         }
         
-        // ✅ Validación cruzada email Auth vs email empresa
-        if (authData.user.email?.toLowerCase().trim() !== company.correo_login.toLowerCase().trim()) {
-            await supabase.auth.signOut();
-            throw new Error("Credenciales no autorizadas para este panel.");
-        }
-        
         console.log("✅ Empresa encontrada:", company.nombre_empresa);
         companyData = company;
 
@@ -3255,7 +3249,7 @@ export const dbGetLogisticsDrivers = async () => {
     const { data, error } = await supabase
         .from('usuarios_login')
         .select('*')
-        .eq('empresa_id', holdingId)
+        .eq('empresa_holding_id', holdingId)
         .eq('rol', UserRole.DELIVERY)
         .eq('activo', true);
     if (error) throw error;

@@ -177,7 +177,6 @@ async function startServer() {
             const originalSend = res.send;
             res.send = function(content) {
               let html = content.toString();
-              const isLogistica = req.url.includes('/logistica');
               const title = isLogistica ? `LOGÍSTICA ${b.nombre_sucursal}` : `${b.nombre_sucursal} - CONTROL TOTAL`;
               const themeColor = b.color_primario || '#4f8ef7';
               let manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
@@ -240,7 +239,6 @@ async function startServer() {
           if (b) {
             const isLogistica = req.url.includes('/logistica');
             const logo = isLogistica ? (b.url_favicon_logistica || b.url_favicon || b.url_logo) : (b.url_favicon || b.url_logo || 'https://lavanderiasislav.com/logo-sislav.png');
-            const isLogistica = req.url.includes('/logistica');
             const title = isLogistica ? `LOGÍSTICA ${b.nombre_sucursal}` : `${b.nombre_sucursal} - CONTROL TOTAL`;
             const themeColor = b.color_primario || '#4f8ef7';
             let manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');

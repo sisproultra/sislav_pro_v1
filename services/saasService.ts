@@ -326,6 +326,7 @@ export const getSaasCompanies = async (page: number = 1, pageSize: number = 50) 
             name: c.nombre_empresa,
             logoUrl: c.url_logo,
             faviconUrl: c.url_favicon,
+            faviconLogisticaUrl: c.url_favicon_logistica, // Nuevo campo
             primaryColor: c.color_primario || '#4f46e5',
             secondaryColor: c.color_secundario || '#0f172a',
             ownerName: c.propietario_nombre,
@@ -491,6 +492,7 @@ export const createSaasCompany = async (company: any) => {
         p_password_hash: company.password,
         p_url_logo: company.logoUrl,
         p_url_favicon: company.faviconUrl,
+        p_url_favicon_logistica: company.faviconLogisticaUrl,
         p_color_primario: company.primaryColor,
         p_color_secundario: company.secondaryColor
     });
@@ -527,7 +529,7 @@ export const createInitialHoldingUser = async (userData: any) => {
             data: {
                 full_name: userData.name,
                 empresa_holding_id: userData.empresaHoldingId,
-                role: UserRole.OWNER
+                role: userData.role || UserRole.OWNER
             }
         }
     });
@@ -564,6 +566,7 @@ export const updateSaasCompany = async (id: string, company: any) => {
         correo_login: company.email,
         url_logo: company.logoUrl,
         url_favicon: company.faviconUrl,
+        url_favicon_logistica: company.faviconLogisticaUrl,
         color_primario: company.primaryColor,
         color_secundario: company.secondaryColor,
         activo: company.isActive
