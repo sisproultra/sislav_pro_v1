@@ -61,10 +61,12 @@ async function startServer() {
   app.get('/manifest.json', async (req, res) => {
     const slug = req.query.s as string;
     const ownerId = req.query.o as string;
+    const isLogistica = req.query.type === 'logistica';
+    
     let logoUrl = 'https://lavanderiasislav.com/logo-sislav.png';
     let name = 'SISLAV';
     let themeColor = '#4f8ef7';
-    let startUrl = '/';
+    let startUrl = isLogistica ? '/logistica' : '/';
 
     try {
       if (ownerId) {
@@ -78,7 +80,7 @@ async function startServer() {
           logoUrl = data.url_favicon || data.url_logo || logoUrl;
           name = data.nombre_empresa || name;
           themeColor = data.color_primario || themeColor;
-          startUrl = `/?o=${ownerId.trim()}`;
+          startUrl = isLogistica ? `/logistica?o=${ownerId.trim()}` : `/?o=${ownerId.trim()}`;
         }
       } else if (slug) {
         const { data } = await supabaseAdmin
@@ -91,16 +93,20 @@ async function startServer() {
           logoUrl = data.url_favicon || data.url_logo || logoUrl;
           name = data.nombre_sucursal || name;
           themeColor = data.color_primario || themeColor;
-          startUrl = `/?s=${slug.trim()}`;
+          startUrl = isLogistica ? `/logistica?s=${slug.trim()}` : `/?s=${slug.trim()}`;
         }
+      }
+
+      if (isLogistica) {
+        name = `LOGÍSTICA ${name}`;
       }
     } catch (e) {
       console.error('Error generating manifest:', e);
     }
 
     res.json({
-      "name": `${name} - CONTROL TOTAL`,
-      "short_name": name,
+      "name": isLogistica ? name : `${name} - CONTROL TOTAL`,
+      "short_name": name.substring(0, 12),
       "description": `Sistema de gestión integral para ${name}`,
       "start_url": startUrl,
       "display": "standalone",
@@ -167,9 +173,13 @@ async function startServer() {
             const originalSend = res.send;
             res.send = function(content) {
               let html = content.toString();
-              const title = `${b.nombre_sucursal} - CONTROL TOTAL`;
+              const isLogistica = req.url.includes('/logistica');
+              const title = isLogistica ? `LOGÍSTICA ${b.nombre_sucursal}` : `${b.nombre_sucursal} - CONTROL TOTAL`;
               const themeColor = b.color_primario || '#4f8ef7';
-              const manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
+              let manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
+              if (isLogistica) {
+                manifestUrl += (manifestUrl.includes('?') ? '&' : '?') + 'type=logistica';
+              }
               
               html = html.replace(/<title>.*?<\/title>/g, `<title>${title}</title>`);
               html = html.replace(/<meta property="og:title" content=".*?" \/>/g, `<meta property="og:title" content="${title}" />`);
@@ -224,9 +234,13 @@ async function startServer() {
             
           if (b) {
             const logo = b.url_favicon || b.url_logo || 'https://lavanderiasislav.com/logo-sislav.png';
-            const title = `${b.nombre_sucursal} - CONTROL TOTAL`;
+            const isLogistica = req.url.includes('/logistica');
+            const title = isLogistica ? `LOGÍSTICA ${b.nombre_sucursal}` : `${b.nombre_sucursal} - CONTROL TOTAL`;
             const themeColor = b.color_primario || '#4f8ef7';
-            const manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
+            let manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
+            if (isLogistica) {
+              manifestUrl += (manifestUrl.includes('?') ? '&' : '?') + 'type=logistica';
+            }
             
             html = html.replace(/<title>.*?<\/title>/g, `<title>${title}</title>`);
             html = html.replace(/<meta property="og:title" content=".*?" \/>/g, `<meta property="og:title" content="${title}" />`);

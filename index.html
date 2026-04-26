@@ -83,9 +83,14 @@
         const params = new URLSearchParams(window.location.search);
         const slug = params.get('s');
         const ownerId = params.get('o');
+        const isLogistica = window.location.pathname.includes('/logistica');
         
         // --- INYECCIÓN INMEDIATA DEL MANIFEST ---
-        const manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
+        let manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
+        if (isLogistica) {
+          manifestUrl += (manifestUrl.includes('?') ? '&' : '?') + 'type=logistica';
+        }
+        
         const link = document.createElement('link');
         link.rel = 'manifest';
         link.href = manifestUrl;
