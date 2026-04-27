@@ -3345,7 +3345,8 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: {
         p_ubicacion_tipo: 'DELIVERY',
         p_ubicacion_id: guia.chofer_id,
         p_usuario_id: userId,
-        p_usuario_nombre: userName
+        p_usuario_nombre: userName,
+        p_empresa_holding_id: holdingId
     });
 
     if (rpcError) throw rpcError;
@@ -3355,10 +3356,10 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: {
     // en algunas versiones del esquema. Verificamos si ya existen para evitar duplicados o errores.
     const { data: existingRelations } = await supabase
         .from('items_guia')
-        .select('item_venta_id')
+        .select('*')
         .eq('guia_id', guiaData.id);
 
-    const existingIds = new Set((existingRelations || []).map(r => r.item_venta_id));
+    const existingIds = new Set((existingRelations || []).map(r => r.item_venta_id || r.item_id));
     const itemsToInsert = items.filter(item => !existingIds.has(item.id));
 
     if (itemsToInsert.length > 0) {
@@ -3366,6 +3367,7 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: {
             const entry: any = {
                 guia_id: guiaData.id,
                 item_venta_id: item.id,
+                item_id: item.id, // Support both names for resiliency
                 estado_item: 'CARGADO',
                 empresa_holding_id: holdingId
             };
@@ -3378,17 +3380,24 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: {
 
         const { error: itemsError } = await supabase.from('items_guia').insert(itemsGuiaMap);
         if (itemsError) {
-            console.warn("Items guide insertion failed, probably handled by RPC or schema mismatch:", itemsError.message);
-            // Si falla por FK o columna inexistente, reintentamos solo con lo básico
-            if (itemsError.code === '23503' || itemsError.code === '42703') {
-                const retryItems = itemsToInsert.map(item => ({
+            console.warn("Items guide insertion failed, trying fallback:", itemsError.message);
+            // Reintentar con solo item_venta_id
+            const fallback1 = itemsToInsert.map(it => ({
+                guia_id: guiaData.id,
+                item_venta_id: it.id,
+                estado_item: 'CARGADO',
+                empresa_holding_id: holdingId
+            }));
+            const { error: err1 } = await supabase.from('items_guia').insert(fallback1);
+            if (err1) {
+                // Reintentar con solo item_id
+                const fallback2 = itemsToInsert.map(it => ({
                     guia_id: guiaData.id,
-                    item_venta_id: item.id,
+                    item_id: it.id,
                     estado_item: 'CARGADO',
                     empresa_holding_id: holdingId
                 }));
-                const { error: retryError } = await supabase.from('items_guia').insert(retryItems);
-                if (retryError) console.error("Final retry failed:", retryError.message);
+                await supabase.from('items_guia').insert(fallback2);
             }
         }
     }
@@ -3429,27 +3438,43 @@ export const dbGetGuiasRemision = async (filters: {
 };
 
 export const dbGetGuiaDetails = async (guiaId: string) => {
+    // Try multiple join options for resiliency
     const { data, error } = await supabase
         .from('items_guia')
-        .select('*, items_venta(*, ventas(*, clientes(*)))')
+        .select('*, item:items_venta(*, ventas(*, clientes(*))), item_venta:items_venta(*, ventas(*, clientes(*))), items_venta(*, ventas(*, clientes(*)))')
         .eq('guia_id', guiaId);
-    if (error) throw error;
-    return data;
+        
+    if (error) {
+        console.warn("Complex join failed, trying simple join:", error.message);
+        const { data: simpleData, error: simpleError } = await supabase
+            .from('items_guia')
+            .select('*, items_venta(*, ventas(*, clientes(*)))')
+            .eq('guia_id', guiaId);
+        if (simpleError) throw simpleError;
+        return simpleData;
+    }
+    
+    // Normalize to always have items_venta
+    return (data || []).map(row => ({
+        ...row,
+        items_venta: row.items_venta || row.item || row.item_venta
+    }));
 };
 
 export const dbUpdateGuiaEstado = async (guiaId: string, nuevoEstadoGuia: string, itemEstado?: string, itemsToProcess?: string[]) => {
     const userId = getActiveUserId();
     const userName = localStorage.getItem('sislav_current_user_name') || 'Sistema';
+    const holdingId = getActiveHoldingId();
 
     // 1. Obtener items y datos de la guía
     const { data: guia, error: guiaError } = await supabase
         .from('guias_remision')
-        .select('*, items_guia(item_venta_id)')
+        .select('*, items_guia(*)')
         .eq('id', guiaId)
         .single();
     
     if (guiaError) throw guiaError;
-    const itemsIds = itemsToProcess || (guia.items_guia || []).map((i: any) => i.item_venta_id);
+    const itemsIds = itemsToProcess || (guia.items_guia || []).map((i: any) => i.item_venta_id || i.item_id);
 
     // 2. Determinar nuevo estado de los items si no se provee
     let finalItemEstado = itemEstado;
@@ -3479,7 +3504,8 @@ export const dbUpdateGuiaEstado = async (guiaId: string, nuevoEstadoGuia: string
             p_ubicacion_tipo: ubicacionTipo,
             p_ubicacion_id: ubicacionId,
             p_usuario_id: userId,
-            p_usuario_nombre: userName
+            p_usuario_nombre: userName,
+            p_empresa_holding_id: holdingId
         });
         if (rpcError) throw rpcError;
     }
@@ -3497,12 +3523,21 @@ export const dbUpdateGuiaEstado = async (guiaId: string, nuevoEstadoGuia: string
 };
 
 export const dbUpdateGuiaItemStatus = async (guiaId: string, itemId: string, nuevoEstado: string) => {
+    // Intentar con item_venta_id
     const { error } = await supabase
         .from('items_guia')
         .update({ estado_item: nuevoEstado })
         .eq('guia_id', guiaId)
         .eq('item_venta_id', itemId);
-    if (error) throw error;
+    
+    if (error) {
+        // Reintentar con item_id si falló por columna inexistente
+        await supabase
+            .from('items_guia')
+            .update({ estado_item: nuevoEstado })
+            .eq('guia_id', guiaId)
+            .eq('item_id', itemId);
+    }
 };
 
 // --- LOGÍSTICA: CONEXIONES ENTRE SUCURSALES ---

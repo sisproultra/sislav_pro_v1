@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
     Truck, Package, MapPin, User, Calendar, Clock, CheckCircle2, 
     XCircle, Loader2, ArrowRight, AlertTriangle, RefreshCw, 
@@ -26,6 +26,19 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout }) => 
     const [showScanner, setShowScanner] = useState(false);
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+    const notifiedGuias = useRef<Set<string>>(new Set());
+
+    // Notification Sound
+    const playNotification = () => {
+        try {
+            // Campana - Mixkit audio preview link
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.volume = 0.5;
+            audio.play();
+        } catch (e) {
+            console.warn("Could not play notification sound", e);
+        }
+    };
 
     useEffect(() => {
         loadMyGuias();
@@ -79,7 +92,30 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout }) => 
             const userId = getActiveUserId();
             // Cargamos tanto PENDIENTE como EN_TRANSITO del chofer
             const data = await dbGetGuiasRemision({ chofer_id: userId! }); 
-            setGuias(data.filter(g => g.estado === 'PENDIENTE' || g.estado === 'EN_TRANSITO'));
+            const filtered = data.filter(g => g.estado === 'PENDIENTE' || g.estado === 'EN_TRANSITO');
+            
+            // Lógica de notificación sonora para nuevas guías PENDIENTES
+            const pendingIds = filtered.filter(g => g.estado === 'PENDIENTE').map(g => g.id);
+            let hasNew = false;
+            
+            if (notifiedGuias.current.size === 0) {
+                // Primera carga: registramos lo existente sin sonar
+                pendingIds.forEach(id => notifiedGuias.current.add(id));
+            } else {
+                // Cargas posteriores (tiempo real): si hay un ID que no estaba, notificamos
+                pendingIds.forEach(id => {
+                    if (!notifiedGuias.current.has(id)) {
+                        notifiedGuias.current.add(id);
+                        hasNew = true;
+                    }
+                });
+            }
+
+            if (hasNew) {
+                playNotification();
+            }
+
+            setGuias(filtered);
         } catch (error) {
             console.error("Error loading driver guias:", error);
         } finally {
@@ -97,11 +133,13 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout }) => 
             setGuiaItems(items);
             // Si ya está en tránsito, marcar todos como checked por defecto para visualización
             if (guia.estado === 'EN_TRANSITO') {
-                const initialChecked: Record<string, boolean> = {};
-                items.forEach((it: any) => {
-                    if (it.estado_item !== 'FALTANTE') initialChecked[it.item_venta_id] = true;
-                });
-                setCheckedItems(initialChecked);
+            // Pre-marcar items que ya están cargados o no son faltantes
+            const initialChecked: Record<string, boolean> = {};
+            items.forEach((it: any) => {
+                const itemId = it.item_venta_id || it.item_id;
+                if (it.estado_item !== 'FALTANTE' && itemId) initialChecked[itemId] = true;
+            });
+            setCheckedItems(initialChecked);
             }
         } catch (error) {
             console.error("Error loading guia details:", error);
@@ -132,7 +170,10 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout }) => 
         }
     };
 
-    const allItemsProcessed = guiaItems.length > 0 && guiaItems.every(it => checkedItems[it.item_venta_id] || missingItems[it.item_venta_id]);
+    const allItemsProcessed = guiaItems.length > 0 && guiaItems.every(it => {
+        const itemId = it.item_venta_id || it.item_id;
+        return checkedItems[itemId] || missingItems[itemId];
+    });
 
     const handleUpdateStatus = async (nuevoEstadoGuia: 'EN_TRANSITO' | 'ENTREGADO') => {
         if (!selectedGuia) return;
@@ -252,38 +293,41 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout }) => 
                                                 Orden #{group.orderNumber} • {group.client}
                                             </span>
                                         </div>
-                                        {group.items.map((item: any, idx: number) => (
-                                            <div 
-                                                key={idx} 
-                                                onClick={() => toggleItemCheck(item.item_venta_id)}
-                                                className={`bg-white p-4 rounded-2xl border transition-all shadow-sm flex items-center gap-4 cursor-pointer ${
-                                                    checkedItems[item.item_venta_id] ? 'border-emerald-200 bg-emerald-50/30' : 
-                                                    missingItems[item.item_venta_id] ? 'border-rose-200 bg-rose-50/30' : 'border-slate-100'
-                                                }`}
-                                            >
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                                                    checkedItems[item.item_venta_id] ? 'bg-emerald-100 text-emerald-600' : 
-                                                    missingItems[item.item_venta_id] ? 'bg-rose-100 text-rose-600' : 'bg-slate-50 text-slate-400'
-                                                }`}>
-                                                    {checkedItems[item.item_venta_id] ? <CheckCircle2 size={20} /> : 
-                                                     missingItems[item.item_venta_id] ? <XCircle size={20} /> : <Box size={20} />}
+                                        {group.items.map((item: any, idx: number) => {
+                                            const itemId = item.item_venta_id || item.item_id;
+                                            return (
+                                                <div 
+                                                    key={idx} 
+                                                    onClick={() => toggleItemCheck(itemId)}
+                                                    className={`bg-white p-4 rounded-2xl border transition-all shadow-sm flex items-center gap-4 cursor-pointer ${
+                                                        checkedItems[itemId] ? 'border-emerald-200 bg-emerald-50/30' : 
+                                                        missingItems[itemId] ? 'border-rose-200 bg-rose-50/30' : 'border-slate-100'
+                                                    }`}
+                                                >
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                                        checkedItems[itemId] ? 'bg-emerald-100 text-emerald-600' : 
+                                                        missingItems[itemId] ? 'bg-rose-100 text-rose-600' : 'bg-slate-50 text-slate-400'
+                                                    }`}>
+                                                        {checkedItems[itemId] ? <CheckCircle2 size={20} /> : 
+                                                         missingItems[itemId] ? <XCircle size={20} /> : <Box size={20} />}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="text-sm font-black text-slate-800 leading-tight">{item.items_venta?.descripcion}</p>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                                            {item.items_venta?.cantidad} {item.items_venta?.codigo_unidad}
+                                                        </p>
+                                                    </div>
+                                                    {selectedGuia.estado === 'PENDIENTE' && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); toggleItemMissing(itemId); }}
+                                                            className={`p-2 rounded-lg transition-colors ${missingItems[itemId] ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-rose-100 hover:text-rose-600'}`}
+                                                        >
+                                                            <AlertTriangle size={16} />
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                <div className="flex-1">
-                                                    <p className="text-sm font-black text-slate-800 leading-tight">{item.items_venta?.descripcion}</p>
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                                        {item.items_venta?.cantidad} {item.items_venta?.codigo_unidad}
-                                                    </p>
-                                                </div>
-                                                {selectedGuia.estado === 'PENDIENTE' && (
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); toggleItemMissing(item.item_venta_id); }}
-                                                        className={`p-2 rounded-lg transition-colors ${missingItems[item.item_venta_id] ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-rose-100 hover:text-rose-600'}`}
-                                                    >
-                                                        <AlertTriangle size={16} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 ))
                             )}
