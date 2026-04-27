@@ -3326,7 +3326,13 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: {
     const { data: guiaData, error: guiaError } = await supabase
         .from('guias_remision')
         .insert({
-            ...guia,
+            codigo_guia: guia.codigo_guia,
+            sucursal_origen_id: guia.sucursal_origen_id,
+            sucursal_destino_id: guia.sucursal_destino_id,
+            chofer_id: guia.chofer_id,
+            tipo_guia: guia.tipo_guia,
+            notas: guia.notas,
+            estado: guia.estado || 'PENDIENTE',
             empresa_holding_id: holdingId,
             registrado_por: userName
         })
@@ -3345,8 +3351,7 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: {
         p_ubicacion_tipo: 'DELIVERY',
         p_ubicacion_id: guia.chofer_id,
         p_usuario_id: userId,
-        p_usuario_nombre: userName,
-        p_empresa_holding_id: holdingId
+        p_usuario_nombre: userName
     });
 
     if (rpcError) throw rpcError;
@@ -3504,8 +3509,7 @@ export const dbUpdateGuiaEstado = async (guiaId: string, nuevoEstadoGuia: string
             p_ubicacion_tipo: ubicacionTipo,
             p_ubicacion_id: ubicacionId,
             p_usuario_id: userId,
-            p_usuario_nombre: userName,
-            p_empresa_holding_id: holdingId
+            p_usuario_nombre: userName
         });
         if (rpcError) throw rpcError;
     }

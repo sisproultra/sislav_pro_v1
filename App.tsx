@@ -353,7 +353,7 @@ export default function App() {
                     "name": activeSucursal.razonSocial || "SISLAV - CONTROL TOTAL",
                     "short_name": activeSucursal.nombre_sucursal || "SISLAV",
                     "description": "Sistema de Control Total para Lavanderías",
-                    "start_url": window.location.origin + window.location.pathname,
+                    "start_url": window.location.origin + window.location.pathname + window.location.search,
                     "display": "standalone",
                     "background_color": "#0d0f14",
                     "theme_color": activeSucursal.color_primario || "#4f8ef7",
@@ -892,7 +892,8 @@ export default function App() {
             if (activeSucursal.slug) {
                 const manifestLink: HTMLLinkElement | null = document.querySelector('link[rel="manifest"]');
                 if (manifestLink) {
-                    manifestLink.href = `/manifest.json?s=${activeSucursal.slug}`;
+                    const currentSearch = window.location.search || `?s=${activeSucursal.slug}`;
+                    manifestLink.href = `/manifest.json${currentSearch}`;
                 }
             }
         }
@@ -1178,6 +1179,7 @@ export default function App() {
     const handleLogout = async () => {
         console.log("Iniciando cierre de sesión...");
         const wasBypass = authSession?.user?.isMasterBypass;
+        const wasDelivery = authSession?.user?.role === UserRole.DELIVERY;
         
         // 1. Limpiamos estado local inmediatamente para que la UI responda
         setAuthSession(null);
@@ -1209,7 +1211,12 @@ export default function App() {
             
             const params = new URLSearchParams(window.location.search);
             const hasSlug = !!params.get('s');
-            const isLogistics = !!params.get('mode');
+            const isLogistics = !!params.get('mode') || wasDelivery;
+            
+            if (wasDelivery && !params.get('mode')) {
+                window.history.replaceState({}, '', window.location.pathname + '?mode=logistics');
+            }
+
             // Si estamos en ruta de dueño (por path o por parámetro 'o'), no mostramos el login maestro
             setShowMasterLogin(!hasSlug && !isOwnerPath && !isLogistics);
         }

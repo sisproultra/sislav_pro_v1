@@ -67,7 +67,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({
     >
       <Icon size={16} className={`min-w-[16px] transition-transform group-hover:scale-110 ${isActive ? 'text-white' : 'text-text3'}`} />
       {isSidebarOpen && <span className="whitespace-nowrap overflow-hidden">{label}</span>}
-      {isSidebarOpen && badge && (<span className={`ml-auto px-1.5 py-0.5 rounded text-[7px] font-black text-white uppercase tracking-tighter ${badge === 'NUEVO' ? 'neon-badge bg-transparent border-brand-primary' : 'animate-blink-badge bg-accent'}`}>{badge}</span>)}
+      {isSidebarOpen && badge && (<span className={`ml-auto px-2 py-0.5 rounded text-[9px] font-black ${badge === 'NUEVO' ? 'text-slate-900' : 'text-white'} uppercase tracking-tighter ${badge === 'NUEVO' ? 'neon-badge bg-transparent border-brand-primary' : 'animate-blink-badge bg-accent'}`}>{badge}</span>)}
       {!isSidebarOpen && (<div className="absolute left-full ml-4 px-2 py-1 bg-surface text-text text-[9px] font-bold rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl uppercase tracking-widest border border-border">{label} {badge ? `(${badge})` : ''}</div>)}
     </button>
   );
