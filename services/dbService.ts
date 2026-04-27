@@ -1605,6 +1605,7 @@ export const dbGetInvoicesForReport = async (filter: 'TO_COLLECT' | 'TO_DELIVER'
                 } : null,
                 prePaymentAmount: totalPagado,
                 debt: debt,
+                payments: pagosVenta,
                 totals: {
                     total: total,
                     igv: Number(v.total_igv) || 0,

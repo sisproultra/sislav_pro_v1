@@ -233,6 +233,7 @@ export interface PaymentRecord {
     monto: number;
     date?: string;
     usuario_id?: string;
+    registrado_por?: string;
 }
 
 export interface Invoice extends BaseEntity {

@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'motion/react';
 interface MyReportsProps {
     invoices: Invoice[];
     paymentMethods: PaymentMethodConfig[];
-    company: Company;
+    company: any;
 }
 
 interface PaymentDetail {
@@ -19,15 +19,21 @@ interface PaymentDetail {
     client: string;
     amount: number;
     date: string;
+    userName: string;
     invoice: Invoice;
 }
 
 const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company }) => {
-    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 7);
+        return d.toISOString().split('T')[0];
+    });
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedPaymentType, setSelectedPaymentType] = useState<{ id: string, name: string, date: string } | null>(null);
 
     const currency = company.moneda_simbolo || 'S/';
+    const primaryColor = company.color_primario || '#4f46e5';
 
     // --- PROCESAMIENTO DE DATOS ---
     const dailyIncome = useMemo(() => {
@@ -59,13 +65,13 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
                         client: inv.client.name,
                         amount: p.monto,
                         date: inv.date,
+                        userName: p.registrado_por || 'SISTEMA',
                         invoice: inv
                     });
                 });
             } else if (inv.prePaymentAmount && inv.prePaymentAmount > 0) {
                 // Fallback para facturación antigua o pagos no desglosados
                 const methodId = 'legacy';
-                const methodName = inv.paymentMethod || 'EFECTIVO';
                 
                 if (!daysMap[date].payments[methodId]) {
                     daysMap[date].payments[methodId] = { amount: 0, count: 0, details: [] };
@@ -79,6 +85,7 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
                     client: inv.client.name,
                     amount: inv.prePaymentAmount,
                     date: inv.date,
+                    userName: 'SISTEMA',
                     invoice: inv
                 });
             }
@@ -111,7 +118,7 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
                 {/* HEADER */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
                     <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest">
+                        <div style={{ color: primaryColor }} className="flex items-center gap-2 font-bold text-[10px] uppercase tracking-widest">
                             <TrendingUp size={14} /> Reportes Personalizados
                         </div>
                         <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Mis Reportes - Ingresos</h2>
@@ -141,9 +148,9 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
                 </div>
 
                 {/* LISTA POR DÍAS */}
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
                     {dailyIncome.length === 0 ? (
-                        <div className="bg-white p-16 rounded-[2.5rem] border border-dashed border-slate-300 flex flex-col items-center justify-center text-center">
+                        <div className="bg-white p-16 rounded-[2.5rem] border border-dashed border-slate-300 flex flex-col items-center justify-center text-center col-span-full">
                             <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 mb-4">
                                 <Search size={32} />
                             </div>
@@ -157,10 +164,11 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
                                 key={day.date} 
                                 className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden"
                             >
-                                <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                                <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center flex-wrap gap-4">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm border border-slate-100 font-black text-xs">
-                                            {day.date.split('-')[2]}
+                                        <div style={{ color: primaryColor, borderColor: `${primaryColor}20` }} className="w-12 h-12 bg-white rounded-2xl flex flex-col items-center justify-center shadow-sm border font-black truncate p-1">
+                                            <span className="text-[8px] uppercase tracking-tighter opacity-60 leading-none mb-0.5">{new Date(day.date + 'T00:00:00').toLocaleDateString('es-ES', { month: 'short' })}</span>
+                                            <span className="text-base leading-none">{day.date.split('-')[2]}</span>
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Ingresos del día</p>
@@ -168,14 +176,14 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest leading-none">Total Diario</p>
-                                        <p className="text-xl font-black text-indigo-600 tabular-nums">{currency} {day.total.toFixed(2)}</p>
+                                        <p style={{ color: `${primaryColor}CC` }} className="text-[10px] font-bold uppercase tracking-widest leading-none">Total Diario</p>
+                                        <p style={{ color: primaryColor }} className="text-xl md:text-2xl font-black tabular-nums">{currency} {day.total.toFixed(2)}</p>
                                     </div>
                                 </div>
 
-                                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                                     {Object.entries(day.payments).map(([methodId, stats]) => {
-                                        const methodName = paymentMethods.find(pm => pm.id === methodId)?.name || (methodId === 'legacy' ? 'Ventas' : 'Otros');
+                                        const methodName = paymentMethods.find(pm => pm.id === methodId)?.name || (methodId === 'legacy' ? 'SISTEMA' : 'OTROS');
                                         return (
                                             <button 
                                                 key={methodId}
@@ -183,7 +191,7 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
                                                 className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all group active:scale-95"
                                             >
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                                    <div style={{ backgroundColor: `${primaryColor}10`, color: primaryColor }} className="w-8 h-8 rounded-lg flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                                                         {getPaymentIcon(methodId)}
                                                     </div>
                                                     <div className="text-left">
@@ -220,7 +228,7 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
                                 className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-full border border-white/20"
                             >
                                 {/* Header Modal */}
-                                <div className="p-8 bg-indigo-600 text-white flex justify-between items-center">
+                                <div style={{ backgroundColor: primaryColor }} className="p-8 text-white flex justify-between items-center">
                                     <div className="flex items-center gap-5">
                                         <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
                                             {getPaymentIcon(selectedPaymentType.id)}
@@ -253,14 +261,20 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
                                                     </div>
                                                     <div>
                                                         <p className="text-xs font-black text-slate-800">TICKET: {d.ticket}</p>
-                                                        <div className="flex items-center gap-1.5 text-slate-500">
-                                                            <User size={10} />
-                                                            <span className="text-[10px] font-bold uppercase">{d.client}</span>
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <div className="flex items-center gap-1.5 text-slate-500">
+                                                                <User size={10} />
+                                                                <span className="text-[10px] font-bold uppercase">{d.client}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1 text-slate-400">
+                                                                <DollarSign size={10} />
+                                                                <span className="text-[9px] font-bold uppercase tracking-tight">Vendedor: {d.userName}</span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="text-sm font-black text-indigo-600 tabular-nums">{currency} {d.amount.toFixed(2)}</p>
+                                                    <p style={{ color: primaryColor }} className="text-sm font-black tabular-nums">{currency} {d.amount.toFixed(2)}</p>
                                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                                                         {new Date(d.date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                                                     </p>
@@ -278,7 +292,8 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
                                     </div>
                                     <button 
                                         onClick={() => setSelectedPaymentType(null)}
-                                        className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all"
+                                        style={{ backgroundColor: '#0f172a' }}
+                                        className="px-10 py-4 text-white rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all"
                                     >
                                         Cerrar Detalle
                                     </button>
