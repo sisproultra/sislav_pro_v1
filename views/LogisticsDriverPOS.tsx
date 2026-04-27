@@ -31,9 +31,9 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout }) => 
     // Notification Sound
     const playNotification = () => {
         try {
-            // Campana - Mixkit audio preview link
-            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-            audio.volume = 0.5;
+            // Sonido de burbujas personalizado
+            const audio = new Audio('https://yvgshdypqanlcgxdyvls.supabase.co/storage/v1/object/public/laundry-assets/burbujas.mp3');
+            audio.volume = 0.6;
             audio.play();
         } catch (e) {
             console.warn("Could not play notification sound", e);
