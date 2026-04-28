@@ -25,7 +25,8 @@ import {
     SaasBranch, 
     SaasGlobalConfig,
     UserRole,
-    InvoiceType
+    InvoiceType,
+    SucursalType
 } from '../types';
 import { 
     Building, Globe, Loader2, X, Save, Palette, 
@@ -625,6 +626,7 @@ export const SuperAdmin: React.FC<{
     const [brLogoUrl, setBrLogoUrl] = useState('');
     const [brFaviconUrl, setBrFaviconUrl] = useState('');
     const [brIsActive, setBrIsActive] = useState(true);
+    const [brType, setBrType] = useState<SucursalType>(SucursalType.ESTANDAR);
     const [brPorcentajeIgv, setBrPorcentajeIgv] = useState('18.00');
     const [brMonedaSimbolo, setBrMonedaSimbolo] = useState('S/');
     const [brUseOrderReset, setBrUseOrderReset] = useState(false);
@@ -766,6 +768,7 @@ export const SuperAdmin: React.FC<{
         setBrSuffixChar('A'); setBrSuffixPos('AFTER'); setBrPuntosEq('10');
         setBrCobranza(false); setBrColorPrimary('#0054A6'); setBrColorSecondary('#10B981');
         setBrLogoUrl(''); setBrFaviconUrl(''); setBrIsActive(true);
+        setBrType(SucursalType.ESTANDAR);
         setBrPorcentajeIgv('18.00'); setBrMonedaSimbolo('S/');
         setBrUseOrderReset(false); setBrLimiteReconteo('10000');
         setBrModulosConfig(DEFAULT_MODULES_CONFIG);
@@ -784,6 +787,7 @@ export const SuperAdmin: React.FC<{
         setBrPhone(branch.phone || '');
         setBrSlug(branch.slug);
         setBrIsActive(branch.isActive);
+        setBrType(branch.sucursal_tipo || SucursalType.ESTANDAR);
         setBrCobranza(branch.cobranza || false);
         setBrColorPrimary(branch.primaryColor);
         setBrColorSecondary(branch.secondaryColor);
@@ -2203,6 +2207,18 @@ export const SuperAdmin: React.FC<{
                                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">RUC Sucursal</label><div className="flex gap-2"><input required value={brRuc} onChange={e => setBrRuc(e.target.value)} className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 transition-all shadow-inner" placeholder="20XXXXXXXXX" /><button type="button" onClick={handleSearchBranchRuc} disabled={isSearchingRuc} className="bg-slate-900 text-white px-5 rounded-2xl shadow-xl transition-all active:scale-90">{isSearchingRuc ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}</button></div></div>
                                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Razón Social (SUNAT)</label><input required value={brRazonSocial} onChange={e => setBrRazonSocial(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 uppercase shadow-inner" placeholder="LAVANDERIA SAC" /></div>
                                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Comercial</label><input required value={brName} onChange={e => setBrName(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 uppercase shadow-inner" placeholder="LAUNDRY SEDE NORTE" /></div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Tipo de Sucursal</label>
+                                                <select 
+                                                    value={brType} 
+                                                    onChange={e => setBrType(e.target.value as SucursalType)} 
+                                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner appearance-none cursor-pointer"
+                                                >
+                                                    {Object.values(SucursalType).map(type => (
+                                                        <option key={type} value={type}>{type}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                             <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Identificador Slug (URL)</label><input disabled={isEditingBranch} value={brSlug} onChange={e => setBrSlug(e.target.value.toLowerCase().replace(/\s+/g, '_'))} className="w-full bg-slate-100 border-2 border-slate-100 rounded-2xl px-5 py-4 text-indigo-600 font-mono text-sm outline-none" placeholder="sede_norte" /></div>
                                         </div>
                                         <div className="space-y-6">

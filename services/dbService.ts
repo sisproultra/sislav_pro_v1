@@ -26,6 +26,31 @@ let activeBranchId: string | null = null;
 let activeHoldingId: string | null = null;
 let activeUserId: string | null = null;
 
+// --- SISTEMA DE CACHE ---
+const queryCache = new Map<string, { data: any, timestamp: number }>();
+
+const getCached = (key: string, ttlMs: number = 30000) => {
+    const entry = queryCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.timestamp > ttlMs) {
+        queryCache.delete(key);
+        return null;
+    }
+    return entry.data;
+};
+
+const setCache = (key: string, data: any) => {
+    queryCache.set(key, { data, timestamp: Date.now() });
+};
+
+const invalidateCache = (prefix: string) => {
+    for (const key of Array.from(queryCache.keys())) {
+        if (key.startsWith(prefix)) {
+            queryCache.delete(key);
+        }
+    }
+};
+
 export const setDbBranchContext = (branchId: string, holdingId?: string, userId?: string) => {
     console.log(`Setting DB Context - Branch: ${branchId}, Holding: ${holdingId}, User: ${userId}`);
     if (branchId) {
@@ -691,6 +716,7 @@ export const dbUpdateSucursalBanner = async (id: string, updates: Partial<PromoB
     if (updates.url) payload.url_imagen = updates.url;
     const { error = null } = await supabase.from('sucursal_banners').update(payload).eq('id', id);
     if (error) throw error;
+    invalidateCache('categories'); // Adjust if banner affects modules
 };
 
 export const dbSaveCategory = async (cat: Omit<Category, 'id'>) => {
@@ -706,6 +732,7 @@ export const dbSaveCategory = async (cat: Omit<Category, 'id'>) => {
         imagen_id: cat.imagen_id
     }).select().single();
     if (error) throw error;
+    invalidateCache('categories');
     return data;
 };
 
@@ -781,6 +808,10 @@ export const dbGetProducts = async (): Promise<Product[]> => {
         console.warn("dbGetProducts: No branchId detected");
         return [];
     }
+    
+    const cacheKey = `products_${branchId}`;
+    const cached = getCached(cacheKey, 60000); // 60s TTL
+    if (cached) return cached;
     try {
         const holdingId = await ensureHoldingId(branchId);
         console.log(`dbGetProducts Fetching for Branch: ${branchId}, Holding: ${holdingId}`);
@@ -801,7 +832,7 @@ export const dbGetProducts = async (): Promise<Product[]> => {
         }
         
         console.log(`dbGetProducts Found ${data?.length || 0} products`);
-        return (data || []).map(p => {
+        const products = (data || []).map(p => {
             const catInfo = normalizeRelation(p.categorias);
             return { 
                 id: p.id, 
@@ -826,6 +857,8 @@ export const dbGetProducts = async (): Promise<Product[]> => {
                 recipe: (p.productos_recetas || []).map((r: any) => ({ supplyId: r.insumo_id, name: r.insumos?.nombre, quantity: Number(r.cantidad_usada), unit: r.insumos?.unidad_medida, cost: 0 })) 
             };
         });
+        setCache(cacheKey, products);
+        return products;
     } catch (e) { return []; }
 };
 
@@ -899,6 +932,7 @@ export const dbSaveProduct = async (product: Omit<Product, 'id'>) => {
         const recipes = product.recipe.map(r => ({ producto_id: p.id, insumo_id: r.supplyId, cantidad_usada: r.quantity, registrado_por: user }));
         await supabase.from('productos_recetas').insert(recipes);
     }
+    invalidateCache('products');
     return p;
 };
 
@@ -919,6 +953,7 @@ export const dbUpdateProduct = async (id: string, updates: Partial<Product>) => 
     if (updates.imagen_id !== undefined) payload.imagen_id = updates.imagen_id;
     const { error } = await supabase.from('productos').update(payload).eq('id', id);
     if (error) throw error;
+    invalidateCache('products');
 };
 
 export const dbDeleteProduct = async (id: string) => {
@@ -932,6 +967,10 @@ export const dbGetCategories = async (): Promise<Category[]> => {
     const branchId = getActiveBranchId();
     if (!branchId) return [];
     
+    const cacheKey = `categories_${branchId}`;
+    const cached = getCached(cacheKey, 60000); // 60s TTL
+    if (cached) return cached;
+    
     const { data: cats, error } = await supabase
         .from('categorias')
         .select('*')
@@ -944,7 +983,7 @@ export const dbGetCategories = async (): Promise<Category[]> => {
     const { data: imgs } = await supabase.from('global_cat_categorias').select('id, url');
     const imgMap = new Map((imgs || []).map(i => [i.id, i.url]));
     
-    return cats.map(c => ({ 
+    const categories = cats.map(c => ({ 
         id: c.id, 
         sucursal_id: c.sucursal_id, 
         name: fixEncoding(c.nombre), 
@@ -952,6 +991,8 @@ export const dbGetCategories = async (): Promise<Category[]> => {
         imagen_id: c.imagen_id,
         imageUrl: c.imagen_id ? imgMap.get(c.imagen_id) : null
     }));
+    setCache(cacheKey, categories);
+    return categories;
 };
 
 export const dbUpdateCategory = async (id: string, updates: Partial<Category>) => {
@@ -961,6 +1002,7 @@ export const dbUpdateCategory = async (id: string, updates: Partial<Category>) =
     if (updates.imagen_id !== undefined) payload.imagen_id = updates.imagen_id;
     const { error = null } = await supabase.from('categorias').update(payload).eq('id', id);
     if (error) throw error;
+    invalidateCache('categories');
 };
 
 // --- CLIENTES ---
@@ -1361,6 +1403,7 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
         }
     }
 
+    invalidateCache('invoices');
     return {
         id: result.id,
         correlativo: result.correlativo,
@@ -1393,6 +1436,7 @@ export const dbAnularVenta = async (ventaId: string) => {
         .eq('id', ventaId);
     
     if (error) throw error;
+    invalidateCache('invoices');
 };
 
 /**
@@ -1536,6 +1580,7 @@ export const dbUpdateOrderItems = async (orderId: string, items: any[], totals: 
     if (vError) {
         throw vError;
     }
+    invalidateCache('invoices');
 };
 
 /**
@@ -1630,6 +1675,10 @@ export const dbGetInvoicesForReport = async (filter: 'TO_COLLECT' | 'TO_DELIVER'
 export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, searchTerm: string = ''): Promise<{ invoices: Invoice[], total: number }> => {
     const branchId = getActiveBranchId();
     if (!branchId) return { invoices: [], total: 0 };
+
+    const cacheKey = `invoices_${branchId}_p${page}_s${pageSize}_q${searchTerm}`;
+    const cached = getCached(cacheKey, 15000); // 15s TTL for invoices
+    if (cached) return cached;
     try {
         const holdingId = await ensureHoldingId(branchId);
 
@@ -1806,7 +1855,9 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
             };
         });
 
-        return { invoices: mappedInvoices, total: count || 0 };
+        const result = { invoices: mappedInvoices, total: count || 0 };
+        setCache(cacheKey, result);
+        return result;
     } catch (e) { return { invoices: [], total: 0 }; }
 };
 
@@ -2333,6 +2384,10 @@ export const dbGetPaymentMethods = async (): Promise<PaymentMethodConfig[]> => {
     const branchId = getActiveBranchId();
     if (!branchId) return [];
     
+    const cacheKey = `payment_methods_${branchId}`;
+    const cached = getCached(cacheKey, 60000); // 60s TTL
+    if (cached) return cached;
+    
     const { data: pms, error = null } = await supabase
         .from('metodos_pago')
         .select('*')
@@ -2346,7 +2401,7 @@ export const dbGetPaymentMethods = async (): Promise<PaymentMethodConfig[]> => {
     
     const STORAGE_BASE = `${SUPABASE_URL}/storage/v1/object/public/laundry-assets/global/c-metodo-pago/`;
     
-    return pms.map(pm => {
+    const results = pms.map(pm => {
         let resolvedIcon = pm.icono || imgMap.get(pm.imagen_id) || 'CreditCard';
         if (resolvedIcon && !resolvedIcon.startsWith('http') && !resolvedIcon.startsWith('data:') && resolvedIcon.includes('.')) {
             resolvedIcon = `${STORAGE_BASE}${resolvedIcon}`;
@@ -2361,6 +2416,8 @@ export const dbGetPaymentMethods = async (): Promise<PaymentMethodConfig[]> => {
             sunatCode: pm.codigo_sunat || '01'
         };
     });
+    setCache(cacheKey, results);
+    return results;
 };
 
 export const dbSavePaymentMethod = async (pm: Omit<PaymentMethodConfig, 'id'>) => {
@@ -2368,6 +2425,7 @@ export const dbSavePaymentMethod = async (pm: Omit<PaymentMethodConfig, 'id'>) =
     const holdingId = getActiveHoldingId();
     const { error = null } = await supabase.from('metodos_pago').insert({ sucursal_id: branchId, empresa_holding_id: holdingId, nombre: pm.name.toUpperCase(), activo: pm.isActive, icono: pm.icon, codigo_sunat: pm.sunatCode, imagen_id: pm.imagen_id });
     if (error) throw error;
+    invalidateCache('payment_methods');
 };
 
 export const dbUpdatePaymentMethod = async (id: string, pm: Partial<PaymentMethodConfig>) => {
@@ -2379,6 +2437,7 @@ export const dbUpdatePaymentMethod = async (id: string, pm: Partial<PaymentMetho
     if (pm.imagen_id !== undefined) payload.imagen_id = pm.imagen_id;
     const { error = null } = await supabase.from('metodos_pago').update(payload).eq('id', id);
     if (error) throw error;
+    invalidateCache('payment_methods');
 };
 
 // --- CONFIGURACIÓN SUCURSAL ---
@@ -2657,9 +2716,14 @@ export const dbSyncMachines = async () => {
 export const dbGetEmployees = async (): Promise<Employee[]> => {
     const branchId = getActiveBranchId();
     if (!branchId) return [];
+    
+    const cacheKey = `employees_${branchId}`;
+    const cached = getCached(cacheKey, 30000); // 30s TTL
+    if (cached) return cached;
+
     const { data, error } = await supabase.from('usuarios_login').select('*').eq('sucursal_id', branchId);
     if (error) return [];
-    return (data || []).map(e => ({ 
+    const employees = (data || []).map(e => ({ 
         id: e.id, 
         sucursal_id: e.sucursal_id, 
         name: e.nombre_completo, 
@@ -2671,6 +2735,8 @@ export const dbGetEmployees = async (): Promise<Employee[]> => {
         permissions: e.permisos_json || {},
         nombreEmpresa: e.nombre_empresa
     }));
+    setCache(cacheKey, employees);
+    return employees;
 };
 
 // Instancia única para creación de empleados para evitar advertencia de múltiples GoTrueClients
@@ -2781,6 +2847,8 @@ export const dbSaveEmployee = async (emp: Omit<Employee, 'id'>, holdingId?: stri
         throw new Error(`Error de base de datos (RPC): ${insertError.message}`);
     }
 
+    invalidateCache('employees');
+
     // Limpieza: Si habíamos iniciado sesión en el cliente temporal, cerramos
     try {
         await tempAuthClient.auth.signOut();
@@ -2802,6 +2870,7 @@ export const dbUpdateEmployee = async (id: string, emp: Partial<Employee>) => {
         })
         .eq('id', id);
     if (error) throw error;
+    invalidateCache('employees');
 };
 
 export const dbDeleteEmployee = async (id: string) => {

@@ -614,12 +614,18 @@ export interface SaasBranch {
     puntos_equivalencia?: number;
     use_order_reset?: boolean;
     limite_reconteo?: number;
+    sucursal_tipo?: SucursalType;
 }
 
 export enum SucursalType {
     ESTANDAR = 'ESTANDAR',
     ACOPIO = 'ACOPIO',
-    CENTRAL = 'CENTRAL'
+    PLANTA = 'PLANTA',
+    CENTRAL = 'CENTRAL',
+    SUCURSAL = 'SUCURSAL',
+    COMERCIAL = 'COMERCIAL',
+    SOCIO = 'SOCIO',
+    ALIANZA = 'ALIANZA'
 }
 
 export interface GuiaRemision {

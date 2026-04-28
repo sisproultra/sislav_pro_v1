@@ -444,6 +444,7 @@ export const getSaasBranches = async (empresaId?: string, page: number = 1, page
             puntos_equivalencia: b.puntos_equivalencia,
             use_order_reset: b.use_order_reset,
             limite_reconteo: b.limite_reconteo,
+            sucursal_tipo: b.sucursal_tipo || 'ESTANDAR',
             modulos_config: b.modulos_config || {},
             doc_enforce_enabled: b.doc_enforce_enabled || false,
             doc_enforce_threshold: b.doc_enforce_threshold || 700
@@ -492,7 +493,6 @@ export const createSaasCompany = async (company: any) => {
         p_password_hash: company.password,
         p_url_logo: company.logoUrl,
         p_url_favicon: company.faviconUrl,
-        p_url_favicon_logistica: company.faviconLogisticaUrl,
         p_color_primario: company.primaryColor,
         p_color_secundario: company.secondaryColor
     });
