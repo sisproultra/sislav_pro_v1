@@ -7,7 +7,8 @@ import {
   dbGetWaCampaignConfig,
   dbIncrementTrackingGenerated,
   dbIncrementTrackingViewed,
-  dbGetCatalogProductsByBranch
+  dbGetCatalogProductsByBranch,
+  supabase
 } from '../services/dbService';
 import { 
   PickupRequest, Invoice, Company, OrderStatus, PromoBanner, InvoiceType, UserRole, Product
@@ -109,9 +110,72 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 30000); 
-    return () => clearInterval(interval);
+
+    // Polling fallback (redundant but safe)
+    const interval = setInterval(loadData, 60000); 
+
+    // REAL-TIME UPDATES
+    const channelName = `tracking-realtime-${id}`;
+    const channel = supabase.channel(channelName)
+        // Listen to changes on THIS specific Order/Venta
+        .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'ventas', 
+            filter: `id=eq.${id}` 
+        }, (payload) => {
+            console.log("⚡ [Tracking] Realtime update on Venta:", payload);
+            loadData();
+        })
+        // Listen to changes if it's a pickup that just got linked to a venta
+        .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'ventas', 
+            filter: `pickup_id=eq.${id}` 
+        }, (payload) => {
+            console.log("⚡ [Tracking] Realtime update on Venta (linked to pickup):", payload);
+            loadData();
+        })
+        // Listen to changes on the Pickup Request itself
+        .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'recojos_delivery', 
+            filter: `id=eq.${id}` 
+        }, (payload) => {
+            console.log("⚡ [Tracking] Realtime update on Pickup:", payload);
+            loadData();
+        })
+        .subscribe();
+
+    return () => {
+        clearInterval(interval);
+        supabase.removeChannel(channel);
+    };
   }, [id]);
+
+  // Second effect to subscribe to items_venta once we have a venta id
+  useEffect(() => {
+    if (!data?.invoice?.id) return;
+
+    const invoiceId = data.invoice.id;
+    const itemsChannel = supabase.channel(`tracking-items-${invoiceId}`)
+        .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'items_venta',
+            filter: `venta_id=eq.${invoiceId}`
+        }, (payload) => {
+            console.log("⚡ [Tracking] Realtime update on Item:", payload);
+            loadData();
+        })
+        .subscribe();
+    
+    return () => {
+        supabase.removeChannel(itemsChannel);
+    };
+  }, [data?.invoice?.id]);
 
   useEffect(() => {
     if (isSelfScheduleOpen && data) {

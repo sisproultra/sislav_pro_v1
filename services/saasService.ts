@@ -754,3 +754,94 @@ export const updateSaasGlobalConfig = async (updates: any) => {
         throw err;
     }
 };
+
+/**
+ * Crea un usuario desde cero en Auth y DB usuarios_login
+ */
+export const adminCreateSystemUser = async (userData: {
+    username: string;
+    password: string;
+    fullName: string;
+    role: UserRole;
+    holdingId?: string | null;
+    sucursalId?: string | null;
+    companyName?: string;
+}) => {
+    const virtualEmail = `${userData.username.trim().toLowerCase()}@sislav.com`;
+
+    // 1. Registrar en Supabase Auth
+    // Importación dinámica para evitar leaks de sesión en el cliente principal
+    const { createClient } = await import('@supabase/supabase-js');
+    const tempClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
+
+    const { data: authUser, error: authError } = await tempClient.auth.signUp({
+        email: virtualEmail,
+        password: userData.password,
+        options: {
+            data: {
+                full_name: userData.fullName,
+                role: userData.role,
+                empresa_holding_id: userData.holdingId || null,
+                sucursal_id: userData.sucursalId || null
+            }
+        }
+    });
+
+    if (authError) throw authError;
+    if (!authUser.user) throw new Error("No se pudo crear el usuario en Auth");
+
+    // 2. Guardar en la tabla usuarios_login usando RPC
+    const { error: dbError } = await supabase.rpc('crear_usuario_sucursal', {
+        p_auth_user_id: authUser.user.id,
+        p_empresa_holding_id: userData.holdingId || null,
+        p_sucursal_id: userData.sucursalId || null,
+        p_username: userData.username.toLowerCase(),
+        p_nombre_completo: userData.fullName,
+        p_rol: userData.role,
+        p_password_hash: userData.password,
+        p_nombre_empresa: userData.companyName || null
+    });
+
+    if (dbError) throw dbError;
+
+    return authUser.user;
+};
+
+/**
+ * Cambia la contraseña de un usuario a nivel de Auth (requiere RPC con security definer)
+ */
+export const adminResetUserPassword = async (userId: string, newPassword: string) => {
+    // Intentamos usar RPC maestro para resetear password
+    const session = JSON.parse(localStorage.getItem('sislav_auth_session') || 'null');
+    const masterToken = session?.user?.masterPassword;
+
+    if (!masterToken) {
+        throw new Error("No autorizado: Falta token maestro.");
+    }
+
+    // Primero actualizamos el hash en usuarios_login por si acaso se usa en algún lado
+    const { error: updateDbError } = await supabase
+        .from('usuarios_login')
+        .update({ password_hash: newPassword })
+        .eq('id', userId);
+
+    if (updateDbError) {
+        console.warn("No se pudo actualizar el password_hash en la DB, pero intentaremos Auth...", updateDbError);
+    }
+
+    // Intentamos RPC oficial de reset (este RPC debe existir en la DB con SECURITY DEFINER)
+    const { data, error } = await supabase.rpc('admin_reset_user_password', {
+        p_token: masterToken,
+        p_user_id: userId,
+        p_new_password: newPassword
+    });
+
+    if (error) {
+        console.error("Error al resetear password via RPC:", error);
+        throw new Error("Error al resetear password: " + (error.message || "Es posible que el RPC admin_reset_user_password no esté configurado en su DB. Contacte a soporte."));
+    }
+
+    return data;
+};

@@ -17,7 +17,9 @@ import {
     uploadGlobalAsset,
     uploadBranchAsset,
     uploadCompanyAsset,
-    updateSaasGlobalConfig
+    updateSaasGlobalConfig,
+    adminCreateSystemUser,
+    adminResetUserPassword
 } from '../services/saasService';
 import { searchClient } from '../services/clientService';
 import { 
@@ -197,6 +199,62 @@ const UsersListView: React.FC = () => {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [updateLoading, setUpdateLoading] = useState(false);
 
+    // Nuevos estados para creación y password
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [createData, setCreateData] = useState({ 
+        username: '', 
+        password: '', 
+        fullName: '', 
+        role: UserRole.OWNER, 
+        holdingId: '', 
+        sucursalId: '',
+        companyName: '' 
+    });
+    const [allCompanies, setAllCompanies] = useState<any[]>([]);
+    const [allBranches, setAllBranches] = useState<any[]>([]);
+    const [filteredBranches, setFilteredBranches] = useState<any[]>([]);
+    const [isCreating, setIsCreating] = useState(false);
+
+    const loadCreationCatalogs = async () => {
+        try {
+            const { companies } = await getSaasCompanies(1, 1000);
+            const { branches } = await getSaasBranches(undefined, 1, 3000);
+            setAllCompanies(companies);
+            setAllBranches(branches);
+        } catch (err) {
+            console.error("Error cargando catálogos para creación:", err);
+        }
+    };
+
+    useEffect(() => {
+        if (isCreateModalOpen) {
+            loadCreationCatalogs();
+        }
+    }, [isCreateModalOpen]);
+
+    useEffect(() => {
+        if (createData.holdingId) {
+            const related = allBranches.filter(b => b.empresaId === createData.holdingId);
+            setFilteredBranches(related);
+            
+            // Si el rol es de sucursal, pero la sucursal actual no pertenece al nuevo holding, resetearla
+            if (createData.sucursalId && !related.find(b => b.id === createData.sucursalId)) {
+                setCreateData(prev => ({ ...prev, sucursalId: '' }));
+            }
+
+            // Autorrellenar nombre de empresa si está vacío
+            const comp = allCompanies.find(c => c.id === createData.holdingId);
+            if (comp && !createData.companyName) {
+                setCreateData(prev => ({ ...prev, companyName: comp.name }));
+            }
+        } else {
+            setFilteredBranches([]);
+        }
+    }, [createData.holdingId, allBranches, allCompanies]);
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [passwordData, setPasswordData] = useState({ userId: '', username: '', newPassword: '' });
+    const [isResettingPassword, setIsResettingPassword] = useState(false);
+
     const fetchUsers = async () => {
         setLoading(true);
         try {
@@ -216,6 +274,56 @@ const UsersListView: React.FC = () => {
     useEffect(() => {
         fetchUsers();
     }, []);
+
+    const handleCreateUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsCreating(true);
+        try {
+            await adminCreateSystemUser({
+                username: createData.username,
+                password: createData.password,
+                fullName: createData.fullName,
+                role: createData.role,
+                holdingId: createData.holdingId,
+                sucursalId: createData.sucursalId,
+                companyName: createData.companyName
+            });
+            alert("Usuario creado correctamente");
+            setIsCreateModalOpen(false);
+            setCreateData({ 
+                username: '', 
+                password: '', 
+                fullName: '', 
+                role: UserRole.OWNER, 
+                holdingId: '', 
+                sucursalId: '',
+                companyName: '' 
+            });
+            fetchUsers();
+        } catch (err: any) {
+            console.error("Error al crear usuario:", err);
+            alert("Error: " + (err.message || "Error desconocido"));
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
+    const handleResetPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsResettingPassword(true);
+        try {
+            await adminResetUserPassword(passwordData.userId, passwordData.newPassword);
+            alert("Contraseña actualizada correctamente");
+            setIsPasswordModalOpen(false);
+            setPasswordData({ userId: '', username: '', newPassword: '' });
+            fetchUsers();
+        } catch (err: any) {
+            console.error("Error al resetear password:", err);
+            alert("Error: " + (err.message || "Error desconocido"));
+        } finally {
+            setIsResettingPassword(false);
+        }
+    };
 
     const handleSyncUser = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -306,12 +414,19 @@ const UsersListView: React.FC = () => {
                     </h3>
                     <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">Todos los usuarios registrados (Login + Role)</p>
                 </div>
-                <div className="flex gap-4 w-full md:w-auto">
+                <div className="flex flex-wrap gap-4 w-full md:w-auto">
+                    <button 
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-bold uppercase transition-all shadow-lg shadow-emerald-600/20"
+                    >
+                        <UserPlus size={16} />
+                        Crear Nuevo Usuario
+                    </button>
                     <button 
                         onClick={() => setIsSyncModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-bold uppercase transition-all shadow-lg shadow-indigo-600/20"
                     >
-                        <UserPlus size={16} />
+                        <RefreshCcw size={16} />
                         Sincronizar Auth
                     </button>
                     <div className="relative flex-1 md:w-64">
@@ -337,41 +452,187 @@ const UsersListView: React.FC = () => {
             {/* Modal de Sincronización */}
             {isSyncModalOpen && (
                 <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl">
-                        <div className="p-8 border-b border-white/5 flex justify-between items-center">
+                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl animate-in scale-in duration-300">
+                        <div className="p-8 border-b border-white/5 flex justify-between items-center bg-indigo-900/10">
                             <h3 className="text-xl font-bold uppercase tracking-tight text-white flex items-center gap-3">
-                                <Database className="text-indigo-400" /> Sincronizar Usuario
+                                <RefreshCcw className="text-indigo-400" /> Sincronizar Usuario
                             </h3>
-                            <button onClick={() => setIsSyncModalOpen(false)} className="text-slate-500 hover:text-white"><X size={24} /></button>
+                            <button onClick={() => setIsSyncModalOpen(false)} className="text-slate-500 hover:text-white transition-colors"><X size={24} /></button>
                         </div>
                         <form onSubmit={handleSyncUser} className="p-8 space-y-4">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">UID de Auth (Copiar de tabla de arriba)</label>
-                                <input required value={syncData.uid} onChange={e => setSyncData({...syncData, uid: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs font-mono outline-none focus:border-indigo-500" placeholder="00000000-0000-..." />
+                            <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl">
+                                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider leading-relaxed">
+                                    Utilice esta opción si el usuario ya existe en Supabase Auth pero no tiene su perfil en usuarios_login.
+                                </p>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Completo</label>
-                                <input required value={syncData.name} onChange={e => setSyncData({...syncData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500" placeholder="LAVA FLASH" />
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">UID de Auth</label>
+                                <input required value={syncData.uid} onChange={e => setSyncData({...syncData, uid: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs font-mono outline-none focus:border-indigo-500" placeholder="00000000-0... (Copie de la tabla)" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Completo</label>
+                                    <input required value={syncData.name} onChange={e => setSyncData({...syncData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500" placeholder="Ej: Juan Pérez" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre de Usuario</label>
+                                    <input required value={syncData.username} onChange={e => setSyncData({...syncData, username: e.target.value.toLowerCase()})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500" placeholder="juanp" />
+                                </div>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre de Usuario (Login)</label>
-                                <input required value={syncData.username} onChange={e => setSyncData({...syncData, username: e.target.value.toLowerCase()})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500" placeholder="lavaflash" />
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Empresa</label>
+                                <input required value={syncData.companyName} onChange={e => setSyncData({...syncData, companyName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500" placeholder="Nombre Comercial" />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre de la Empresa</label>
-                                <input required value={syncData.companyName} onChange={e => setSyncData({...syncData, companyName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500" placeholder="LAVA FLASH CORP" />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">ID del Holding (Opcional)</label>
-                                <input value={syncData.holdingId} onChange={e => setSyncData({...syncData, holdingId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-indigo-500 font-mono" placeholder="uuid del holding..." />
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Rol</label>
+                                <select 
+                                    value={syncData.role} 
+                                    onChange={e => setSyncData({...syncData, role: e.target.value as any})}
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-[10px] font-bold uppercase outline-none focus:border-indigo-500 appearance-none"
+                                >
+                                    {Object.values(UserRole).map(r => <option key={r} value={r} className="bg-slate-900">{r}</option>)}
+                                </select>
                             </div>
                             <div className="pt-4">
                                 <button 
                                     disabled={isSyncing}
-                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
                                 >
                                     {isSyncing ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
                                     Sincronizar ahora
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Creación Total */}
+            {isCreateModalOpen && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl animate-in scale-in duration-300">
+                        <div className="p-8 border-b border-white/5 flex justify-between items-center bg-emerald-900/10">
+                            <h3 className="text-xl font-bold uppercase tracking-tight text-white flex items-center gap-3">
+                                <UserPlus className="text-emerald-400" /> Nuevo Usuario
+                            </h3>
+                            <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-500 hover:text-white transition-colors"><X size={24} /></button>
+                        </div>
+                        <form onSubmit={handleCreateUser} className="p-8 space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre de Usuario (Login)</label>
+                                <input required value={createData.username} onChange={e => setCreateData({...createData, username: e.target.value.toLowerCase()})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-emerald-500" placeholder="vendedor_central" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Contraseña Inicial</label>
+                                <input required type="text" value={createData.password} onChange={e => setCreateData({...createData, password: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-emerald-500 font-mono" placeholder="••••••••" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Completo</label>
+                                <input required value={createData.fullName} onChange={e => setCreateData({...createData, fullName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-emerald-500" placeholder="Nombre y Apellido" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Rol</label>
+                                <select 
+                                    value={createData.role} 
+                                    onChange={e => setCreateData({...createData, role: e.target.value as any})}
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-[10px] font-bold uppercase outline-none focus:border-emerald-500 appearance-none cursor-pointer"
+                                >
+                                    {Object.values(UserRole).map(r => <option key={r} value={r} className="bg-slate-900">{r}</option>)}
+                                </select>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Empresa / Holding</label>
+                                    <select 
+                                        required
+                                        value={createData.holdingId} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            const comp = allCompanies.find(c => c.id === val);
+                                            setCreateData({...createData, holdingId: val, companyName: comp?.name || ''})
+                                        }}
+                                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-[10px] font-bold uppercase outline-none focus:border-emerald-500 appearance-none cursor-pointer"
+                                    >
+                                        <option value="">Seleccione Empresa...</option>
+                                        {allCompanies.map(c => (
+                                            <option key={c.id} value={c.id} className="bg-slate-900">
+                                                {c.name} ({allBranches.filter(b => b.empresaId === c.id).length} sedes)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Sucursal / Sede</label>
+                                    <select 
+                                        disabled={!createData.holdingId}
+                                        value={createData.sucursalId} 
+                                        onChange={e => setCreateData({...createData, sucursalId: e.target.value})}
+                                        className={`w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-[10px] font-bold uppercase outline-none focus:border-emerald-500 appearance-none cursor-pointer ${!createData.holdingId && 'opacity-30 cursor-not-allowed'}`}
+                                    >
+                                        <option value="">{createData.holdingId ? "Seleccione Sede..." : "<- Elija Empresa"}</option>
+                                        {filteredBranches.map(b => (
+                                            <option key={b.id} value={b.id} className="bg-slate-900">
+                                                {b.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Empresa (Label Visual)</label>
+                                <input value={createData.companyName} onChange={e => setCreateData({...createData, companyName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-emerald-500" placeholder="Ej: SISLAV SUCURSAL" />
+                            </div>
+                            <div className="pt-4">
+                                <button 
+                                    disabled={isCreating}
+                                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
+                                >
+                                    {isCreating ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+                                    Crear Usuario Ahora
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Cambio de Password */}
+            {isPasswordModalOpen && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-sm overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
+                        <div className="p-8 border-b border-white/5 flex justify-between items-center bg-indigo-900/10">
+                            <h3 className="text-lg font-bold uppercase tracking-tight text-white flex items-center gap-3">
+                                <KeyRound className="text-amber-400" /> Reset Password
+                            </h3>
+                            <button onClick={() => setIsPasswordModalOpen(false)} className="text-slate-500 hover:text-white transition-colors"><X size={20} /></button>
+                        </div>
+                        <form onSubmit={handleResetPassword} className="p-8 space-y-6">
+                            <div className="text-center space-y-2">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Cambiando contraseña para:</p>
+                                <p className="text-sm font-bold text-indigo-400 font-mono bg-indigo-500/10 py-2 rounded-xl border border-indigo-500/20">{passwordData.username}</p>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nueva Contraseña</label>
+                                <input 
+                                    required 
+                                    autoFocus
+                                    type="text" 
+                                    value={passwordData.newPassword} 
+                                    onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})} 
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-white text-sm font-mono text-center outline-none focus:border-amber-500 transition-all shadow-inner" 
+                                    placeholder="Nuev@Pass123"
+                                />
+                            </div>
+                            <div className="pt-2">
+                                <button 
+                                    disabled={isResettingPassword}
+                                    className="w-full py-4 bg-amber-600 hover:bg-amber-500 text-white rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20"
+                                >
+                                    {isResettingPassword ? <Loader2 className="animate-spin" size={16} /> : <Zap size={16} />}
+                                    Actualizar Contraseña
                                 </button>
                             </div>
                         </form>
@@ -501,6 +762,13 @@ const UsersListView: React.FC = () => {
                                     </td>
                                     <td className="p-4">
                                         <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => { setPasswordData({ userId: user.id, username: user.username, newPassword: '' }); setIsPasswordModalOpen(true); }}
+                                                className="p-2 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-all"
+                                                title="Cambiar Contraseña"
+                                            >
+                                                <KeyRound size={16} />
+                                            </button>
                                             <button 
                                                 onClick={() => { setEditingUser(user); setIsEditModalOpen(true); }}
                                                 className="p-2 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-all"
