@@ -89,7 +89,7 @@ import YapeMonitor from './views/YapeMonitor';
 import DevConfig from './views/DevConfig';
 import { SuperAdmin } from './views/SuperAdmin';
 import { Loader2, X, ShieldAlert } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from './services/supabaseClient';
 import { DebugOverlay } from './components/DebugOverlay';
 import InventoryModal from './components/InventoryModal';
@@ -910,6 +910,64 @@ export default function App() {
         staleTime: 5 * 60 * 1000
     });
 
+    const productMutation = useMutation({
+        mutationFn: async ({ id, updates }: { id: string | null, updates: any }) => {
+            if (id) {
+                return await dbUpdateProduct(id, updates);
+            } else {
+                return await dbSaveProduct(updates);
+            }
+        },
+        onMutate: async ({ id, updates }) => {
+            // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+            await queryClient.cancelQueries({ queryKey: ['products', activeSucursal?.id] });
+
+            // Snapshot the previous value
+            const previousProducts = queryClient.getQueryData<Product[]>(['products', activeSucursal?.id]);
+
+            // Optimistically update to the new value
+            if (id) {
+                queryClient.setQueryData(['products', activeSucursal?.id], (old: Product[] | undefined) => {
+                    return old?.map(p => p.id === id ? { ...p, ...updates } : p);
+                });
+            }
+
+            return { previousProducts };
+        },
+        onError: (err, variables, context) => {
+            // If the mutation fails, use the context returned from onMutate to roll back
+            if (context?.previousProducts) {
+                queryClient.setQueryData(['products', activeSucursal?.id], context.previousProducts);
+            }
+        },
+        onSettled: () => {
+            // Always refetch after error or success to keep server sync
+            queryClient.invalidateQueries({ queryKey: ['products', activeSucursal?.id] });
+        },
+    });
+
+    const deleteProductMutation = useMutation({
+        mutationFn: dbDeleteProduct,
+        onMutate: async (id) => {
+            await queryClient.cancelQueries({ queryKey: ['products', activeSucursal?.id] });
+            const previousProducts = queryClient.getQueryData<Product[]>(['products', activeSucursal?.id]);
+
+            queryClient.setQueryData(['products', activeSucursal?.id], (old: Product[] | undefined) => {
+                return old?.filter(p => p.id !== id);
+            });
+
+            return { previousProducts };
+        },
+        onError: (err, variables, context) => {
+            if (context?.previousProducts) {
+                queryClient.setQueryData(['products', activeSucursal?.id], context.previousProducts);
+            }
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ['products', activeSucursal?.id] });
+        },
+    });
+
     const { data: clientsRes, isLoading: isLoadingClients } = useQuery({
         queryKey: ['clients', activeSucursal?.id, clientsPage, clientsSearch],
         queryFn: () => dbGetClients(clientsPage, 100, clientsSearch),
@@ -1649,7 +1707,7 @@ export default function App() {
             }} />;
             case 'view:operations': return <Operations invoices={invoices} machines={machines} activeItems={activeItems} onUpdateItemStatus={handleUpdateItemStatusOptimistic} sucursal={activeSucursal} canManage={canManageApp} />;
             case 'view:cash_closing': return <CashClosingView invoices={invoices} expenses={expenses} currentUser={authSession?.user as any} company={activeSucursal} canManage={canManageApp} activeCashSession={activeCashSession} onSessionClosed={() => refetchCashSession()} />;
-            case 'view:inventory': return <Inventory products={products} categories={categories} company={activeSucursal} onOpenModal={() => { setEditingProduct(null); setIsInvModalOpen(true); }} onEdit={(p) => { setEditingProduct(p); setIsInvModalOpen(true); }} onDelete={async (id) => { await dbDeleteProduct(id); refreshData(true); }} canCreate={canManageApp} canEdit={canManageApp} canDelete={canManageApp} />;
+            case 'view:inventory': return <Inventory products={products} categories={categories} company={activeSucursal} onOpenModal={() => { setEditingProduct(null); setIsInvModalOpen(true); }} onEdit={(p) => { setEditingProduct(p); setIsInvModalOpen(true); }} onDelete={(id) => deleteProductMutation.mutate(id)} canCreate={canManageApp} canEdit={canManageApp} canDelete={canManageApp} />;
             case 'view:clients': return <Clients clients={clients} total={clientsTotal} currentPage={clientsPage} onPageChange={fetchClients} onSearch={fetchClients} company={activeSucursal!} onOpenModal={() => { setEditingClient(null); setIsClientModalOpen(true); }} onEdit={(c) => { setEditingClient(c); setIsClientModalOpen(true); }} onDelete={async (id) => { await dbDeleteClient(id); refreshData(true); }} canCreate={canManageApp} canEdit={canManageApp} canDelete={canManageApp} />;
             case 'view:employees': return <Employees 
                 employees={employees} 
@@ -1676,16 +1734,16 @@ export default function App() {
             case 'view:package_inventory': return <PackageInventory invoices={invoices} onUpdateStatus={dbUpdateInvoiceStatus} company={activeSucursal} />;
             case 'view:product_counting': return <ProductCounting authSession={authSession!} products={products} />;
             case 'view:loyalty': return <Loyalty company={activeSucursal} canManage={canManageApp} />;
-            case 'view:bonus_points': return <BonusPoints company={activeSucursal} products={products} onSaveCompany={async (c) => { await dbUpdateSucursalConfig(c.id, c); setActiveSucursal({ ...c }); localStorage.setItem('sislav_active_sucursal', JSON.stringify(c)); refreshData(true); }} onUpdateProduct={async (id, p) => { await dbUpdateProduct(id, p); refreshData(true); }} canManage={canManageApp} />;
+            case 'view:bonus_points': return <BonusPoints company={activeSucursal} products={products} onSaveCompany={async (c) => { await dbUpdateSucursalConfig(c.id, c); setActiveSucursal({ ...c }); localStorage.setItem('sislav_active_sucursal', JSON.stringify(c)); refreshData(true); }} onUpdateProduct={(id, p) => { productMutation.mutate({ id, updates: p }); return Promise.resolve(); }} canManage={canManageApp} />;
             case 'view:promotions': {
                 return <Promotions 
                     products={products} 
                     categories={categories} 
                     supplies={supplies} 
                     company={activeSucursal} 
-                    onSavePromotion={async (p) => { await dbSaveProduct(p); refreshData(true); }} 
-                    onUpdatePromotion={async (id, p) => { await dbUpdateProduct(id, p); refreshData(true); }} 
-                    onDeletePromotion={async (id) => { await dbDeleteProduct(id); refreshData(true); }} 
+                    onSavePromotion={(p) => { productMutation.mutate({ id: null, updates: p }); return Promise.resolve(); }} 
+                    onUpdatePromotion={(id, p) => { productMutation.mutate({ id, updates: p }); return Promise.resolve(); }} 
+                    onDeletePromotion={(id) => { deleteProductMutation.mutate(id); return Promise.resolve(); }} 
                     onSaveCompany={async (c) => { await dbUpdateSucursalConfig(c.id, c); setActiveSucursal({ ...c }); localStorage.setItem('sislav_active_sucursal', JSON.stringify(c)); refreshData(true); }} 
                     canCreateService={canManageApp}
                     canManageBanners={canManageApp}
@@ -1934,12 +1992,9 @@ export default function App() {
                 isOpen={isInvModalOpen} 
                 onClose={() => setIsInvModalOpen(false)} 
                 onSave={async (d) => { 
-                    if (editingProduct) {
-                        await dbUpdateProduct(editingProduct.id, d);
-                    } else {
-                        await dbSaveProduct(d);
-                    }
-                    refreshData(true); 
+                    productMutation.mutate({ id: editingProduct?.id || null, updates: d });
+                    setIsInvModalOpen(false);
+                    setEditingProduct(null);
                 }} 
                 categories={categories} 
                 company={activeSucursal} 
