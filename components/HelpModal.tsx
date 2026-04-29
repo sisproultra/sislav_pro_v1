@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { X, Search, ExternalLink, Youtube, Play, Video, Sparkles, Info } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Search, ExternalLink, Youtube, Play, Video, Sparkles, Info, Loader2 } from 'lucide-react';
 import { GlobalHelpVideo } from '../types';
 
 interface HelpModalProps {
@@ -11,6 +11,8 @@ interface HelpModalProps {
 
 const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, videos = [] }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedVideo, setSelectedVideo] = useState<GlobalHelpVideo | null>(null);
+  const [isVideoLoading, setIsVideoLoading] = useState(true);
 
   const brandPrimary = document.documentElement.style.getPropertyValue('--brand-primary').trim() || '#0054A6';
 
@@ -19,6 +21,11 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, videos = [] }) =
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
+  };
+
+  const handleSelectVideo = (video: GlobalHelpVideo) => {
+    setIsVideoLoading(true);
+    setSelectedVideo(video);
   };
 
   if (!isOpen) return null;
@@ -101,7 +108,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, videos = [] }) =
                         
                         <div className="absolute inset-0 flex items-center justify-center">
                             <button 
-                                onClick={() => window.open(video.youtubeUrl, '_blank')}
+                                onClick={() => handleSelectVideo(video)}
                                 className="bg-white/95 p-4 rounded-full shadow-2xl transform transition-all group-hover:scale-110 group-active:scale-95 flex items-center justify-center ring-8 ring-white/10"
                             >
                                 <Play size={22} className="text-slate-900 ml-1" fill="currentColor" />
@@ -123,7 +130,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, videos = [] }) =
                                 {video.category || 'GENERAL'}
                             </span>
                             <button 
-                                onClick={() => window.open(video.youtubeUrl, '_blank')}
+                                onClick={() => handleSelectVideo(video)}
                                 className="text-slate-400 hover:text-indigo-600 transition-all flex items-center gap-1.5 font-bold text-[9px] uppercase tracking-widest"
                             >
                                 VER CLASE <ExternalLink size={10} />
@@ -157,6 +164,53 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, videos = [] }) =
             </p>
           </div>
       </div>
+
+      {/* REPRODUCTOR DE VIDEO INTEGRADO (MODAL SOBRE EL MODAL) */}
+      {selectedVideo && (
+        <div className="fixed inset-0 bg-slate-950/95 z-[400] flex items-center justify-center p-4 md:p-10 animate-in fade-in duration-300 backdrop-blur-sm">
+            <div className="w-full max-w-6xl aspect-video bg-black rounded-[2.5rem] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.5)] border-4 relative" style={{ borderColor: brandPrimary }}>
+                {/* Botón Cerrar Video */}
+                <button 
+                    onClick={() => setSelectedVideo(null)}
+                    className="absolute top-6 right-6 z-50 p-3 bg-white text-slate-900 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all"
+                >
+                    <X size={24} />
+                </button>
+
+                {/* Loader / Pantalla de Carga */}
+                {isVideoLoading && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900 animate-in fade-in duration-300">
+                        <Loader2 
+                            size={60} 
+                            style={{ color: brandPrimary }} 
+                            className="animate-spin mb-4 drop-shadow-[0_0_15px_rgba(30,58,138,0.5)]" 
+                        />
+                        <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.4em] animate-pulse">Cargando Tutorial...</p>
+                    </div>
+                )}
+
+                {/* Header del Video */}
+                <div className="absolute top-0 left-0 right-0 p-6 bg-gradient-to-bottom from-black/80 to-transparent z-40 pointer-events-none">
+                    <p className="text-[10px] font-bold text-white/50 uppercase tracking-[0.3em] mb-1">REPRODUCIENDO CLASE</p>
+                    <h3 className="text-lg md:text-xl font-bold text-white uppercase tracking-tight line-clamp-1">{selectedVideo.title}</h3>
+                </div>
+
+                {/* Iframe de YouTube */}
+                <iframe 
+                    src={`https://www.youtube.com/embed/${getYouTubeId(selectedVideo.youtubeUrl)}?autoplay=1&modestbranding=1&rel=0`}
+                    className="w-full h-full"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title={selectedVideo.title}
+                    onLoad={() => setIsVideoLoading(false)}
+                ></iframe>
+
+                {/* Decoración inferior */}
+                <div className="absolute bottom-0 left-0 right-0 h-1" style={{ backgroundColor: brandPrimary }}></div>
+            </div>
+        </div>
+      )}
     </div>
   );
 };

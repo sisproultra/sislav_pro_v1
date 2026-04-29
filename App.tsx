@@ -168,19 +168,26 @@ export default function App() {
     };
 
     const refreshData = useCallback(async (manual: boolean = false) => {
-        // Invalidate all queries
-        queryClient.invalidateQueries();
+        // Solo invalidar queries dinámicas, no las estáticas
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['orderStats'] });
+        queryClient.invalidateQueries({ queryKey: ['machines'] });
+        queryClient.invalidateQueries({ queryKey: ['activeItems'] });
+        queryClient.invalidateQueries({ queryKey: ['activeCashSession'] });
         
-        // REFRESH de Configuración de Sucursal (CRÍTICO para rotación de letras y cambios de SuperAdmin)
-        if (activeSucursal?.id) {
+        // Solo refrescar sucursal si es refresh manual explícito del usuario
+        if (manual && activeSucursal?.id) {
             try {
                 const refreshedSucursalData = await dbGetSucursalById(activeSucursal.id);
                 if (refreshedSucursalData) {
                     setActiveSucursal(refreshedSucursalData);
-                    localStorage.setItem('sislav_active_sucursal', JSON.stringify(refreshedSucursalData));
+                    localStorage.setItem(
+                        'sislav_active_sucursal', 
+                        JSON.stringify(refreshedSucursalData)
+                    );
                 }
             } catch (e) {
-                console.error("Error refreshing sucursal data:", e);
+                console.error("Error refreshing sucursal:", e);
             }
         }
     }, [queryClient, activeSucursal]);
@@ -758,13 +765,9 @@ export default function App() {
                 }, 
                 (payload) => {
                     console.log('💰 Cambio detectado en VENTAS:', payload.eventType);
-                    // Invalida y refetch inmediato de facturas y productos
-                    queryClient.invalidateQueries({ queryKey: ['invoices'] });
-                    queryClient.invalidateQueries({ queryKey: ['products'] });
-                    
-                    // Si es una inserción nueva, podemos sonar una alerta o refrescar globalmente
                     if (payload.eventType === 'INSERT') {
-                        refreshData(true);
+                        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                        queryClient.invalidateQueries({ queryKey: ['orderStats'] });
                     } else {
                         // Para actualizaciones, invalidamos las queries para que useQuery las refresque
                         queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -904,12 +907,14 @@ export default function App() {
         queryKey: ['products', activeSucursal?.id],
         queryFn: dbGetProducts,
         enabled: !!activeSucursal?.id,
+        staleTime: 5 * 60 * 1000
     });
 
     const { data: clientsRes, isLoading: isLoadingClients } = useQuery({
         queryKey: ['clients', activeSucursal?.id, clientsPage, clientsSearch],
         queryFn: () => dbGetClients(clientsPage, 100, clientsSearch),
         enabled: !!activeSucursal?.id,
+        staleTime: 60 * 1000
     });
 
     const { data: invoicesRes, isLoading: isLoadingInvoices } = useQuery({
@@ -938,6 +943,7 @@ export default function App() {
         queryKey: ['categories', activeSucursal?.id],
         queryFn: dbGetCategories,
         enabled: !!activeSucursal?.id,
+        staleTime: 5 * 60 * 1000
     });
 
     const { data: machinesData, isLoading: isLoadingMachines } = useQuery({
@@ -958,42 +964,49 @@ export default function App() {
         queryKey: ['expenses', activeSucursal?.id],
         queryFn: () => dbGetExpenses(),
         enabled: !!activeSucursal?.id,
+        staleTime: 60 * 1000
     });
 
     const { data: suppliesData, isLoading: isLoadingSupplies } = useQuery({
         queryKey: ['supplies', activeSucursal?.id],
         queryFn: dbGetSupplies,
         enabled: !!activeSucursal?.id,
+        staleTime: 2 * 60 * 1000
     });
 
     const { data: purchasesData, isLoading: isLoadingPurchases } = useQuery({
         queryKey: ['purchases', activeSucursal?.id],
         queryFn: dbGetPurchases,
         enabled: !!activeSucursal?.id,
+        staleTime: 2 * 60 * 1000
     });
 
     const { data: ticketConfig } = useQuery({
         queryKey: ['ticketConfig', activeSucursal?.id],
         queryFn: () => activeSucursal?.id ? dbGetTicketConfig(activeSucursal.id) : null,
         enabled: !!activeSucursal?.id,
+        staleTime: 10 * 60 * 1000
     });
 
     const { data: paymentMethodsData, isLoading: isLoadingPaymentMethods } = useQuery({
         queryKey: ['paymentMethods', activeSucursal?.id],
         queryFn: dbGetPaymentMethods,
         enabled: !!activeSucursal?.id,
+        staleTime: 5 * 60 * 1000
     });
 
     const { data: pausedSalesData, isLoading: isLoadingPausedSales } = useQuery({
         queryKey: ['pausedSales', activeSucursal?.id],
         queryFn: dbGetPausedSales,
         enabled: !!activeSucursal?.id,
+        staleTime: 30 * 1000
     });
 
     const { data: employeesData, isLoading: isLoadingEmployees } = useQuery({
         queryKey: ['employees', activeSucursal?.id],
         queryFn: dbGetEmployees,
         enabled: !!activeSucursal?.id,
+        staleTime: 2 * 60 * 1000
     });
 
     // Sync state with React Query data
