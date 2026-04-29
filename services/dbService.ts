@@ -3421,7 +3421,8 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: {
         p_ubicacion_tipo: 'DELIVERY',
         p_ubicacion_id: guia.chofer_id,
         p_usuario_id: userId,
-        p_usuario_nombre: userName
+        p_usuario_nombre: userName,
+        p_empresa_holding_id: holdingId
     });
 
     if (rpcError) throw rpcError;

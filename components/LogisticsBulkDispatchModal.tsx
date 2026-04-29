@@ -251,7 +251,7 @@ const LogisticsBulkDispatchModal: React.FC<LogisticsBulkDispatchModalProps> = ({
                             {orderIds.map(orderId => {
                                 const items = groupedItems[orderId];
                                 const isExpanded = expandedOrders.has(orderId);
-                                const orderNumber = items[0]?.ordenNumber || orderId;
+                                const orderNumber = items[0]?.ticketNumber || orderId;
                                 const itemsSelectedInOrder = items.filter(it => selectedIds.has(it.uniqueId || it.id)).length;
                                 const isAllSelectedInOrder = itemsSelectedInOrder === items.length;
 
