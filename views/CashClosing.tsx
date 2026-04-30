@@ -29,6 +29,13 @@ const CashClosing: React.FC<CashClosingProps> = ({
   activeCashSession,
   onSessionClosed
 }) => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const [openingBalance, setOpeningBalance] = useState(() => 
     activeCashSession ? activeCashSession.openingBalance.toFixed(2) : '0.00'
   );
@@ -58,11 +65,17 @@ const CashClosing: React.FC<CashClosingProps> = ({
           return new Date(activeCashSession.fechaApertura);
       }
 
+      // Si no hay sesión activa, buscamos el último cierre de este usuario
+      const userLastClosing = closingHistory
+        .filter(c => c.cajero === currentUserName)
+        .sort((a, b) => new Date(b.fechaCierre).getTime() - new Date(a.fechaCierre).getTime())[0];
+
+      if (userLastClosing) return new Date(userLastClosing.fechaCierre);
+
       if (closingHistory.length === 0) return new Date(0);
-      // Ensure we sort by date to get the most recent one
       const sorted = [...closingHistory].sort((a, b) => new Date(b.fechaCierre).getTime() - new Date(a.fechaCierre).getTime());
       return new Date(sorted[0].fechaCierre);
-  }, [closingHistory]);
+  }, [closingHistory, activeCashSession, currentUserName]);
 
   const userProjections = useMemo(() => {
     if (!isHighRole) return [];
@@ -74,17 +87,20 @@ const CashClosing: React.FC<CashClosingProps> = ({
         otherMethods: Record<string, number>;
     }> = {};
 
-    invoices.filter(inv => new Date(inv.date) >= lastClosingDate).forEach(inv => {
+    invoices.forEach(inv => {
         (inv.payments || []).forEach(p => {
-            const userName = (p as any).registrado_por?.trim().toUpperCase() || 'SISTEMA';
-            if (!projections[userName]) {
-                projections[userName] = { userName, totalCash: 0, expenses: 0, otherMethods: {} };
-            }
-            const method = (p.metodo_pago_name || 'EFECTIVO').toUpperCase();
-            if (method.includes('EFECTIVO')) {
-                projections[userName].totalCash += p.monto || 0;
-            } else {
-                projections[userName].otherMethods[method] = (projections[userName].otherMethods[method] || 0) + (p.monto || 0);
+            const pDate = new Date(p.date || inv.date);
+            if (pDate >= lastClosingDate) {
+                const userName = (p as any).registrado_por?.trim().toUpperCase() || 'SISTEMA';
+                if (!projections[userName]) {
+                    projections[userName] = { userName, totalCash: 0, expenses: 0, otherMethods: {} };
+                }
+                const method = (p.metodo_pago_name || 'EFECTIVO').toUpperCase();
+                if (method.includes('EFECTIVO')) {
+                    projections[userName].totalCash += p.monto || 0;
+                } else {
+                    projections[userName].otherMethods[method] = (projections[userName].otherMethods[method] || 0) + (p.monto || 0);
+                }
             }
         });
     });
@@ -110,13 +126,12 @@ const CashClosing: React.FC<CashClosingProps> = ({
   }, [isHighRole, activeView]);
 
   const pendingInvoices = useMemo(() => {
-      return invoices.filter(inv => {
-          const dateMatch = new Date(inv.date) >= lastClosingDate && inv.type !== '07';
-          // Si no hay sesión activa o es admin, tal vez vemos todo? 
-          // El usuario dice: "cada trabajador ... se calcula dentro de su usuario".
-          // Así que filtramos estrictamente.
-          return dateMatch;
-      });
+    // Para el cierre actual, queremos facturas que tengan PAGOS en el turno
+    // Pero para otros fines descriptivos, filtramos facturas creadas desde la apertura
+    return invoices.filter(inv => {
+        const dateMatch = new Date(inv.date) >= lastClosingDate && inv.type !== '07';
+        return dateMatch;
+    });
   }, [invoices, lastClosingDate]);
 
   const pendingExpenses = useMemo(() => {
@@ -141,51 +156,32 @@ const CashClosing: React.FC<CashClosingProps> = ({
   const summary = useMemo(() => {
       const methods: Record<string, number> = {};
       let totalCashSales = 0;
-      
       const categoryMap: Record<string, { name: string; quantity: number; amount: number }> = {};
-
       const activeUserId = activeCashSession?.usuario_id;
 
-      pendingInvoices.forEach(inv => {
-          // Process Payments for accurate segmented collection
-          // FILTRAR PAGOS POR USUARIO (Priorizando ID para ventas compartidas)
-          const userPayments = (inv.payments || []).filter(p => {
+      // Iteramos directamente sobre las facturas pero filtramos PAGOS
+      invoices.forEach(inv => {
+          const userPaymentsAtTurn = (inv.payments || []).filter(p => {
+              const pDate = new Date(p.date || inv.date);
+              const dateMatch = pDate >= lastClosingDate;
+              let userMatch = false;
               if (activeUserId && (p as any).usuario_id) {
-                  return (p as any).usuario_id === activeUserId;
+                  userMatch = (p as any).usuario_id === activeUserId;
+              } else {
+                  userMatch = (p as any).registrado_por?.trim().toUpperCase() === currentUserName;
               }
-              return (p as any).registrado_por?.trim().toUpperCase() === currentUserName;
+              return dateMatch && userMatch;
           });
 
-          if (userPayments.length > 0) {
-              userPayments.forEach(p => {
-                  const method = (p.metodo_pago_name || 'EFECTIVO').toUpperCase();
-                  const amount = p.monto || 0;
-                  if (method.includes('EFECTIVO')) totalCashSales += amount;
-                  else methods[method] = (methods[method] || 0) + amount;
-              });
-          } else if (inv.payments && inv.payments.length > 0) {
-              // Tiene pagos pero ninguno es del usuario actual -> skip
-          } else {
-              // Fallback if no detailed payments (only if user created the invoice)
-              const createdBy = (inv as any).registrado_por || (inv as any).user || '';
-              if (createdBy.trim().toUpperCase() === currentUserName) {
-                  const paid = inv.prePaymentAmount || 0;
-                  const method = (inv.paymentMethod || 'EFECTIVO').toUpperCase();
-                  if (method.includes('EFECTIVO')) totalCashSales += paid;
-                  else methods[method] = (methods[method] || 0) + paid;
-              }
-          }
+          userPaymentsAtTurn.forEach(p => {
+              const method = (p.metodo_pago_name || 'EFECTIVO').toUpperCase();
+              const amount = p.monto || 0;
+              if (method.includes('EFECTIVO')) totalCashSales += amount;
+              else methods[method] = (methods[method] || 0) + amount;
+          });
 
-          // Process Categories (Solo si el usuario registró algo en esta factura)
-          const involved = (inv.payments || []).some(p => {
-              if (activeUserId && (p as any).usuario_id) {
-                  return (p as any).usuario_id === activeUserId;
-              }
-              return (p as any).registrado_por?.trim().toUpperCase() === currentUserName;
-          }) || (activeUserId && (inv as any).usuario_id === activeUserId) ||
-          ((inv as any).registrado_por || '').trim().toUpperCase() === currentUserName;
-          
-          if (involved) {
+          // Solo sumar categorías si el usuario tuvo actividad (pagos) en esta factura durante el turno
+          if (userPaymentsAtTurn.length > 0) {
               inv.items.forEach(item => {
                   const catName = (item.category || (item as any).categoria_nombre || 'GENERAL').toUpperCase();
                   if (!categoryMap[catName]) {
@@ -344,8 +340,18 @@ const CashClosing: React.FC<CashClosingProps> = ({
   };
 
   return (
-    <div className="p-2 lg:p-6 h-full overflow-y-auto bg-[#f8fafc]">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="p-2 lg:p-6 h-full overflow-y-auto bg-[#f8fafc] relative">
+      <div className="max-w-4xl mx-auto space-y-6 relative">
+        {/* Subtle Floating Clock */}
+        <div className="absolute -top-1 right-0 flex flex-col items-end opacity-40 hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-1.5 bg-slate-200/50 backdrop-blur-sm text-slate-500 px-3 py-1.5 rounded-xl border border-slate-300/30">
+                <Clock size={12} className="text-slate-400" />
+                <span className="text-[11px] font-bold font-mono">
+                    {currentTime.toLocaleTimeString('es-PE', { hour12: false })}
+                </span>
+            </div>
+            <p className="text-[6px] font-bold text-slate-300 uppercase tracking-[0.3em] mt-1 mr-1">Hora Sistema</p>
+        </div>
         
         {/* Navigation Tabs */}
         <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100 overflow-x-auto no-scrollbar">
@@ -394,10 +400,14 @@ const CashClosing: React.FC<CashClosingProps> = ({
                   <div className="absolute -right-4 -top-4 opacity-5 rotate-12">
                     <TrendingUp size={120} />
                   </div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Efectivo Esperado</p>
-                  <h2 className="text-4xl font-black font-manrope tracking-tight mb-2" style={{ color: company.primaryColor || '#0054A6' }}>
-                    {currency} {summary.expectedCash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </h2>
+                  <div className="flex flex-col">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Efectivo Esperado</p>
+                    <div className="flex items-baseline gap-2">
+                        <h2 className="text-4xl font-black font-manrope tracking-tight" style={{ color: company.primaryColor || '#0054A6' }}>
+                            {currency} {summary.expectedCash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </h2>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
                     <InfoIcon size={14} />
                     <span>Incluye saldo inicial + ventas efectivo - egresos</span>

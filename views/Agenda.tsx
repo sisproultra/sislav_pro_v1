@@ -23,10 +23,10 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
     const primaryColor = document.documentElement.style.getPropertyValue('--primary-color') || '#0054A6';
 
     const getStatusColor = (count: number) => {
-        if (count === 0) return 'bg-white text-slate-200 border-slate-50';
-        if (count < 11) return 'bg-emerald-500 text-white border-emerald-400 shadow-[0_10px_30px_-10px_rgba(16,185,129,0.5)]';
-        if (count < 20) return 'bg-orange-500 text-white border-orange-400 shadow-[0_10px_30px_-10px_rgba(249,115,22,0.5)]';
-        return 'bg-red-600 text-white border-red-500 shadow-[0_10px_30px_-10px_rgba(220,38,38,0.5)] animate-agenda-blink';
+        if (count === 0) return 'bg-white/40 backdrop-blur-md text-slate-300 border-slate-100/50 hover:bg-white/80';
+        if (count < 11) return 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white border-emerald-300 shadow-[0_15px_35px_-10px_rgba(16,185,129,0.4)]';
+        if (count < 20) return 'bg-gradient-to-br from-orange-400 to-orange-600 text-white border-orange-300 shadow-[0_15px_35px_-10px_rgba(249,115,22,0.4)]';
+        return 'bg-gradient-to-br from-red-500 to-rose-700 text-white border-red-400 shadow-[0_15px_35px_-10px_rgba(220,38,38,0.4)] animate-agenda-blink';
     };
 
     // Agrupar prendas por fecha de entrega
@@ -54,23 +54,28 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
         setCurrentDate(newDate);
     };
 
-    const daysInMonth = useMemo(() => {
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
-        const firstDay = new Date(year, month, 1).getDay();
-        const days = new Date(year, month + 1, 0).getDate();
-        
-        const result = [];
-        // Relleno inicial
-        const prevMonthDays = new Date(year, month, 0).getDate();
-        for (let i = firstDay; i > 0; i--) {
-            result.push({ day: prevMonthDays - i + 1, month: month - 1, year, isCurrent: false });
+    const monthsToDisplay = useMemo(() => {
+        const months = [];
+        for (let m = 0; m < 4; m++) {
+            const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + m, 1);
+            const year = date.getFullYear();
+            const month = date.getMonth();
+            const firstDay = new Date(year, month, 1).getDay();
+            const lastDay = new Date(year, month + 1, 0).getDate();
+            
+            const days = [];
+            // Relleno inicial
+            const prevMonthLastDay = new Date(year, month, 0).getDate();
+            for (let i = firstDay; i > 0; i--) {
+                days.push({ day: prevMonthLastDay - i + 1, month: month - 1, year, isCurrent: false });
+            }
+            // Días del mes
+            for (let i = 1; i <= lastDay; i++) {
+                days.push({ day: i, month, year, isCurrent: true });
+            }
+            months.push({ name: date.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' }), days, month, year });
         }
-        // Días del mes
-        for (let i = 1; i <= days; i++) {
-            result.push({ day: i, month, year, isCurrent: true });
-        }
-        return result;
+        return months;
     }, [currentDate]);
 
     const weekDays = useMemo(() => {
@@ -196,43 +201,55 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
     };
 
     return (
-        <div className="p-4 lg:p-8 h-full overflow-y-auto bg-slate-50 custom-scrollbar">
+        <div className="p-4 lg:p-10 h-full overflow-y-auto bg-[#f8fafc] custom-scrollbar relative">
+            {/* ATMOSPHERIC BACKGROUND ELEMENTS */}
+            <div className="absolute top-0 left-0 w-full h-[600px] overflow-hidden pointer-events-none opacity-40 z-0">
+                <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-indigo-200 blur-[120px] rounded-full opacity-50" />
+                <div className="absolute top-[20%] -right-[10%] w-[30%] h-[30%] bg-blue-100 blur-[100px] rounded-full opacity-40" />
+            </div>
+
             <style>{`
                 @keyframes agenda-blink {
-                    0%, 100% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); transform: scale(1); }
-                    50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); transform: scale(1.02); }
+                    0%, 100% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.4); transform: scale(1); }
+                    50% { box-shadow: 0 0 40px rgba(220, 38, 38, 0.7); transform: scale(1.03); }
                 }
                 .animate-agenda-blink {
-                    animation: agenda-blink 1.5s infinite ease-in-out;
+                    animation: agenda-blink 2s infinite ease-in-out;
                 }
-                @keyframes neon-pulse {
-                    0%, 100% { opacity: 1; filter: brightness(1); }
-                    50% { opacity: 0.8; filter: brightness(1.2); }
+                .glass-card {
+                    background: rgba(255, 255, 255, 0.7);
+                    backdrop-filter: blur(12px);
+                    border: 1px solid rgba(255, 255, 255, 0.5);
                 }
-                .animate-neon-pulse {
-                    animation: neon-pulse 1s infinite alternate;
+                .day-number {
+                    font-family: 'Outfit', sans-serif;
                 }
             `}</style>
 
-            <div className="max-w-7xl mx-auto space-y-6">
+            <div className="max-w-[1600px] mx-auto space-y-8 relative z-10">
                 {/* HEADER */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-200">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 rounded-2xl text-white shadow-xl" style={{ backgroundColor: primaryColor }}>
-                            <CalendarIcon size={28} />
-                        </div>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 glass-card p-8 rounded-[3rem] shadow-[0_20px_50px_-20px_rgba(0,0,0,0.05)] border-white/50">
+                    <div className="flex items-center gap-6">
+                        <motion.div 
+                            initial={{ rotate: -15, scale: 0.8 }}
+                            animate={{ rotate: 0, scale: 1 }}
+                            className="p-5 rounded-3xl text-white shadow-2xl" 
+                            style={{ backgroundColor: primaryColor }}
+                        >
+                            <CalendarIcon size={32} />
+                        </motion.div>
                         <div>
-                            <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase leading-none">Mi Agenda de Tareas</h2>
-                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Control Operativo y Tareas Diarias</p>
+                            <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-tight">Mi Agenda</h2>
+                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] mt-1">Operación y Tareas de Lavandería</p>
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                    <div className="flex flex-wrap items-center gap-2 bg-slate-200/50 backdrop-blur-sm p-1.5 rounded-[2rem] border border-white/20">
                         {(['WEEK', 'MONTH', 'YEAR'] as ViewMode[]).map(mode => (
                             <button
                                 key={mode}
                                 onClick={() => setViewMode(mode)}
-                                className={`px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${viewMode === mode ? 'bg-white shadow-md border border-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
+                                className={`px-8 py-3 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${viewMode === mode ? 'bg-white shadow-xl text-slate-900 scale-105' : 'text-slate-400 hover:text-slate-600 hover:bg-white/30'}`}
                                 style={viewMode === mode ? { color: primaryColor } : {}}
                             >
                                 {mode === 'WEEK' ? 'Semana' : mode === 'MONTH' ? 'Mes' : 'Año'}
@@ -242,99 +259,137 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                 </div>
 
                 {/* CONTROLES NAVEGACION */}
-                <div className="flex justify-between items-center px-2">
+                <div className="flex flex-col sm:flex-row justify-between items-center px-4 gap-4">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="p-3 bg-white border border-slate-200 rounded-full hover:bg-slate-50 transition-all shadow-sm active:scale-90">
-                            <ChevronLeft size={20} />
+                        <button onClick={() => navigate(-1)} className="w-10 h-10 bg-white/60 backdrop-blur-md border border-white/50 rounded-xl flex items-center justify-center hover:bg-white hover:shadow-xl transition-all active:scale-90 group">
+                            <ChevronLeft size={20} className="text-slate-600 group-hover:-translate-x-0.5 transition-transform" />
                         </button>
-                        <h3 className="text-xl font-bold text-slate-800 uppercase tracking-tight w-48 text-center">
-                            {viewMode === 'MONTH' && currentDate.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' })}
-                            {viewMode === 'YEAR' && currentDate.getFullYear()}
-                            {viewMode === 'WEEK' && `Semana ${Math.ceil(currentDate.getDate() / 7)}`}
-                        </h3>
-                        <button onClick={() => navigate(1)} className="p-3 bg-white border border-slate-200 rounded-full hover:bg-slate-50 transition-all shadow-sm active:scale-90">
-                            <ChevronRight size={20} />
+                        <div className="flex flex-col items-center min-w-[180px]">
+                            <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter day-number leading-tight">
+                                {viewMode === 'MONTH' && currentDate.toLocaleDateString('es-PE', { month: 'long' })}
+                                {viewMode === 'YEAR' && currentDate.getFullYear()}
+                                {viewMode === 'WEEK' && 'Semana'}
+                            </h3>
+                            <p className="text-[8px] font-black text-indigo-500 uppercase tracking-[0.3em]">
+                                {viewMode === 'MONTH' && currentDate.getFullYear()}
+                                {viewMode === 'WEEK' && `Del mes de ${currentDate.toLocaleDateString('es-PE', { month: 'long' })}`}
+                            </p>
+                        </div>
+                        <button onClick={() => navigate(1)} className="w-10 h-10 bg-white/60 backdrop-blur-md border border-white/50 rounded-xl flex items-center justify-center hover:bg-white hover:shadow-xl transition-all active:scale-90 group">
+                            <ChevronRight size={20} className="text-slate-600 group-hover:translate-x-0.5 transition-transform" />
                         </button>
                     </div>
-                    <div className="hidden md:flex gap-6">
+                    
+                    <div className="flex gap-6 bg-white/40 backdrop-blur-md p-3 rounded-2xl border border-white/30 px-6">
                         <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">Baja (0-10)</span>
+                            <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Leve</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">Media (11-19)</span>
+                            <div className="w-3 h-3 rounded-full bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.5)]"></div>
+                            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Medio</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-red-600 animate-pulse"></div>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">Alta (20+)</span>
+                            <div className="w-3 h-3 rounded-full bg-red-600 animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)]"></div>
+                            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Saturado</span>
                         </div>
                     </div>
                 </div>
 
-                {/* VISTA MES */}
+                {/* VISTA MES (4 MESES) */}
                 {viewMode === 'MONTH' && (
-                    <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden p-6">
-                        <div className="grid grid-cols-7 gap-4 mb-4">
-                            {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
-                                <div key={d} className="text-center text-[10px] font-bold text-slate-300 uppercase tracking-widest">{d}</div>
-                            ))}
-                        </div>
-                        <div className="grid grid-cols-7 gap-3 md:gap-4">
-                            {daysInMonth.map((d, i) => {
-                                const dateKey = `${d.year}-${String(d.month + 1).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
-                                const dayGarments = groupedGarments.get(dateKey) || [];
-                                const count = dayGarments.length;
-                                
-                                return (
-                                    <div 
-                                        key={i} 
-                                        onClick={() => count > 0 && setSelectedDate(dateKey)}
-                                        className={`aspect-square rounded-[1.5rem] md:rounded-[2.5rem] border-2 transition-all p-2 flex flex-col items-center justify-center gap-1 cursor-pointer hover:scale-105 active:scale-95 ${d.isCurrent ? 'border-transparent' : 'opacity-20 pointer-events-none border-slate-50'} ${getStatusColor(count)}`}
-                                    >
-                                        <span className="text-xs md:text-sm font-bold">{d.day}</span>
-                                        {count > 0 && <span className="text-[8px] md:text-[9px] font-bold uppercase opacity-80">{count} Pren.</span>}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"
+                    >
+                        {monthsToDisplay.map((m, mIdx) => (
+                            <div key={mIdx} className="glass-card rounded-[2rem] border-white/50 shadow-lg overflow-hidden p-4">
+                                <h4 className="text-sm font-black text-slate-800 uppercase tracking-tighter mb-3 text-center bg-slate-50/50 py-1.5 rounded-lg border border-slate-100">{m.name}</h4>
+                                <div className="grid grid-cols-7 gap-1 mb-2">
+                                    {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((d, i) => (
+                                        <div key={i} className="text-center text-[7px] font-black text-slate-400 uppercase tracking-widest">{d}</div>
+                                    ))}
+                                </div>
+                                <div className="grid grid-cols-7 gap-1">
+                                    {m.days.map((d, i) => {
+                                        const dateKey = `${d.year}-${String(d.month + 1).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
+                                        const dayGarments = groupedGarments.get(dateKey) || [];
+                                        const count = dayGarments.reduce((sum, { item, invoice }) => {
+                                            const isAnulado = item.isAnulado || invoice.orderStatus === 'CANCELADO';
+                                            return isAnulado ? sum : sum + (Number(item.quantity) || 0);
+                                        }, 0);
+                                        const isToday = new Date().toISOString().split('T')[0] === dateKey;
+                                        
+                                        return (
+                                            <motion.div 
+                                                key={i} 
+                                                whileHover={d.isCurrent ? { scale: 1.1, zIndex: 10 } : {}}
+                                                onClick={() => d.isCurrent && count > 0 && setSelectedDate(dateKey)}
+                                                className={`relative aspect-square rounded-lg border transition-all p-0.5 flex flex-col items-center justify-center cursor-pointer group shadow-sm ${d.isCurrent ? 'border-transparent' : 'opacity-0 pointer-events-none border-slate-100'} ${getStatusColor(count)} ${isToday ? 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-slate-50' : ''}`}
+                                            >
+                                                <span className="text-[10px] font-black day-number tracking-tighter">{d.day}</span>
+                                                {count > 0 && d.isCurrent && (
+                                                    <span className="text-[6px] font-black uppercase tracking-tighter opacity-80 bg-white/20 px-1 rounded">{count}</span>
+                                                )}
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </motion.div>
                 )}
 
                 {/* VISTA SEMANA */}
                 {viewMode === 'WEEK' && (
-                    <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden p-6 space-y-4">
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="glass-card rounded-[3rem] border-white/50 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.06)] overflow-hidden p-8 space-y-4"
+                    >
                         {weekDays.map((d, i) => {
                             const dateKey = d.toISOString().split('T')[0];
                             const dayGarments = groupedGarments.get(dateKey) || [];
                             const count = dayGarments.length;
+                            const isToday = new Date().toISOString().split('T')[0] === dateKey;
                             
                             return (
-                                <div 
+                                <motion.div 
                                     key={i} 
+                                    whileHover={{ x: 15, scale: 1.01 }}
                                     onClick={() => count > 0 && setSelectedDate(dateKey)}
-                                    className={`flex items-center justify-between p-6 rounded-[2rem] border-2 cursor-pointer transition-all hover:translate-x-2 ${getStatusColor(count)}`}
+                                    className={`flex items-center justify-between p-6 rounded-[2.5rem] border-2 cursor-pointer transition-all shadow-sm ${getStatusColor(count)} ${isToday ? 'ring-4 ring-indigo-400 ring-offset-4 ring-offset-slate-50' : ''}`}
                                 >
-                                    <div className="flex items-center gap-6">
-                                        <div className="bg-white/20 px-5 py-2 rounded-2xl text-center min-w-[80px]">
-                                            <p className="text-[9px] font-bold uppercase opacity-60 leading-none">{d.toLocaleDateString('es-PE', { weekday: 'short' })}</p>
-                                            <p className="text-2xl font-bold">{d.getDate()}</p>
+                                    <div className="flex items-center gap-8">
+                                        <div className="bg-white/30 backdrop-blur-md px-6 py-3 rounded-3xl text-center min-w-[100px] border border-white/20">
+                                            <p className="text-[10px] font-black uppercase opacity-70 tracking-tighter leading-none mb-1">{d.toLocaleDateString('es-PE', { weekday: 'short' })}</p>
+                                            <p className="text-3xl font-black day-number tracking-tighter">{d.getDate()}</p>
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-lg uppercase tracking-tight">Prendas Programadas</h4>
-                                            <p className="text-xs font-bold uppercase tracking-widest opacity-70">{count} Prendas totales para el día</p>
+                                            <h4 className="font-black text-xl uppercase tracking-tighter leading-tight">Prendas en Agenda</h4>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-70">
+                                                {count === 0 ? 'Sin tareas programadas' : `${count} prendas para procesar`}
+                                            </p>
                                         </div>
                                     </div>
-                                    <ChevronRight size={32} className="opacity-40" />
-                                </div>
+                                    <div className="flex items-center gap-4">
+                                        {isToday && <span className="bg-white/40 text-white text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border border-white/30">Hoy</span>}
+                                        <ChevronRight size={32} className="opacity-30" />
+                                    </div>
+                                </motion.div>
                             );
                         })}
-                    </div>
+                    </motion.div>
                 )}
 
                 {/* VISTA AÑO */}
                 {viewMode === 'YEAR' && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8"
+                    >
                         {Array.from({ length: 12 }).map((_, mIdx) => {
                             const dateKeyPrefix = `${currentDate.getFullYear()}-${String(mIdx + 1).padStart(2, '0')}`;
                             let monthCount = 0;
@@ -343,105 +398,150 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                             });
 
                             return (
-                                <div 
+                                <motion.div 
                                     key={mIdx} 
-                                    className={`p-8 rounded-[3rem] border-2 transition-all flex flex-col items-center gap-4 cursor-default group hover:scale-105 ${getStatusColor(monthCount)}`}
+                                    whileHover={{ y: -15, scale: 1.05 }}
+                                    className={`p-10 rounded-[4rem] border-2 transition-all flex flex-col items-center gap-6 cursor-default group shadow-lg ${getStatusColor(monthCount)}`}
                                 >
-                                    <h4 className="text-2xl font-black uppercase tracking-tight">{new Date(2000, mIdx).toLocaleDateString('es-PE', { month: 'long' })}</h4>
-                                    <div className="bg-black/10 px-6 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">{monthCount} Prendas</div>
-                                    <div className="w-full h-2 bg-white/20 rounded-full mt-2 overflow-hidden">
+                                    <h4 className="text-3xl font-black uppercase tracking-tighter day-number">{new Date(2000, mIdx).toLocaleDateString('es-PE', { month: 'long' })}</h4>
+                                    <div className="bg-white/20 backdrop-blur-md px-8 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border border-white/20">
+                                        {monthCount} Prendas
+                                    </div>
+                                    <div className="w-full h-2.5 bg-white/20 rounded-full mt-2 overflow-hidden border border-white/20">
                                         <motion.div 
                                             initial={{ width: 0 }}
-                                            animate={{ width: `${Math.min(100, (monthCount/100)*100)}%` }}
-                                            className="h-full bg-white rounded-full" 
+                                            animate={{ width: `${Math.min(100, (monthCount/300)*100)}%` }}
+                                            className="h-full bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.8)]" 
                                         />
                                     </div>
-                                </div>
+                                </motion.div>
                             );
                         })}
-                    </div>
+                    </motion.div>
                 )}
             </div>
 
             {/* MODAL RESUMEN TAREA DEL DIA */}
             <AnimatePresence>
                 {daySummary && (
-                    <div className="fixed inset-0 bg-slate-950/80 z-[300] flex items-center justify-center backdrop-blur-sm overflow-y-auto pt-4 pb-4 px-2 lg:px-6">
+                    <div className="fixed inset-0 bg-slate-950/60 z-[300] flex items-center justify-center backdrop-blur-[20px] overflow-y-auto pt-4 pb-4 px-2 lg:px-6">
+                        {/* ATMOSPHERIC BACKGROUND ELEMENTS FOR MODAL */}
+                        <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+                            <div className="absolute top-0 right-0 w-[50%] h-[50%] bg-indigo-500 blur-[150px] rounded-full" />
+                            <div className="absolute bottom-0 left-0 w-[50%] h-[50%] bg-emerald-500 blur-[150px] rounded-full" />
+                        </div>
+
                         <motion.div 
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            initial={{ opacity: 0, scale: 0.9, y: 100 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="bg-white rounded-[2rem] lg:rounded-[3rem] w-full lg:w-[90vw] max-w-[1400px] shadow-2xl flex flex-col border border-white/20 min-h-[80vh] max-h-fit lg:max-h-[95vh] relative"
+                            exit={{ opacity: 0, scale: 0.9, y: 100 }}
+                            className="bg-white/80 backdrop-blur-3xl rounded-[3rem] lg:rounded-[5rem] w-full lg:w-[95vw] max-w-[1500px] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] flex flex-col border border-white/50 min-h-[90vh] max-h-fit lg:max-h-[95vh] relative overflow-hidden"
                         >
                             {/* Cabecera del Modal */}
-                            <div className="p-6 lg:p-8 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-50 shrink-0">
-                                <div className="flex items-center gap-4 lg:gap-6">
-                                    <div className="p-4 rounded-[1.5rem] text-white shadow-xl hidden sm:flex" style={{ backgroundColor: primaryColor }}>
-                                        <CalendarIcon size={24} />
-                                    </div>
+                            <div className="p-8 lg:p-12 border-b border-black/5 flex justify-between items-center sticky top-0 z-50 shrink-0 bg-white/40 backdrop-blur-md">
+                                <div className="flex items-center gap-8">
+                                    <motion.div 
+                                        animate={{ rotate: [0, -10, 10, 0] }}
+                                        transition={{ repeat: Infinity, duration: 4 }}
+                                        className="p-6 rounded-[2.5rem] text-white shadow-2xl hidden sm:flex" 
+                                        style={{ backgroundColor: primaryColor }}
+                                    >
+                                        <CalendarIcon size={32} />
+                                    </motion.div>
                                     <div>
-                                        <h3 className="font-black text-xl lg:text-3xl text-slate-900 uppercase tracking-tight leading-none tracking-[-0.03em]">Mi Tarea del Día</h3>
-                                        <p className="text-[10px] lg:text-[11px] font-black text-slate-400 uppercase tracking-[0.25em] mt-2 flex items-center gap-2">
-                                            <span className="bg-slate-900 text-white px-3 py-1 rounded-[4px]">{daySummary.date}</span>
-                                            <span className="opacity-30">•</span>
-                                            <span className="flex items-center gap-1.5"><Shirt size={12} className="opacity-50" /> {daySummary.orders.length} ÓRDENES</span>
-                                        </p>
+                                        <h3 className="font-black text-3xl lg:text-5xl text-slate-900 uppercase tracking-tighter leading-none tracking-[-0.04em]">Hoja de Ruta</h3>
+                                        <div className="flex flex-wrap items-center gap-4 mt-4">
+                                            <div className="bg-slate-900 text-white px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-slate-900/20">
+                                                <CalendarIcon size={12} className="text-indigo-400" />
+                                                {daySummary.date}
+                                            </div>
+                                            <div className="bg-white/50 px-5 py-1.5 rounded-full text-[11px] font-black text-slate-500 uppercase tracking-widest border border-white flex items-center gap-2">
+                                                <Shirt size={12} className="text-indigo-500" />
+                                                {daySummary.orders.length} ÓRDENES PROGRAMADAS
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <button 
                                     onClick={() => setSelectedDate(null)}
-                                    className="p-3 lg:p-4 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-900 rounded-2xl transition-all active:scale-95 border border-slate-200/50"
+                                    className="w-16 h-16 bg-white/80 hover:bg-white text-slate-400 hover:text-slate-900 rounded-[2rem] transition-all active:scale-90 border border-white flex items-center justify-center shadow-xl group"
                                 >
-                                    <X size={24} strokeWidth={4} />
+                                    <X size={32} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-500" />
                                 </button>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8 space-y-10">
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-8 lg:p-14 space-y-16">
                                 {/* TARJETAS DE RESUMEN TÉCNICO */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    <div className="bg-white p-6 rounded-3xl border border-slate-200 flex items-center justify-between group hover:shadow-2xl hover:border-indigo-500/20 transition-all">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                                    <motion.div 
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: 0.1 }}
+                                        className="bg-white p-10 rounded-[3rem] border border-white shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] flex items-center justify-between group hover:shadow-2xl transition-all"
+                                    >
                                         <div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Carga Total</p>
-                                            <p className="text-4xl font-black text-slate-900 tabular-nums">{daySummary.total}</p>
-                                            <p className="text-[10px] font-bold text-slate-300 uppercase mt-1 tracking-tighter">Prendas Registradas</p>
+                                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Prendas Totales</p>
+                                            <p className="text-6xl font-black text-slate-900 day-number tracking-tighter tabular-nums">{daySummary.total}</p>
+                                            <div className="flex items-center gap-2 mt-3">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Registros de Hoy</p>
+                                            </div>
                                         </div>
-                                        <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shrink-0 border border-indigo-100 group-hover:scale-110 transition-transform">
-                                            <Shirt size={28} />
+                                        <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-[2rem] flex items-center justify-center shrink-0 border border-indigo-100 group-hover:rotate-12 transition-transform">
+                                            <Shirt size={40} />
                                         </div>
-                                    </div>
+                                    </motion.div>
 
-                                    <div className="bg-white p-6 rounded-3xl border border-slate-200 flex items-center justify-between group hover:shadow-2xl hover:border-amber-500/20 transition-all">
+                                    <motion.div 
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: 0.2 }}
+                                        className="bg-white p-10 rounded-[3rem] border border-white shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] flex items-center justify-between group hover:shadow-2xl transition-all"
+                                    >
                                         <div>
-                                            <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">Pendiente Lavado</p>
-                                            <p className="text-4xl font-black text-amber-600 tabular-nums">{daySummary.pending}</p>
-                                            <p className="text-[10px] font-bold text-amber-300 uppercase mt-1 tracking-tighter">Acción Requerida</p>
+                                            <p className="text-[11px] font-black text-amber-500 uppercase tracking-[0.2em] mb-2">Por Procesar</p>
+                                            <p className="text-6xl font-black text-amber-600 day-number tracking-tighter tabular-nums">{daySummary.pending}</p>
+                                            <div className="flex items-center gap-2 mt-3">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                                <p className="text-[10px] font-black text-amber-300 uppercase tracking-widest">En cola de trabajo</p>
+                                            </div>
                                         </div>
-                                        <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shrink-0 border border-amber-100 group-hover:scale-110 transition-transform">
-                                            <WashingMachine size={28} />
+                                        <div className="w-20 h-20 bg-amber-50 text-amber-600 rounded-[2rem] flex items-center justify-center shrink-0 border border-amber-100 group-hover:rotate-12 transition-transform">
+                                            <WashingMachine size={40} />
                                         </div>
-                                    </div>
+                                    </motion.div>
 
-                                    <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 flex items-center justify-between group hover:shadow-2xl transition-all sm:col-span-2 lg:col-span-1">
+                                    <motion.div 
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: 0.3 }}
+                                        className="bg-slate-900 p-10 rounded-[3rem] border border-slate-800 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.3)] flex items-center justify-between group hover:shadow-2xl transition-all sm:col-span-2 lg:col-span-1"
+                                    >
                                         <div>
-                                            <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1 tracking-[0.2em]">Listas para Entrega</p>
-                                            <p className="text-4xl font-black text-white tabular-nums tracking-tighter">{daySummary.ready}</p>
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Listo para despacho</p>
+                                            <p className="text-[11px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-2">Para Entrega</p>
+                                            <p className="text-6xl font-black text-white day-number tracking-tighter tabular-nums">{daySummary.ready}</p>
+                                            <div className="flex items-center gap-2 mt-3">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)]" />
+                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Listo para el cliente</p>
+                                            </div>
                                         </div>
-                                        <div className="w-14 h-14 bg-white/10 text-emerald-400 rounded-2xl flex items-center justify-center shrink-0 border border-white/10 group-hover:bg-emerald-500 group-hover:text-white transition-all">
-                                            <CheckCircle2 size={28} />
+                                        <div className="w-20 h-20 bg-white/10 text-emerald-400 rounded-[2rem] flex items-center justify-center shrink-0 border border-white/10 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+                                            <CheckCircle2 size={40} />
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 </div>
 
                                 {/* LISTADO DE ÓRDENES */}
-                                <div className="space-y-6">
-                                    <div className="flex items-center justify-between mb-4 px-2">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-1 h-5 rounded-full bg-slate-900" />
-                                            <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em]">Hoja de Ruta Operativa</h4>
+                                <div className="space-y-10">
+                                    <div className="flex items-center justify-between mb-8 px-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-2 h-10 rounded-full bg-indigo-600 shadow-[0_0_20px_rgba(79,70,229,0.5)]" />
+                                            <div>
+                                                <h4 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Detalle Operativo</h4>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Listado de tickets y clientes del día</p>
+                                            </div>
                                         </div>
-                                        <div className="h-[1px] flex-1 mx-6 bg-slate-100 hidden md:block" />
-                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{daySummary.orders.length} DOCUMENTOS</div>
+                                        <div className="text-[11px] font-black tracking-widest text-slate-400 uppercase bg-slate-100 px-6 py-2 rounded-full border border-slate-200">{daySummary.orders.length} TICKETS</div>
                                     </div>
 
                                     {daySummary.orders.map(({ invoice, items }) => {
@@ -586,28 +686,32 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                             </div>
 
                             {/* Footer del Modal Premium */}
-                            <div className="p-6 border-t border-slate-100 bg-white flex flex-col sm:flex-row justify-between items-center gap-6 shrink-0 rounded-b-3xl mt-auto">
-                                <div className="flex items-center gap-8">
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                            <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Normal</span>
+                            <div className="p-10 border-t border-black/5 bg-slate-50/50 backdrop-blur-md flex flex-col sm:flex-row justify-between items-center gap-8 shrink-0 rounded-b-[4rem] mt-auto">
+                                <div className="flex items-center gap-12">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                                            <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)]" />
                                         </div>
-                                        <p className="text-[8px] text-slate-400 font-bold ml-4">ENTREGA ESTÁNDAR</p>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none">Entrega Normal</p>
+                                            <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">ESTÁNDAR (4H+)</p>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                            <span className="text-[9px] font-black text-red-600 uppercase tracking-widest">Crítico</span>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-2xl bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                                            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,1)]" />
                                         </div>
-                                        <p className="text-[8px] text-slate-400 font-bold ml-4">EXCESO DE TIEMPO (&lt;4H)</p>
+                                        <div>
+                                            <p className="text-[10px] font-black text-red-600 uppercase tracking-widest leading-none">Entrega Crítica</p>
+                                            <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">MENOS DE 4 HORAS</p>
+                                        </div>
                                     </div>
                                 </div>
                                 <button 
                                     onClick={() => setSelectedDate(null)}
-                                    className="w-full sm:w-auto px-12 h-14 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.25em] shadow-xl active:scale-95 transition-all hover:bg-black group flex items-center justify-center gap-4 border-b-4 border-slate-700"
+                                    className="w-full sm:w-auto px-16 h-16 bg-slate-900 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all hover:bg-black group flex items-center justify-center gap-6 border-b-8 border-slate-950"
                                 >
-                                    Cerrar Reporte <CheckCircle2 size={18} className="group-hover:translate-x-1 transition-transform" />
+                                    Cerrar Reporte <CheckCircle2 size={24} className="group-hover:translate-x-2 transition-transform duration-300" />
                                 </button>
                             </div>
                         </motion.div>
@@ -619,24 +723,32 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
             <AnimatePresence>
                 {viewedImage && (
                     <div 
-                        className="fixed inset-0 z-[600] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 cursor-zoom-out"
+                        className="fixed inset-0 z-[600] bg-slate-950/95 backdrop-blur-[40px] flex items-center justify-center p-6 lg:p-20 cursor-zoom-out"
                         onClick={() => setViewedImage(null)}
                     >
                         <motion.button 
-                            initial={{ opacity: 0, scale: 0.5 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="absolute top-10 right-10 text-white hover:text-red-400 transition-colors bg-white/10 p-3 rounded-full"
+                            initial={{ opacity: 0, scale: 0.5, rotate: -90 }}
+                            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                            className="absolute top-12 right-12 text-white hover:text-red-400 transition-all bg-white/10 hover:bg-white/20 p-5 rounded-[2rem] border border-white/20 shadow-2xl"
                         >
-                            <X size={32} strokeWidth={4} />
+                            <X size={40} strokeWidth={3} />
                         </motion.button>
-                        <motion.img 
-                            initial={{ scale: 0.8, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.8, opacity: 0 }}
-                            src={viewedImage} 
-                            className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl border-4 border-white/10" 
-                            alt="Visualización" 
-                        />
+                        <motion.div
+                            initial={{ scale: 0.8, opacity: 0, y: 100 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.8, opacity: 0, y: 100 }}
+                            className="relative group"
+                        >
+                            <div className="absolute -inset-4 bg-white/20 blur-2xl rounded-[3rem] opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                            <img 
+                                src={viewedImage} 
+                                className="max-w-full max-h-[85vh] object-contain rounded-[2.5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.8)] border-8 border-white/10 relative z-10" 
+                                alt="Visualización Tarea" 
+                            />
+                            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full text-white text-[10px] font-black uppercase tracking-[0.4em] opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0 z-20">
+                                Click para cerrar
+                            </div>
+                        </motion.div>
                     </div>
                 )}
             </AnimatePresence>
