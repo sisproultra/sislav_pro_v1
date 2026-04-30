@@ -224,7 +224,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
           sucursal_id: company.id,
           cajero: currentUser?.name || UserRole.ADMIN, 
           caja: activeCashSession?.caja || 'CAJA PRINCIPAL', 
-          turno: activeCashSession?.turno || `TURNO ${new Date().getHours() < 14 ? 'MAÑANA' : 'TARDE'}`, 
+          turno: activeCashSession?.turno || `${new Date().getHours() < 14 ? 'MAÑANA' : 'TARDE'} TURNO`, 
           fechaApertura: activeCashSession?.fechaApertura || (lastClosingDate.getTime() === 0 ? new Date().toISOString() : lastClosingDate.toISOString()), 
           fechaCierre: new Date().toISOString(), 
           openingBalance: summary.opening, 
@@ -672,11 +672,11 @@ const CashClosing: React.FC<CashClosingProps> = ({
                <h3 className="font-black text-slate-800 text-xl px-2">Cierres Anteriores</h3>
                
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {closingHistory.map((report) => (
+                  {[...closingHistory].sort((a, b) => new Date(b.fechaCierre).getTime() - new Date(a.fechaCierre).getTime()).map((report) => (
                     <div key={report.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between group transition-all hover:shadow-md">
                        <div className="flex justify-between items-start mb-4">
                           <div>
-                             <p className="font-black text-sm text-slate-700">{new Date(report.fechaCierre).toLocaleDateString()} - {report.turno}</p>
+                             <p className="font-black text-sm text-slate-700">{new Date(report.fechaCierre).toLocaleDateString()} - {report.turno.includes('MAÑANA') && !report.turno.includes('TURNO') ? `${report.turno} TURNO` : report.turno}</p>
                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Atendido por: {report.cajero}</p>
                           </div>
                           <button 
