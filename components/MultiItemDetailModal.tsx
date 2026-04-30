@@ -1,15 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
     X, Camera, Save, Mic, Palette, Shirt, Volume2, Activity,
-    Check, Square, Pause, Trash2, Loader2, Play, Image as ImageIcon, Calendar, Clock
+    Check, Square, Pause, Trash2, Loader2, Play, Image as ImageIcon, Calendar, Clock, Maximize2
 } from 'lucide-react';
-import { CartItem, GlobalColor, ItemDetalle, Company } from '../types';
+import { CartItem, GlobalColor, ItemDetalle, Company, UmSaas } from '../types';
 import { dbGetGlobalColors, dbUploadImage } from '../services/dbService';
 
 interface MultiItemDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (detalles: ItemDetalle[]) => void;
+  onSave: (detalles: ItemDetalle[], totalQuantity?: number) => void;
   item: CartItem;
   company: Company;
 }
@@ -48,22 +48,104 @@ const MultiItemDetailModal: React.FC<MultiItemDetailModalProps> = ({ isOpen, onC
     useEffect(() => {
         if (isOpen) {
             loadColors();
-            const initial = Array.from({ length: Math.ceil(item.quantity) }, (_, i) => ({ 
-                index: i, 
-                details: '', 
-                color: '', 
-                hex: '',
-                url_imagen: '',
-                defects: [], 
-                images: [], 
-                audioNote: null, 
-                deliveryDate: '',
-                deliveryTime: '05:00 PM'
-            }));
+            
+            // Determinar si es un producto por peso/volumen que no debe partirse
+            const isBulk = item.um_saas === UmSaas.KILO || 
+                          item.um_saas === UmSaas.LITRO || 
+                          item.um_saas === UmSaas.METROS;
+            
+            // Si es bulk, solo una entrada. Si no, partir según la cantidad (ceil)
+            const length = isBulk ? 1 : Math.ceil(item.quantity || 1);
+
+            let initial: any[] = [];
+            
+            // Intentar cargar detalles existentes si hay
+            if (item.details) {
+                try {
+                    const parsed = JSON.parse(item.details);
+                    if (Array.isArray(parsed)) {
+                        initial = parsed.map((d: any, i: number) => {
+                            // Extraer color hex si es posible
+                            const hexMatch = d.color ? d.color.match(/#(?:[0-9a-fA-F]{3}){1,2}/) : null;
+                            
+                            // Reconstruir fecha y hora
+                            let dDate = '';
+                            let dTime = '05:00 PM';
+                            if (d.fecha_entrega_especifica) {
+                                const dateObj = new Date(d.fecha_entrega_especifica);
+                                dDate = dateObj.toISOString().split('T')[0];
+                                dTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase();
+                            }
+
+                            return {
+                                index: i,
+                                details: d.observaciones || '',
+                                color: d.color || '',
+                                hex: hexMatch ? hexMatch[0] : '',
+                                url_imagen: '', // No tenemos la URL de textura fácilmente aquí sin buscar en availableColors
+                                defects: d.defectos ? d.defectos.split(', ').filter(Boolean) : [],
+                                images: d.unit_images || [],
+                                audioNote: d.unit_audio || null,
+                                deliveryDate: dDate,
+                                deliveryTime: dTime,
+                                width: d.width || 0,
+                                height: d.height || 0,
+                                calculatedQuantity: d.width && d.height ? d.width * d.height : (isBulk ? item.quantity : 1)
+                            };
+                        });
+                    }
+                } catch (e) {
+                    console.error("Error al parsear detalles existentes:", e);
+                }
+            }
+
+            // Si no hay datos previos o la cantidad cambió (y no es bulk), regeneramos/completamos
+            if (initial.length === 0) {
+                initial = Array.from({ length }, (_, i) => ({ 
+                    index: i, 
+                    details: '', 
+                    color: '', 
+                    hex: '',
+                    url_imagen: '',
+                    defects: [], 
+                    images: [], 
+                    audioNote: null, 
+                    deliveryDate: '',
+                    deliveryTime: '05:00 PM',
+                    width: 0,
+                    height: 0,
+                    calculatedQuantity: isBulk ? item.quantity : 1
+                }));
+            } else if (isBulk) {
+                // Para bulk, siempre forzamos a una sola entrada (la primera)
+                initial = [initial[0]];
+            } else if (initial.length < length) {
+                // Si faltan entradas, agregar las nuevas
+                const missing = Array.from({ length: length - initial.length }, (_, i) => ({
+                    index: initial.length + i,
+                    details: '',
+                    color: '',
+                    hex: '',
+                    url_imagen: '',
+                    defects: [],
+                    images: [],
+                    audioNote: null,
+                    deliveryDate: '',
+                    deliveryTime: '05:00 PM',
+                    width: 0,
+                    height: 0,
+                    calculatedQuantity: 1
+                }));
+                initial = [...initial, ...missing];
+            } else if (initial.length > length) {
+                // Si sobran (porque bajó la cantidad), recortamos
+                initial = initial.slice(0, length);
+            }
+
             setItemsData(initial);
         }
         return () => { stopCamera(); stopAudioPlayback(); };
-    }, [isOpen, item.quantity]);
+    }, [isOpen, item.quantity, item.um_saas, item.details]);
 
     const loadColors = async () => {
         const colors = await dbGetGlobalColors();
@@ -195,6 +277,7 @@ const MultiItemDetailModal: React.FC<MultiItemDetailModalProps> = ({ isOpen, onC
     };
 
     const handleSave = () => { 
+        let totalQty = 0;
         const normalDetails: ItemDetalle[] = itemsData.map(it => {
             let finalISO = undefined;
             if (it.deliveryDate && it.deliveryTime) {
@@ -206,16 +289,20 @@ const MultiItemDetailModal: React.FC<MultiItemDetailModalProps> = ({ isOpen, onC
                 finalISO = `${it.deliveryDate}T${String(hour).padStart(2,'0')}:${m}:00Z`;
             }
 
+            totalQty += (it.calculatedQuantity || 1);
+
             return {
                 color: it.color,
                 defectos: it.defects.join(', '),
                 observaciones: it.details.toUpperCase(),
                 fecha_entrega_especifica: finalISO,
                 unit_images: it.images,
-                unit_audio: it.audioNote
+                unit_audio: it.audioNote,
+                width: it.width,
+                height: it.height
             };
         });
-        onSave(normalDetails); 
+        onSave(normalDetails, item.requiresAreaCalc ? totalQty : undefined); 
         onClose();
     };
 
@@ -280,6 +367,67 @@ const MultiItemDetailModal: React.FC<MultiItemDetailModalProps> = ({ isOpen, onC
                                     <button key={def} onClick={() => setItemsData(prev => prev.map((it, i) => i === idx ? { ...it, defects: it.defects.includes(def) ? it.defects.filter((d: string) => d !== def) : [...it.defects, def] } : it))} className={`px-3 py-1.5 rounded-xl text-[9px] font-bold border transition-all ${data.defects.includes(def) ? 'bg-slate-950 border-slate-950 text-white' : 'bg-white text-slate-950 border-slate-300'}`}>{def}</button>
                                 ))}
                             </div>
+
+                            {/* CÁLCULO POR AREA (PARA ALFOMBRAS) */}
+                            {item.requiresAreaCalc && (
+                                <div className="pl-2 border-t border-indigo-100 pt-3 pb-1">
+                                    <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <Maximize2 size={16} /> Cálculo de Área (Ancho x Largo)
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <div className="flex justify-between items-center ml-1">
+                                                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Ancho (m)</label>
+                                            </div>
+                                            <div className="relative">
+                                                <input 
+                                                    type="number" 
+                                                    step="0.01"
+                                                    value={data.width || ''} 
+                                                    onChange={e => {
+                                                        const w = parseFloat(e.target.value) || 0;
+                                                        setItemsData(prev => prev.map((it, i) => i === idx ? { 
+                                                            ...it, 
+                                                            width: w, 
+                                                            calculatedQuantity: w * (it.height || 0),
+                                                            details: `${w.toFixed(2)}x${(it.height || 0).toFixed(2)} m2 ${it.details.replace(/^\d+(\.\d+)?x\d+(\.\d+)? m2 /, '')}`.toUpperCase()
+                                                        } : it));
+                                                    }}
+                                                    className="w-full px-4 py-3 bg-indigo-50 border-2 border-indigo-100 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all shadow-inner"
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <div className="flex justify-between items-center ml-1">
+                                                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Alto / Largo (m)</label>
+                                            </div>
+                                            <div className="relative">
+                                                <input 
+                                                    type="number" 
+                                                    step="0.01"
+                                                    value={data.height || ''} 
+                                                    onChange={e => {
+                                                        const h = parseFloat(e.target.value) || 0;
+                                                        setItemsData(prev => prev.map((it, i) => i === idx ? { 
+                                                            ...it, 
+                                                            height: h, 
+                                                            calculatedQuantity: (it.width || 0) * h,
+                                                            details: `${(it.width || 0).toFixed(2)}x${h.toFixed(2)} m2 ${it.details.replace(/^\d+(\.\d+)?x\d+(\.\d+)? m2 /, '')}`.toUpperCase()
+                                                        } : it));
+                                                    }}
+                                                    className="w-full px-4 py-3 bg-indigo-50 border-2 border-indigo-100 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all shadow-inner"
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 bg-slate-900 rounded-xl p-3 flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total metros cuadrados:</span>
+                                        <span className="text-sm font-black text-white tabular-nums">{(data.calculatedQuantity || 0).toFixed(2)} m²</span>
+                                    </div>
+                                </div>
+                            )}
                             
                             {/* NUEVOS INPUTS: FECHA Y HORA DE ENTREGA POR ITEM */}
                             <div className="pl-2 grid grid-cols-2 gap-3">

@@ -1644,7 +1644,15 @@ export default function App() {
                     removeFromCart={(id) => setCart(prev => prev.filter(i => i.id !== id))} 
                     updateQuantity={(id, q) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: q, subtotal: roundToOneDecimal(q * i.price) } : i))} 
                     updatePrice={(id, p) => setCart(prev => prev.map(i => i.id === id ? { ...i, price: p, subtotal: roundToOneDecimal(i.quantity * p) } : i))} 
-                    updateDetails={(id, det, imgs, aud, date) => setCart(prev => prev.map(i => i.id === id ? { ...i, details: det, images: imgs, audioNote: aud, itemDeliveryDate: date } : i))} 
+                    updateDetails={(id, det, imgs, aud, date, newQty) => setCart(prev => prev.map(i => i.id === id ? { 
+                        ...i, 
+                        details: det, 
+                        images: imgs, 
+                        audioNote: aud, 
+                        itemDeliveryDate: date,
+                        quantity: newQty !== undefined ? newQty : i.quantity,
+                        subtotal: roundToOneDecimal((newQty !== undefined ? newQty : i.quantity) * i.price)
+                    } : i))} 
                     onCheckout={(...args) => {
                         return new Promise((resolve) => {
                             checkCajaOpen(() => {

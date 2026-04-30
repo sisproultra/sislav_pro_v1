@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Search, ShoppingBasket, ShoppingCart, Trash2, Plus, Minus, User, X, Save, Loader2, CheckCircle2, Ticket, Layers, PlusCircle, ClipboardEdit, Camera, Mic, AlertTriangle, ShieldAlert, Pause, Play, Clock, History, Crown, RefreshCcw, Image as ImageIcon, Bell, Shirt, Edit2, Check, DollarSign, WashingMachine, FileText } from 'lucide-react';
 import { Product, CartItem, InvoiceType, InvoiceTotals, Client, PaymentMethodConfig, PickupRequest, Category, UnitCode, GlobalColor, Company, PausedSale, UmSaas } from '../types';
 import { calculateTotals } from '../utils/calculations';
@@ -25,7 +26,7 @@ interface PointOfSaleProps {
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   updatePrice: (id: string, price: number) => void;
-  updateDetails: (id: string, details: string, images?: string[], audioNote?: string, deliveryDate?: string) => void;
+  updateDetails: (id: string, details: string, images?: string[], audioNote?: string, deliveryDate?: string, newQuantity?: number) => void;
   onCheckout: (docType: InvoiceType, client: Client, paymentMethodId: string, deliveryDate?: string, notes?: string, prePayment?: number, discount?: number, customerPhotos?: string[], paymentsList?: { methodName: string, amount: number }[], cartOverride?: CartItem[], pickupOverride?: string) => Promise<void>;
   onAddClient: (client: Client) => Promise<Client>;
   onOpenInventoryModal: () => void;
@@ -73,6 +74,7 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
   const [showFacturaRestriction, setShowFacturaRestriction] = useState(false);
   const [showSunatThresholdModal, setShowSunatThresholdModal] = useState(false);
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+  const [showNoClientAlert, setShowNoClientAlert] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [nagVisible, setNagVisible] = useState(false);
   
@@ -398,6 +400,9 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
   const handleCheckoutClick = () => {
     if (cart.length === 0) return alert("El carrito está vacío.");
     if (!selectedClient) {
+        setShowNoClientAlert(true);
+        setTimeout(() => setShowNoClientAlert(false), 1250);
+        
         setClientError(true);
         const clientArea = document.getElementById('client-selector-area');
         if (clientArea) clientArea.scrollIntoView({ behavior: 'smooth' });
@@ -903,8 +908,14 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
                                 <button 
                                     onClick={() => {
                                         const isBulkUnit = [UnitCode.KGM, UnitCode.MTK, UnitCode.LTR].includes(item.unitCode);
-                                        if (isBulkUnit) setSelectedCartItemForSingleDetail(item);
-                                        else setSelectedCartItemForMultiDetail(item);
+                                        // Si requiere cálculo de área, usamos obligatoriamente el MultiItemDetailModal (que ahora maneja área)
+                                        if (item.requiresAreaCalc) {
+                                            setSelectedCartItemForMultiDetail(item);
+                                        } else if (isBulkUnit) {
+                                            setSelectedCartItemForSingleDetail(item);
+                                        } else {
+                                            setSelectedCartItemForMultiDetail(item);
+                                        }
                                     }} 
                                     className={`p-1 rounded-lg transition-all border ${item.details || (item.images && item.images.length > 0) ? 'bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm' : 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100'}`}
                                     title="Auditoría de Prenda"
@@ -1015,7 +1026,7 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
             onClose={() => setSelectedCartItemForMultiDetail(null)} 
             item={selectedCartItemForMultiDetail} 
             company={company}
-            onSave={(detalles) => updateDetails(selectedCartItemForMultiDetail.id, JSON.stringify(detalles))} 
+            onSave={(detalles, newQty) => updateDetails(selectedCartItemForMultiDetail.id, JSON.stringify(detalles), undefined, undefined, undefined, newQty)} 
           />
       )}
 
@@ -1217,6 +1228,27 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
               </div>
           </div>
       )}
+
+      <AnimatePresence>
+        {showNoClientAlert && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center pointer-events-none p-4">
+             <motion.div 
+                initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.8, y: 20 }}
+                className="bg-white border-2 border-slate-200 shadow-2xl rounded-[2rem] px-10 py-6 flex flex-col items-center gap-4"
+             >
+                <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 animate-pulse">
+                   <ShieldAlert size={32} />
+                </div>
+                <div className="text-center">
+                  <h3 className="font-black text-slate-900 uppercase tracking-tighter text-2xl leading-none">Falta Cliente</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 italic">Seleccione un cliente para continuar</p>
+                </div>
+             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

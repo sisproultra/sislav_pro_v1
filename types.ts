@@ -189,6 +189,7 @@ export interface Product extends BaseEntity {
     recipe?: RecipeItem[];
     trackStock?: boolean;
     processingTime?: string;
+    requiresAreaCalc?: boolean;
 }
 
 export interface CartItem extends Product {
@@ -224,6 +225,8 @@ export interface ItemDetalle {
     fecha_entrega_especifica?: string;
     unit_images?: string[];
     unit_audio?: string | null;
+    width?: number;
+    height?: number;
 }
 
 export interface PaymentRecord {
