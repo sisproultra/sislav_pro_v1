@@ -3,13 +3,16 @@ import React, { useState, useMemo } from 'react';
 import { 
     Calendar, ArrowRight, TrendingUp, 
     BadgeDollarSign, CreditCard, ChevronRight, X, User, Receipt,
-    Search, Filter, Download, FileText, Smartphone, DollarSign, Wallet
+    Search, Filter, Download, FileText, Smartphone, DollarSign, Wallet,
+    Loader2
 } from 'lucide-react';
-import { Invoice, Company, PaymentMethodConfig, InvoiceType } from '../types';
+import { Company, PaymentMethodConfig, InvoiceType } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { useQuery } from '@tanstack/react-query';
+import { dbGetPaymentsReport } from '../services/dbService';
 
 interface MyReportsProps {
-    invoices: Invoice[];
+    invoices: any[]; // Se mantiene por compatibilidad de props pero no se usará para ingresos
     paymentMethods: PaymentMethodConfig[];
     company: any;
 }
@@ -20,10 +23,10 @@ interface PaymentDetail {
     amount: number;
     date: string;
     userName: string;
-    invoice: Invoice;
+    invoice: any;
 }
 
-const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company }) => {
+const MyReports: React.FC<MyReportsProps> = ({ paymentMethods, company }) => {
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
         d.setDate(d.getDate() - 7);
@@ -35,66 +38,54 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
     const currency = company.moneda_simbolo || 'S/';
     const primaryColor = company.color_primario || '#4f46e5';
 
+    // --- CARGA DE DATOS BASADA EN FECHA DE PAGO ---
+    const { data: payments = [], isLoading } = useQuery({
+        queryKey: ['paymentsReport', startDate, endDate, company.id],
+        queryFn: () => dbGetPaymentsReport(startDate, endDate),
+        enabled: !!company.id
+    });
+
     // --- PROCESAMIENTO DE DATOS ---
     const dailyIncome = useMemo(() => {
         const daysMap: Record<string, { total: number; payments: Record<string, { amount: number; count: number; details: PaymentDetail[] }> }> = {};
 
-        invoices.forEach(inv => {
-            const date = inv.date.split('T')[0];
-            if (date < startDate || date > endDate) return;
+        payments.forEach(p => {
+            // Convertimos la fecha del servidor a la fecha local del navegador (Perú)
+            // Esto asegura que pagos en UTC-0 se agrupen en el día correcto de Perú
+            const localDate = new Date(p.date);
+            const date = localDate.getFullYear() + '-' + 
+                         String(localDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                         String(localDate.getDate()).padStart(2, '0');
 
             if (!daysMap[date]) {
+
                 daysMap[date] = { total: 0, payments: {} };
             }
 
-            // Procesar pagos individuales
-            if (inv.payments && inv.payments.length > 0) {
-                inv.payments.forEach(p => {
-                    const methodId = p.metodo_pago_id;
-                    const methodName = p.metodo_pago_name || 'OTROS';
-                    
-                    if (!daysMap[date].payments[methodId]) {
-                        daysMap[date].payments[methodId] = { amount: 0, count: 0, details: [] };
-                    }
-
-                    daysMap[date].total += p.monto;
-                    daysMap[date].payments[methodId].amount += p.monto;
-                    daysMap[date].payments[methodId].count += 1;
-                    daysMap[date].payments[methodId].details.push({
-                        ticket: inv.ordenNumber || inv.correlativo.toString(),
-                        client: inv.client.name,
-                        amount: p.monto,
-                        date: inv.date,
-                        userName: p.registrado_por || 'SISTEMA',
-                        invoice: inv
-                    });
-                });
-            } else if (inv.prePaymentAmount && inv.prePaymentAmount > 0) {
-                // Fallback para facturación antigua o pagos no desglosados
-                const methodId = 'legacy';
-                
-                if (!daysMap[date].payments[methodId]) {
-                    daysMap[date].payments[methodId] = { amount: 0, count: 0, details: [] };
-                }
-
-                daysMap[date].total += inv.prePaymentAmount;
-                daysMap[date].payments[methodId].amount += inv.prePaymentAmount;
-                daysMap[date].payments[methodId].count += 1;
-                daysMap[date].payments[methodId].details.push({
-                    ticket: inv.ordenNumber || inv.correlativo.toString(),
-                    client: inv.client.name,
-                    amount: inv.prePaymentAmount,
-                    date: inv.date,
-                    userName: 'SISTEMA',
-                    invoice: inv
-                });
+            const methodId = p.methodId;
+            const methodName = p.methodName || 'OTROS';
+            
+            if (!daysMap[date].payments[methodId]) {
+                daysMap[date].payments[methodId] = { amount: 0, count: 0, details: [] };
             }
+
+            daysMap[date].total += p.amount;
+            daysMap[date].payments[methodId].amount += p.amount;
+            daysMap[date].payments[methodId].count += 1;
+            daysMap[date].payments[methodId].details.push({
+                ticket: p.ticket,
+                client: p.clientName,
+                amount: p.amount,
+                date: p.date,
+                userName: p.userName,
+                invoice: p.invoice
+            });
         });
 
         return Object.entries(daysMap)
             .sort((a, b) => b[0].localeCompare(a[0]))
             .map(([date, data]) => ({ date, ...data }));
-    }, [invoices, startDate, endDate]);
+    }, [payments]);
 
     const modalData = useMemo(() => {
         if (!selectedPaymentType) return [];
@@ -148,7 +139,15 @@ const MyReports: React.FC<MyReportsProps> = ({ invoices, paymentMethods, company
                 </div>
 
                 {/* LISTA POR DÍAS */}
-                <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 relative min-h-[200px]">
+                    {isLoading && (
+                        <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-[2rem]">
+                            <div className="flex flex-col items-center gap-2">
+                                <Loader2 className="animate-spin text-indigo-600" size={32} />
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Actualizando Ingresos...</p>
+                            </div>
+                        </div>
+                    )}
                     {dailyIncome.length === 0 ? (
                         <div className="bg-white p-16 rounded-[2.5rem] border border-dashed border-slate-300 flex flex-col items-center justify-center text-center col-span-full">
                             <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 mb-4">

@@ -29,6 +29,17 @@ let activeUserId: string | null = null;
 // --- SISTEMA DE CACHE ---
 const queryCache = new Map<string, { data: any, timestamp: number }>();
 
+/**
+ * Obtiene la fecha y hora actual formateada para Perú (UTC-5)
+ * Retorna un string ISO con el offset -05:00 para persistencia exacta
+ */
+export const getPeruTimestamp = () => {
+    // Calculamos el offset de Perú (-5 horas)
+    const now = new Date();
+    const peruTime = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+    return peruTime.toISOString().replace('Z', '-05:00');
+};
+
 const getCached = (key: string, ttlMs: number = 30000) => {
     const entry = queryCache.get(key);
     if (!entry) return null;
@@ -1383,9 +1394,12 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
 
     const formattedOrderCode = formatOrderNumber(result.correlativo_interno, currentConfig);
     
-    // Actualizamos la columna codigo_orden con el formato final (ceros, sufijos, etc)
+    // Actualizamos la columna codigo_orden y fecha_recepcion con el formato final y zona horaria correcta
     try {
-        await supabase.from('ventas').update({ codigo_orden: formattedOrderCode }).eq('id', result.id);
+        await supabase.from('ventas').update({ 
+            codigo_orden: formattedOrderCode,
+            fecha_recepcion: getPeruTimestamp()
+        }).eq('id', result.id);
     } catch (updateError) {
         console.error("Error persistiendo codigo_orden formateado:", updateError);
         // No lanzamos error para no romper la creación de la venta que ya fue atómica
@@ -1604,6 +1618,60 @@ export const dbAdjustClientBalance = async (clientId: string, delta: number) => 
         .eq('id', clientId);
     
     if (error) throw error;
+};
+
+export const dbGetPaymentsReport = async (startDate: string, endDate: string): Promise<any[]> => {
+    const branchId = getActiveBranchId();
+    if (!branchId) return [];
+    
+    try {
+        const { data, error } = await supabase
+            .from('pagos_venta')
+            .select(`
+                id,
+                monto,
+                fecha_pago,
+                registrado_por,
+                metodo_pago_id,
+                metodos_pago(nombre),
+                ventas!inner(
+                    id,
+                    codigo_orden,
+                    correlativo,
+                    fecha_recepcion,
+                    total,
+                    sucursal_id,
+                    clientes(id, nombres, apellidos, razon_social)
+                )
+            `)
+            .eq('ventas.sucursal_id', branchId)
+            .gte('fecha_pago', `${startDate}T00:00:00-05:00`)
+            .lte('fecha_pago', `${endDate}T23:59:59-05:00`)
+            .order('fecha_pago', { ascending: false });
+
+        if (error) throw error;
+
+        return (data || []).map(p => {
+            const v = p.ventas as any;
+            const c = v.clientes;
+            const clientName = c ? (c.razon_social || `${c.nombres || ''} ${c.apellidos || ''}`.trim()) : 'CLIENTE VARIOS';
+            
+            return {
+                id: p.id,
+                amount: Number(p.monto),
+                date: p.fecha_pago,
+                methodId: p.metodo_pago_id,
+                methodName: (p.metodos_pago as any)?.nombre || (Array.isArray(p.metodos_pago) ? (p.metodos_pago as any)[0]?.nombre : 'OTROS'),
+                userName: p.registrado_por || 'SISTEMA',
+                ticket: v.codigo_orden || v.correlativo?.toString() || '---',
+                clientName: fixEncoding(clientName).toUpperCase(),
+                invoice: v // Para mantener compatibilidad si se necesita ver el detalle
+            };
+        });
+    } catch (error) {
+        console.error("Error fetching payments report:", error);
+        return [];
+    }
 };
 
 export const dbGetInvoicesForReport = async (filter: 'TO_COLLECT' | 'TO_DELIVER' | 'ALL'): Promise<Invoice[]> => {
@@ -2036,7 +2104,8 @@ export const dbAddPayment = async (ventaId: string, amount: number, methodName: 
         registrado_por: user,
         usuario_id: userId,
         sucursal_id: branchId,
-        empresa_holding_id: holdingId
+        empresa_holding_id: holdingId,
+        fecha_pago: getPeruTimestamp()
     });
     if (payError) throw payError;
 
