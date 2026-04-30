@@ -44,6 +44,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
   const [activeView, setActiveView] = useState<'CURRENT' | 'HISTORY' | 'PROJECTIONS'>('CURRENT');
   const [closingHistory, setClosingHistory] = useState<CashClosingType[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedMethodPayments, setSelectedMethodPayments] = useState<{ method: string; payments: any[] } | null>(null);
 
   const isHighRole = currentUser?.role === UserRole.OWNER || currentUser?.role === UserRole.SAAS_MASTER;
 
@@ -155,6 +156,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
 
   const summary = useMemo(() => {
       const methods: Record<string, number> = {};
+      const methodDetails: Record<string, any[]> = {};
       let totalCashSales = 0;
       const categoryMap: Record<string, { name: string; quantity: number; amount: number }> = {};
       const activeUserId = activeCashSession?.usuario_id;
@@ -176,8 +178,26 @@ const CashClosing: React.FC<CashClosingProps> = ({
           userPaymentsAtTurn.forEach(p => {
               const method = (p.metodo_pago_name || 'EFECTIVO').toUpperCase();
               const amount = p.monto || 0;
-              if (method.includes('EFECTIVO')) totalCashSales += amount;
-              else methods[method] = (methods[method] || 0) + amount;
+              
+              if (method.includes('EFECTIVO')) {
+                  totalCashSales += amount;
+                  if (!methodDetails['EFECTIVO']) methodDetails['EFECTIVO'] = [];
+                  methodDetails['EFECTIVO'].push({
+                      ticket: inv.ticketNumber || `${inv.serie}-${inv.correlativo}`,
+                      client: inv.client?.name || 'CLIENTE VARIOS',
+                      date: p.date || inv.date,
+                      amount: amount
+                  });
+              } else {
+                  methods[method] = (methods[method] || 0) + amount;
+                  if (!methodDetails[method]) methodDetails[method] = [];
+                  methodDetails[method].push({
+                      ticket: inv.ticketNumber || `${inv.serie}-${inv.correlativo}`,
+                      client: inv.client?.name || 'CLIENTE VARIOS',
+                      date: p.date || inv.date,
+                      amount: amount
+                  });
+              }
           });
 
           // Solo sumar categorías si el usuario tuvo actividad (pagos) en esta factura durante el turno
@@ -201,6 +221,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
       
       return { 
           methods, 
+          methodDetails,
           totalCashSales, 
           totalExpenses, 
           opening: open, 
@@ -440,24 +461,37 @@ const CashClosing: React.FC<CashClosingProps> = ({
 
                   <div className="space-y-3">
                     {/* Efectivo row */}
-                    <div className="flex items-center justify-between p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:scale-[1.01]">
+                    <div 
+                      onClick={() => summary.totalCashSales > 0 && setSelectedMethodPayments({ method: 'EFECTIVO', payments: summary.methodDetails['EFECTIVO'] || [] })}
+                      className="flex items-center justify-between p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:scale-[1.01] cursor-pointer group"
+                    >
                        <div className="flex items-center gap-3">
-                          <div className="bg-emerald-100 p-2.5 rounded-xl text-emerald-600 shadow-sm">
+                          <div className="bg-emerald-100 p-2.5 rounded-xl text-emerald-600 shadow-sm group-hover:bg-emerald-200 transition-colors">
                              <Banknote size={24} />
                           </div>
-                          <span className="font-black text-slate-700 uppercase tracking-tight">EFECTIVO</span>
+                          <div className="flex flex-col">
+                            <span className="font-black text-slate-700 uppercase tracking-tight">EFECTIVO</span>
+                            <span className="text-[8px] font-black text-emerald-600/60 uppercase tracking-widest">Click para ver detalle</span>
+                          </div>
                        </div>
                        <span className="font-black text-2xl text-emerald-600">{currency} {summary.totalCashSales.toFixed(2)}</span>
                     </div>
 
                     {/* Other methods */}
                     {Object.entries(summary.methods).map(([method, amount]) => (
-                      <div key={method} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 transition-all hover:bg-slate-100/50">
+                      <div 
+                        key={method} 
+                        onClick={() => setSelectedMethodPayments({ method, payments: summary.methodDetails[method] || [] })}
+                        className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 transition-all hover:bg-slate-100/50 cursor-pointer group"
+                      >
                         <div className="flex items-center gap-3">
-                          <div className="bg-white p-2.5 rounded-xl text-slate-600 shadow-sm border border-slate-100">
+                          <div className="bg-white p-2.5 rounded-xl text-slate-600 shadow-sm border border-slate-100 group-hover:border-slate-300 transition-colors">
                              {getPaymentIcon(method)}
                           </div>
-                          <span className="font-black text-sm text-slate-600 uppercase tracking-tight">{method}</span>
+                          <div className="flex flex-col">
+                            <span className="font-black text-sm text-slate-600 uppercase tracking-tight">{method}</span>
+                            <span className="text-[8px] font-black text-slate-400/60 uppercase tracking-widest">Click para ver detalle</span>
+                          </div>
                         </div>
                         <span className="font-black text-lg text-slate-800">{currency} {amount.toFixed(2)}</span>
                       </div>
@@ -727,6 +761,103 @@ const CashClosing: React.FC<CashClosingProps> = ({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Modal Detalle de Cobros */}
+      <AnimatePresence>
+        {selectedMethodPayments && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedMethodPayments(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            ></motion.div>
+            
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-white/20"
+            >
+              {/* Header Modal */}
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between shrink-0" style={{ backgroundColor: (company.primaryColor || '#0054A6') + '08' }}>
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-3xl flex items-center justify-center shadow-inner" style={{ backgroundColor: (company.primaryColor || '#0054A6') + '15', color: (company.primaryColor || '#0054A6') }}>
+                    {getPaymentIcon(selectedMethodPayments.method)}
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">Detalles de Cobro</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-2">MÉTODO: {selectedMethodPayments.method}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedMethodPayments(null)}
+                  className="p-4 hover:bg-white rounded-2xl transition-all active:scale-90 border border-transparent hover:border-slate-100 hover:shadow-xl text-slate-400 hover:text-slate-900"
+                >
+                  <X size={28} />
+                </button>
+              </div>
+
+              {/* Body Modal - Lista de Pagos */}
+              <div className="p-8 overflow-y-auto flex-1 space-y-4">
+                {selectedMethodPayments.payments.length > 0 ? (
+                  <div className="space-y-4">
+                    {selectedMethodPayments.payments.map((p, idx) => (
+                      <motion.div 
+                        key={idx}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        className="bg-slate-50 border border-slate-100 p-5 rounded-[1.5rem] flex items-center justify-between hover:border-slate-300 transition-all group"
+                      >
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-3">
+                            <span className="font-black text-slate-900 uppercase tracking-tighter text-sm bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-sm">
+                              {p.ticket}
+                            </span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                              <Clock size={12} className="text-blue-500" />
+                              {new Date(p.date).toLocaleTimeString('es-PE', { hour12: false })}
+                            </span>
+                          </div>
+                          <p className="font-black text-slate-600 text-sm uppercase tracking-tight truncate max-w-[250px]">{p.client}</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{new Date(p.date).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Pagado</p>
+                          <span className="text-xl font-black text-slate-900 block group-hover:scale-110 transition-transform">{currency} {p.amount.toFixed(2)}</span>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-20 text-center opacity-40">
+                    <AlertTriangle size={64} className="mb-4 text-slate-300" />
+                    <p className="font-black text-slate-400 uppercase tracking-widest">No hay pagos registrados para este método</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer Modal */}
+              <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total en {selectedMethodPayments.method}</span>
+                  <span className="text-2xl font-black text-slate-950">
+                    {currency} {selectedMethodPayments.payments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setSelectedMethodPayments(null)}
+                  className="px-10 h-14 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.25em] shadow-xl active:scale-95 transition-all hover:bg-black group flex items-center justify-center gap-4"
+                >
+                  Cerrar Detalle <CheckCircle2 size={18} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
