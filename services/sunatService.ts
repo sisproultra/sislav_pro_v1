@@ -206,10 +206,17 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
       
       const data = body.data; 
 
-      if (body.success === true || (data && (String(data.respuesta_sunat_codigo) === "0" || data.respuesta_sunat_codigo === 0))) {
+      // Detección de error "Ya informado" o "Registrado previamente"
+      const errorMessage = (data?.respuesta_sunat_descripcion || body?.mensaje || body?.error || "").toUpperCase();
+      const isAlreadyAccepted = errorMessage.includes("INFORMADO ANTERIORMENTE") || 
+                                errorMessage.includes("REGISTRADO PREVIAMENTE") ||
+                                errorMessage.includes("YA EXISTE EL COMPROBANTE") ||
+                                errorMessage.includes("DUPLICADO");
+
+      if (body.success === true || (data && (String(data.respuesta_sunat_codigo) === "0" || data.respuesta_sunat_codigo === 0)) || isAlreadyAccepted) {
           return {
               success: true,
-              description: data?.respuesta_sunat_descripcion || "Comprobante Aceptado por SUNAT",
+              description: isAlreadyAccepted ? "Comprobante ya informado anteriormente (Aceptado)" : (data?.respuesta_sunat_descripcion || "Comprobante Aceptado por SUNAT"),
               hash: data?.hash || "---",
               pdfUrl: data?.ruta_pdf || data?.url_pdf || `${apiBaseUrl}/files/facturacion_electronica/PDF/${company.ruc}-${invoice.serie}-${invoice.correlativo}.pdf`,
               xmlUrl: data?.ruta_xml || `${apiBaseUrl}/files/facturacion_electronica/XML/${company.ruc}-${invoice.serie}-${invoice.correlativo}.xml`,
