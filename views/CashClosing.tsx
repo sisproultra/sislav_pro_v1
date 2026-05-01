@@ -45,6 +45,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
   const [closingHistory, setClosingHistory] = useState<CashClosingType[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedMethodPayments, setSelectedMethodPayments] = useState<{ method: string; payments: any[] } | null>(null);
+  const [selectedHistoryClosing, setSelectedHistoryClosing] = useState<CashClosingType | null>(null);
 
   const isHighRole = currentUser?.role === UserRole.OWNER || currentUser?.role === UserRole.SAAS_MASTER;
 
@@ -138,6 +139,9 @@ const CashClosing: React.FC<CashClosingProps> = ({
   const pendingExpenses = useMemo(() => {
       const activeUserId = activeCashSession?.usuario_id;
       return expenses.filter(exp => {
+          if (activeCashSession?.id && exp.cash_session_id) {
+              return exp.cash_session_id === activeCashSession.id;
+          }
           const dateMatch = new Date(exp.date) >= lastClosingDate;
           const userMatch = activeUserId 
             ? (exp as any).usuarioId === activeUserId 
@@ -164,6 +168,9 @@ const CashClosing: React.FC<CashClosingProps> = ({
       // Iteramos directamente sobre las facturas pero filtramos PAGOS
       invoices.forEach(inv => {
           const userPaymentsAtTurn = (inv.payments || []).filter(p => {
+              if (activeCashSession?.id && (p as any).cash_session_id) {
+                  return (p as any).cash_session_id === activeCashSession.id;
+              }
               const pDate = new Date(p.date || inv.date);
               const dateMatch = pDate >= lastClosingDate;
               let userMatch = false;
@@ -240,6 +247,13 @@ const CashClosing: React.FC<CashClosingProps> = ({
       setIsClosing(true);
       const diff = cashCount - summary.expectedCash;
       
+      const allPayments: any[] = [];
+      Object.entries(summary.methodDetails).forEach(([methodName, pList]) => {
+          pList.forEach(p => {
+              allPayments.push({ ...p, methodName });
+          });
+      });
+
       const report: CashClosingType = { 
           id: activeCashSession?.id || Date.now().toString(), 
           sucursal_id: company.id,
@@ -255,7 +269,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
           expectedCash: summary.expectedCash, 
           actualCash: cashCount, 
           difference: diff, 
-          transactions: [], 
+          transactions: allPayments, 
           topCategories: summary.topCategories
       };
       
@@ -701,54 +715,100 @@ const CashClosing: React.FC<CashClosingProps> = ({
                initial={{ opacity: 0, scale: 0.98 }}
                animate={{ opacity: 1, scale: 1 }}
                exit={{ opacity: 0, scale: 1.02 }}
-               className="space-y-4"
+               className="space-y-6"
             >
-               <h3 className="font-black text-slate-800 text-xl px-2">Cierres Anteriores</h3>
+               <div className="flex items-center justify-between px-2">
+                 <h3 className="font-black text-slate-800 text-xl">Cierres Anteriores</h3>
+                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-full flex items-center gap-2">
+                    <History size={12} /> Orden: Más reciente primero
+                 </span>
+               </div>
                
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[...closingHistory].sort((a, b) => new Date(b.fechaCierre).getTime() - new Date(a.fechaCierre).getTime()).map((report) => (
-                    <div key={report.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between group transition-all hover:shadow-md">
-                       <div className="flex justify-between items-start mb-4">
-                          <div>
-                             <p className="font-black text-sm text-slate-700">{new Date(report.fechaCierre).toLocaleDateString()} - {report.turno.includes('MAÑANA') && !report.turno.includes('TURNO') ? `${report.turno} TURNO` : report.turno}</p>
-                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Atendido por: {report.cajero}</p>
-                          </div>
-                          <button 
-                             onClick={() => handlePrint(report)}
-                             className="p-3 bg-gray-50 rounded-xl text-[#0054A6] hover:bg-[#0054A6] hover:text-white transition-all shadow-sm"
-                             style={{ '--hover-bg': company.primaryColor || '#0054A6' } as any}
-                          >
-                            <Printer size={18} />
-                          </button>
-                       </div>
-                       
-                       <div className="grid grid-cols-2 gap-4 py-3 border-t border-gray-50 border-b mb-4">
-                          <div>
-                             <p className="text-[9px] font-bold text-gray-400 uppercase">Efectivo Real</p>
-                             <p className="font-black text-xl text-slate-800">{currency} {report.actualCash.toFixed(2)}</p>
-                          </div>
-                          <div className="text-right">
-                             <p className="text-[9px] font-bold text-gray-400 uppercase">Diferencia</p>
-                             <p className={`font-black text-xl ${report.difference >= 0 ? 'text-green-600' : 'text-rose-600'}`}>
-                               {report.difference >= 0 ? '+' : ''}{report.difference.toFixed(2)}
-                             </p>
-                          </div>
-                       </div>
-
-                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            className="text-[10px] font-black text-[#0054A6] flex items-center gap-1 uppercase"
-                            style={{ color: company.primaryColor || '#0054A6' }}
-                          >
-                             Ver Detalle Completo <ArrowRight size={10} />
-                          </button>
-                       </div>
-                    </div>
-                  ))}
+               <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="overflow-x-auto no-scrollbar">
+                    <table className="w-full text-left border-separate border-spacing-0 min-w-[800px]">
+                      <thead>
+                        <tr className="bg-slate-50/50 border-b border-slate-100">
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100">Fecha y Hora</th>
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100">Turno / Cajero</th>
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Efectivo Real</th>
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Diferencia</th>
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-center">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {[...closingHistory]
+                          .sort((a, b) => new Date(b.fechaCierre).getTime() - new Date(a.fechaCierre).getTime())
+                          .map((report) => (
+                            <tr key={report.id} className="hover:bg-slate-50/80 transition-colors group">
+                              <td className="px-6 py-5">
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-black text-slate-700 uppercase tracking-tight text-xs">
+                                    {new Date(report.fechaCierre).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <Clock size={10} className="text-[#0054A6]" style={{ color: company.primaryColor }} />
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                      {new Date(report.fechaCierre).toLocaleTimeString('es-PE', { hour12: false })}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-5">
+                                <div className="flex flex-col">
+                                   <span className="text-xs font-black text-slate-600 uppercase tracking-tight">{report.cajero}</span>
+                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                                      {report.turno.includes('MAÑANA') && !report.turno.includes('TURNO') ? `${report.turno} TURNO` : report.turno}
+                                   </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-5 text-right">
+                                <span className="text-sm font-black text-slate-900 tabular-nums">
+                                  {currency} {report.actualCash.toFixed(2)}
+                                </span>
+                              </td>
+                              <td className="px-6 py-5 text-right">
+                                <div className="inline-flex flex-col items-end">
+                                  <span className={`text-sm font-black tabular-nums ${report.difference >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                    {report.difference >= 0 ? '+' : ''}{currency} {report.difference.toFixed(2)}
+                                  </span>
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest opacity-60">
+                                    {report.difference >= 0 ? 'Sobrante' : 'Faltante'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-5">
+                                <div className="flex justify-center gap-2">
+                                  <button 
+                                      onClick={() => setSelectedHistoryClosing(report)}
+                                      className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-90"
+                                      title="Ver Detalle"
+                                  >
+                                    <Eye size={18} />
+                                  </button>
+                                  <button 
+                                      onClick={() => handlePrint(report)}
+                                      className="p-3 bg-slate-100 rounded-xl text-slate-500 hover:bg-slate-900 hover:text-white transition-all shadow-sm active:scale-90"
+                                      title="Reimprimir Cierre"
+                                  >
+                                    <Printer size={18} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                   {closingHistory.length === 0 && (
-                    <div className="col-span-full bg-white p-12 rounded-2xl text-center border-2 border-dashed border-gray-100">
-                       <History size={48} className="mx-auto text-gray-200 mb-4" />
-                       <p className="text-gray-400 font-bold italic">No se ha realizado ningún cierre histórico todavía.</p>
+                    <div className="bg-white p-20 text-center flex flex-col items-center gap-4">
+                       <div className="w-20 h-20 rounded-full bg-slate-50 flex items-center justify-center text-slate-200 border-2 border-dashed border-slate-100">
+                          <History size={40} />
+                       </div>
+                       <div>
+                          <p className="text-slate-400 font-black uppercase tracking-widest text-xs">Historial Vacío</p>
+                          <p className="text-[10px] text-slate-300 font-bold mt-1 uppercase tracking-tighter">No se han realizado cierres de caja todavía.</p>
+                       </div>
                     </div>
                   )}
                </div>
@@ -762,7 +822,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
         </AnimatePresence>
       </div>
 
-      {/* Modal Detalle de Cobros */}
+      {/* Modal Detalle de Cobros (Formas de Pago Específicas) */}
       <AnimatePresence>
         {selectedMethodPayments && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
@@ -818,11 +878,11 @@ const CashClosing: React.FC<CashClosingProps> = ({
                             </span>
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                               <Clock size={12} className="text-blue-500" />
-                              {new Date(p.date).toLocaleTimeString('es-PE', { hour12: false })}
+                              {new Date(p.date || Date.now()).toLocaleTimeString('es-PE', { hour12: false })}
                             </span>
                           </div>
                           <p className="font-black text-slate-600 text-sm uppercase tracking-tight truncate max-w-[250px]">{p.client}</p>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{new Date(p.date).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{new Date(p.date || Date.now()).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Pagado</p>
@@ -852,6 +912,120 @@ const CashClosing: React.FC<CashClosingProps> = ({
                   className="px-10 h-14 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.25em] shadow-xl active:scale-95 transition-all hover:bg-black group flex items-center justify-center gap-4"
                 >
                   Cerrar Detalle <CheckCircle2 size={18} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Detalle Historial (Resumen de tickets y clientes del cierre) */}
+      <AnimatePresence>
+        {selectedHistoryClosing && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedHistoryClosing(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            ></motion.div>
+            
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-3xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-white/20"
+            >
+              {/* Header Modal */}
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between shrink-0" style={{ backgroundColor: (company.primaryColor || '#0054A6') + '08' }}>
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-3xl flex items-center justify-center shadow-inner text-white shadow-lg" style={{ backgroundColor: company.primaryColor || '#0054A6' }}>
+                    <ShieldCheck size={28} />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">Resumen del Turno</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-2">CAJERO: {selectedHistoryClosing.cajero}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedHistoryClosing(null)}
+                  className="p-4 hover:bg-white rounded-2xl transition-all active:scale-90 border border-transparent hover:border-slate-100 hover:shadow-xl text-slate-400 hover:text-slate-900"
+                >
+                  <X size={28} />
+                </button>
+              </div>
+
+              {/* Body Modal */}
+              <div className="p-8 overflow-y-auto flex-1 space-y-8">
+                {/* Stats Summary */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                   <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl">
+                      <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1">Caja Real</p>
+                      <p className="text-xl font-black text-emerald-700">{currency} {selectedHistoryClosing.actualCash.toFixed(2)}</p>
+                   </div>
+                   <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Efecto Ventas</p>
+                      <p className="text-xl font-black text-slate-700">{currency} {selectedHistoryClosing.cashSales.toFixed(2)}</p>
+                   </div>
+                   <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl">
+                      <p className="text-[8px] font-black text-rose-400 uppercase tracking-widest mb-1">Egresos</p>
+                      <p className="text-xl font-black text-rose-700">-{currency} {selectedHistoryClosing.expenses.toFixed(2)}</p>
+                   </div>
+                   <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl">
+                      <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1">Diferencia</p>
+                      <p className={`text-xl font-black ${selectedHistoryClosing.difference >= 0 ? 'text-blue-700' : 'text-rose-600'}`}>
+                        {selectedHistoryClosing.difference >= 0 ? '+' : ''}{currency} {selectedHistoryClosing.difference.toFixed(2)}
+                      </p>
+                   </div>
+                </div>
+
+                {/* List of Payments */}
+                <div className="space-y-4">
+                   <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                      <List size={16} className="text-[#0054A6]" style={{ color: company.primaryColor }} />
+                      Ventas Detalladas del Turno
+                   </h4>
+                   
+                   {selectedHistoryClosing.transactions && selectedHistoryClosing.transactions.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-3">
+                         {selectedHistoryClosing.transactions.map((t: any, idx: number) => (
+                            <div key={idx} className="bg-white border border-slate-100 p-4 rounded-2xl flex items-center justify-between hover:bg-slate-50 transition-colors shadow-sm">
+                               <div className="flex items-center gap-4">
+                                  <div className="p-2 bg-slate-100 rounded-xl text-slate-500">
+                                     {getPaymentIcon(t.methodName || 'EFECTIVO')}
+                                  </div>
+                                  <div>
+                                     <div className="flex items-center gap-2">
+                                        <span className="font-black text-xs text-slate-900">{t.ticket}</span>
+                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{t.methodName || 'EFECTIVO'}</span>
+                                     </div>
+                                     <p className="text-[11px] font-bold text-slate-600 uppercase tracking-tight truncate max-w-[200px]">{t.client}</p>
+                                  </div>
+                               </div>
+                               <div className="text-right">
+                                  <span className="font-black text-slate-900">{currency} {t.amount.toFixed(2)}</span>
+                                  <p className="text-[8px] font-bold text-slate-400 uppercase">{new Date(t.date).toLocaleTimeString('es-PE', { hour12: false })}</p>
+                               </div>
+                            </div>
+                         ))}
+                      </div>
+                   ) : (
+                      <div className="text-center py-10 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-100">
+                         <p className="text-slate-400 text-xs italic font-medium">No hay transacciones detalladas guardadas en este cierre.</p>
+                         <p className="text-[9px] text-slate-300 font-bold uppercase mt-1">Los cierres antiguos podrían no mostrar este detalle.</p>
+                      </div>
+                   )}
+                </div>
+              </div>
+
+              {/* Footer Modal */}
+              <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex justify-end shrink-0">
+                <button 
+                  onClick={() => setSelectedHistoryClosing(null)}
+                  className="px-10 h-14 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.25em] shadow-xl active:scale-95 transition-all hover:bg-black group flex items-center justify-center gap-4"
+                >
+                  Cerrar Historial <CheckCircle2 size={18} className="group-hover:translate-x-1 transition-transform" />
                 </button>
               </div>
             </motion.div>

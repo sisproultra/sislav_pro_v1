@@ -237,6 +237,7 @@ export interface PaymentRecord {
     date?: string;
     usuario_id?: string;
     registrado_por?: string;
+    cash_session_id?: string;
 }
 
 export interface Invoice extends BaseEntity {
@@ -264,6 +265,7 @@ export interface Invoice extends BaseEntity {
     vistoDelivery?: boolean;
     paymentMethod?: string;
     orderCorrelativoRaw?: number;
+    cash_session_id?: string;
     lavanderia_at?: string;
     listo_at?: string;
     en_camino_entrega_at?: string;
@@ -302,6 +304,7 @@ export interface Expense extends BaseEntity {
     evidencePhoto?: string; 
     usuarioRegistro?: string; 
     usuarioId?: string;
+    cash_session_id?: string;
 }
 
 export interface Machine extends BaseEntity {

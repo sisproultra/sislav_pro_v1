@@ -1364,45 +1364,50 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
     // 4. Formatear y Persistir el código de orden final en la base de datos
     // El RPC genera el correlativo_interno, pero dbService aplica la lógica de formato del negocio
     
+    // Obtenemos el ID de sesión activa para vincular la venta directamente
+    const { data: activeSession } = await supabase
+        .from('cierres_caja')
+        .select('id')
+        .eq('sucursal_id', branchId)
+        .eq('usuario_id', userId)
+        .eq('estado', 'ABIERTO')
+        .maybeSingle();
+
     let currentConfig = { ...company };
 
     // LÓGICA DE ROTACIÓN DE PREFIJO/SUFIJO (A -> B -> C...)
-    // Si el correlativo volvió a 1 y el reset está activo, incrementamos el prefijo/sufijo
-    // para que la serie cambie (ej: de A-00010 a B-00001)
     if (result.correlativo_interno === 1 && company.use_order_reset && company.useOrderSuffix) {
-        // Obtenemos la siguiente letra (A -> B, etc)
         const currentLetter = company.prefijo_sufijo || company.orderCurrentSuffix || 'A';
         const nextLetter = getNextLetter(currentLetter);
-        
         try {
-            // 1. Persistimos el cambio en la base de datos para que las PRÓXIMAS órdenes ya usen la nueva letra
-            // Actualizamos tanto la columna nueva prefijo_sufijo como la antigua order_current_suffix por compatibilidad
-            await supabase.from('sucursales')
-                .update({ 
-                    prefijo_sufijo: nextLetter,
-                    order_current_suffix: nextLetter 
-                })
-                .eq('id', branchId);
-            
-            // 2. Actualizamos la configuración local de este proceso para que ESTA orden (la #1) ya salga con la nueva letra
+            await supabase.from('sucursales').update({ 
+                prefijo_sufijo: nextLetter,
+                order_current_suffix: nextLetter 
+            }).eq('id', branchId);
             currentConfig.orderCurrentSuffix = nextLetter;
             currentConfig.prefijo_sufijo = nextLetter;
         } catch (errSuffix) {
-            console.error("Error actualizando rotación de prefijo de orden:", errSuffix);
+            console.error("Error actualizando rotación:", errSuffix);
         }
     }
 
     const formattedOrderCode = formatOrderNumber(result.correlativo_interno, currentConfig);
     
-    // Actualizamos la columna codigo_orden y fecha_recepcion con el formato final y zona horaria correcta
+    // Actualizamos la columna codigo_orden, fecha_recepcion y cash_session_id
     try {
         await supabase.from('ventas').update({ 
             codigo_orden: formattedOrderCode,
+            cash_session_id: activeSession?.id || null,
             fecha_recepcion: getPeruTimestamp()
         }).eq('id', result.id);
+
+        if (activeSession?.id) {
+            await supabase.from('pagos_venta').update({ 
+                cash_session_id: activeSession.id 
+            }).eq('venta_id', result.id).is('cash_session_id', null);
+        }
     } catch (updateError) {
-        console.error("Error persistiendo codigo_orden formateado:", updateError);
-        // No lanzamos error para no romper la creación de la venta que ya fue atómica
+        console.error("Error persistiendo datos de cierre de caja en venta:", updateError);
     }
 
     // 5. Sumar puntos al cliente si hubo pagos y el cliente es válido
@@ -2080,7 +2085,7 @@ export const dbUpdateInvoiceStatus = async (id: string, status: OrderStatus, pho
     if (error) throw error;
 };
 
-export const dbAddPayment = async (ventaId: string, amount: number, methodName: string, pUserId?: string | null) => {
+export const dbAddPayment = async (ventaId: string, amount: number, methodName: string, pUserId?: string | null, pCashSessionId?: string | null) => {
     const branchId = getActiveBranchId();
     if (!branchId) throw new Error("No hay contexto de sucursal");
     const holdingId = await ensureHoldingId(branchId);
@@ -2105,7 +2110,8 @@ export const dbAddPayment = async (ventaId: string, amount: number, methodName: 
         usuario_id: userId,
         sucursal_id: branchId,
         empresa_holding_id: holdingId,
-        fecha_pago: getPeruTimestamp()
+        fecha_pago: getPeruTimestamp(),
+        cash_session_id: pCashSessionId || null
     });
     if (payError) throw payError;
 
@@ -2404,7 +2410,8 @@ export const dbSaveExpense = async (exp: Omit<Expense, 'id'>) => {
         url_evidencia: exp.evidencePhoto,
         registrado_por: exp.usuarioRegistro,
         usuario_id: userId,
-        fecha_gasto: exp.date
+        fecha_gasto: exp.date,
+        cash_session_id: exp.cash_session_id || null
     });
     if (error) throw error;
 };

@@ -1386,7 +1386,7 @@ export default function App() {
         try {
             const tasks = [];
             if (discount !== undefined) tasks.push(dbUpdateInvoiceDiscount(orderId, discount));
-            for (const p of payments) { tasks.push(dbAddPayment(orderId, p.amount, p.methodName, authSession?.user?.id)); }
+            for (const p of payments) { tasks.push(dbAddPayment(orderId, p.amount, p.methodName, authSession?.user?.id, activeCashSession?.id)); }
             if (itemIds.length > 0) tasks.push(dbUpdateItemStatus(orderId, itemIds, 'ENTREGADO'));
             
             await Promise.all(tasks);
@@ -1710,7 +1710,7 @@ export default function App() {
                 checkCajaOpen(async () => {
                    // Pago optimista individual
                    setInvoices(prev => prev.map(inv => inv.id === ventaId ? { ...inv, prePaymentAmount: (inv.prePaymentAmount || 0) + amount } : inv));
-                   try { await dbAddPayment(ventaId, amount, method); refreshData(false); } catch(e) { refreshData(true); }
+                   try { await dbAddPayment(ventaId, amount, method, authSession?.user?.id, activeCashSession?.id); refreshData(false); } catch(e) { refreshData(true); }
                 });
             }} />;
             case 'view:operations': return <Operations invoices={invoices} machines={machines} activeItems={activeItems} onUpdateItemStatus={handleUpdateItemStatusOptimistic} sucursal={activeSucursal} canManage={canManageApp} />;
@@ -1729,7 +1729,7 @@ export default function App() {
             />;
             case 'view:expenses': return <Expenses expenses={expenses} company={activeSucursal} paymentMethods={paymentMethods} onSave={async (exp) => { 
                 checkCajaOpen(async () => {
-                    await dbSaveExpense(exp); 
+                    await dbSaveExpense({ ...exp, cash_session_id: activeCashSession?.id }); 
                     refreshData(false); 
                 });
             }} onDelete={async (id) => { await dbDeleteExpense(id); refreshData(false); }} canManage={canManageApp} />;
