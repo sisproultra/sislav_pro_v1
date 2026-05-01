@@ -36,18 +36,25 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
   const fechaEmision = dateToUse ? dateToUse.split('T')[0] : peruTime.date;
   const horaEmision = dateToUse ? new Date(dateToUse).toLocaleTimeString('en-GB') : peruTime.time;
 
+  const cleanDoc = (doc: string) => (doc || "").replace(/[^0-9]/g, '').trim();
+  const cleanText = (text: string) => (text || "").toUpperCase().replace(/[<>&"']/g, '').trim();
+
   let codigoTipoEntidad = '0'; 
-  const docTypeClean = String(invoice.client.docType).toUpperCase();
-  if (docTypeClean.includes('DNI')) codigoTipoEntidad = '1';
-  else if (docTypeClean.includes('RUC')) codigoTipoEntidad = '6';
-  else if (docTypeClean.includes('CEX') || docTypeClean.includes('EXTRANJER')) codigoTipoEntidad = '4';
-  else if (docTypeClean === '-' || docTypeClean === 'VARIOS') codigoTipoEntidad = '0';
+  const docTypeClean = String(invoice.client.docType || '-').toUpperCase();
+  const rawDocNumber = cleanDoc(invoice.client.docNumber || '');
+
+  if (docTypeClean.includes('DNI') && rawDocNumber.length > 0 && rawDocNumber !== '99999999') {
+      codigoTipoEntidad = '1';
+  } else if (docTypeClean.includes('RUC')) {
+      codigoTipoEntidad = '6';
+  } else if (docTypeClean.includes('CEX') || docTypeClean.includes('EXTRANJER')) {
+      codigoTipoEntidad = '4';
+  } else {
+      codigoTipoEntidad = '0';
+  }
 
   const igvRate = company.porcentajeIgv || 18.00;
   const igvFactor = 1 + (igvRate / 100);
-
-  const cleanDoc = (doc: string) => doc.replace(/[^0-9]/g, '').trim();
-  const cleanText = (text: string) => (text || "").toUpperCase().replace(/[<>&"']/g, '').trim();
 
   const isTestMode = company.sunatEnvironment === 'BETA' || company.sunatEnvironment === 'INTERNAL';
 
@@ -84,8 +91,8 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
         "usu_secundario_produccion_password": (company.solPass || "MODDATOS").trim()
     },
     "cliente": {
-        "razon_social_nombres": cleanText(invoice.client.name || "CLIENTE VARIOS"),
-        "numero_documento": (codigoTipoEntidad === '0') ? '00000000' : cleanDoc(invoice.client.docNumber),
+        "razon_social_nombres": (codigoTipoEntidad === '0') ? "CLIENTES VARIOS" : cleanText(invoice.client.name || "CLIENTES VARIOS"),
+        "numero_documento": (codigoTipoEntidad === '0') ? '-' : rawDocNumber,
         "codigo_tipo_entidad": codigoTipoEntidad,
         "cliente_direccion": (invoice.client.address && invoice.client.address !== '-') ? cleanText(invoice.client.address) : "-"
     },
@@ -249,17 +256,33 @@ export const sendSummaryToSunat = async (invoices: Invoice[], company: Company) 
       "fecha_documentos": today,
       "fecha_resumen": today
     },
-    "comprobantes": invoices.map(inv => ({
-      "tipo_documento": inv.type, 
-      "serie": inv.serie,
-      "numero": String(inv.correlativo),
-      "cliente_tipo_documento": inv.client.docType === 'DNI' ? '1' : (inv.client.docType === 'RUC' ? '6' : '0'),
-      "cliente_numero_documento": inv.client.docNumber,
-      "status": "1",
-      "total_a_pagar": Number(inv.totals.total.toFixed(2)),
-      "total_igv": Number(inv.totals.igv.toFixed(2)),
-      "total_gravada": Number(inv.totals.gravada.toFixed(2))
-    }))
+    "comprobantes": invoices.map(inv => {
+      const docTypeClean = String(inv.client.docType || '-').toUpperCase();
+      const rawDocNumber = (inv.client.docNumber || '').replace(/[^0-9]/g, '').trim();
+      
+      let clientDocType = '0';
+      let clientDocNum = '-';
+
+      if (docTypeClean.includes('DNI') && rawDocNumber.length > 0 && rawDocNumber !== '99999999') {
+          clientDocType = '1';
+          clientDocNum = rawDocNumber;
+      } else if (docTypeClean.includes('RUC')) {
+          clientDocType = '6';
+          clientDocNum = rawDocNumber;
+      }
+
+      return {
+        "tipo_documento": inv.type, 
+        "serie": inv.serie,
+        "numero": String(inv.correlativo),
+        "cliente_tipo_documento": clientDocType,
+        "cliente_numero_documento": clientDocNum,
+        "status": "1",
+        "total_a_pagar": Number(inv.totals.total.toFixed(2)),
+        "total_igv": Number(inv.totals.igv.toFixed(2)),
+        "total_gravada": Number(inv.totals.gravada.toFixed(2))
+      };
+    })
   };
 
   const dbUrl = company.sunat_url?.trim();
