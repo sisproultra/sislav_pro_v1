@@ -146,17 +146,36 @@ export default function App() {
     const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
     const checkCajaOpen = useCallback((action: () => void) => {
-        // ADMIN EXCEPTION: Allow if current user is admin OR master
+        // Only exceptions are SAAS_MASTER. Even ADMIN and OWNER should open cash if they want to sell, 
+        // but strictly following "estricto" instruction, we check activeCashSession.
         const role = authSession?.user?.role;
-        const isAdmin = role === UserRole.ADMIN || role === UserRole.SAAS_MASTER || role === UserRole.OWNER;
+        const isMaster = role === UserRole.SAAS_MASTER;
         
-        if (isAdmin || activeCashSession) {
+        if (isMaster || activeCashSession) {
             action();
         } else {
             setPendingAction(() => action);
             setIsCashOpeningModalOpen(true);
         }
     }, [activeCashSession, authSession]);
+
+    const navigateToPos = (initialPickup?: any) => {
+        checkCajaOpen(() => {
+            if (initialPickup) setInitialPickupForPos(initialPickup);
+            setClientsSearch('');
+            setClientsPage(1);
+            setInvoicesSearch('');
+            setInvoicesPage(1);
+            setCurrentView('view:pos');
+        });
+    };
+
+    useEffect(() => {
+        if (authSession) {
+            if (authSession.user.role === UserRole.OWNER) setCurrentView('view:owner_dashboard');
+            else if (authSession.user.role === UserRole.DELIVERY) navigateToPos();
+        }
+    }, [authSession]);
 
     const handleConfirmCashOpening = async (amount: number, turno: string) => {
         await dbOpenCashClosing(amount, turno);
@@ -288,7 +307,7 @@ export default function App() {
 
     const isOwnerPath = window.location.pathname === '/owner-login' || !!new URLSearchParams(window.location.search).get('o');
 
-    const [currentView, setCurrentView] = useState('view:pos');
+    const [currentView, setCurrentView] = useState('view:dashboard');
 
     useEffect(() => {
         if (currentView === 'view:cash_closing') {
@@ -298,12 +317,6 @@ export default function App() {
         }
     }, [currentView]);
 
-    useEffect(() => {
-        if (authSession) {
-            if (authSession.user.role === UserRole.OWNER) setCurrentView('view:owner_dashboard');
-            else if (authSession.user.role === UserRole.DELIVERY) setCurrentView('view:pos');
-        }
-    }, [authSession]);
     const [darkMode, setDarkMode] = useState(() => {
         const saved = localStorage.getItem('sislav_dark_mode');
         return saved ? JSON.parse(saved) : false;
@@ -1619,7 +1632,7 @@ export default function App() {
         const isSaas = role === UserRole.SAAS_MASTER;
 
         switch (currentView) {
-            case 'view:dashboard': return <Dashboard invoices={invoices} expenses={expenses} products={products} clients={clients} categories={categories} paymentMethods={paymentMethods} company={activeSucursal} employees={employees} machines={machines} onNavigateToPos={() => setCurrentView('view:pos')} onRefresh={() => refreshData(true)} />;
+            case 'view:dashboard': return <Dashboard invoices={invoices} expenses={expenses} products={products} clients={clients} categories={categories} paymentMethods={paymentMethods} company={activeSucursal} employees={employees} machines={machines} onNavigateToPos={() => navigateToPos()} onRefresh={() => refreshData(true)} />;
             case 'view:agenda': return <Agenda invoices={invoices} company={activeSucursal} />;
             case 'view:pos': return (
                 <PointOfSale 
@@ -1735,7 +1748,7 @@ export default function App() {
             }} onDelete={async (id) => { await dbDeleteExpense(id); refreshData(false); }} canManage={canManageApp} />;
             case 'view:machines': return <Machines machines={machines} invoices={invoices} activeItems={activeItems} globalMachineImages={globalConfig?.defaultMachineImages} onAddMachine={async (m) => { await dbSaveMachine(m); refreshData(true); }} onUpdateMachineStatus={async (id, u) => { await dbUpdateMachine(id, u); refreshData(true); }} onSyncMachines={async () => { await dbSyncMachines(); refreshData(true); }} canManage={canManageApp} />;
             case 'view:callcenter': return <CallCenter apiToken={globalConfig?.apiToken || ''} onRefreshData={() => refreshData(true)} clients={clients} company={activeSucursal} invoices={invoices} />;
-            case 'view:delivery': return <Delivery onConvertToOrder={(p) => { if (window.innerWidth >= 768) { setInitialPickupForPos(p); setCurrentView('view:pos'); } else { setActivePickupForFastOrder(p); setIsFastOrderOpen(true); } }} company={activeSucursal} />;
+            case 'view:delivery': return <Delivery onConvertToOrder={(p) => { if (window.innerWidth >= 768) { navigateToPos(p); } else { setActivePickupForFastOrder(p); setIsFastOrderOpen(true); } }} company={activeSucursal} />;
             case 'view:logistics_hub': return <LogisticsHub />;
             case 'view:supplies': return <Supplies supplies={supplies} company={activeSucursal} onOpenModal={() => setIsSupplyModalOpen(true)} onDelete={async (id) => { await dbDeleteSupply(id); refreshData(true); }} canManage={canManageApp} />;
             case 'view:purchases': return <Purchases purchases={purchases} company={activeSucursal} onOpenModal={() => setIsPurchaseModalOpen(true)} canManage={canManageApp} />;
@@ -1944,6 +1957,11 @@ export default function App() {
     }
 
     const handleViewChange = (view: string) => {
+        if (view === 'view:pos') {
+            navigateToPos();
+            return;
+        }
+
         if (view !== 'view:clients') {
             setClientsSearch('');
             setClientsPage(1);

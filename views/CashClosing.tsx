@@ -43,22 +43,36 @@ const CashClosing: React.FC<CashClosingProps> = ({
   const [isClosing, setIsClosing] = useState(false);
   const [activeView, setActiveView] = useState<'CURRENT' | 'HISTORY' | 'PROJECTIONS'>('CURRENT');
   const [closingHistory, setClosingHistory] = useState<CashClosingType[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedMethodPayments, setSelectedMethodPayments] = useState<{ method: string; payments: any[] } | null>(null);
   const [selectedHistoryClosing, setSelectedHistoryClosing] = useState<CashClosingType | null>(null);
 
-  const isHighRole = currentUser?.role === UserRole.OWNER || currentUser?.role === UserRole.SAAS_MASTER;
+  const isHighRole = currentUser?.role === UserRole.OWNER || currentUser?.role === UserRole.SAAS_MASTER || currentUser?.role === UserRole.ADMIN;
 
   const currency = company.currencySymbol || 'S/';
   const currentUserName = (currentUser?.name || localStorage.getItem('sislav_current_user_name') || 'SISTEMA').trim().toUpperCase();
 
   useEffect(() => {
       loadHistory();
-  }, []);
+  }, [activeView]);
 
   const loadHistory = async () => {
-      const data = await dbGetCashClosings();
-      setClosingHistory(data);
+      if (activeView !== 'HISTORY') return;
+      setIsLoadingHistory(true);
+      setErrorMessage(null);
+      try {
+        const data = await dbGetCashClosings();
+        setClosingHistory(data || []);
+        if (!data || data.length === 0) {
+           console.log("No se encontraron cierres para esta sucursal");
+        }
+      } catch (err: any) {
+        console.error("Error loading history:", err);
+        setErrorMessage("No se pudo cargar el historial: " + (err.message || 'Error desconocido'));
+      } finally {
+        setIsLoadingHistory(false);
+      }
   };
 
   const lastClosingDate = useMemo(() => {
@@ -717,14 +731,30 @@ const CashClosing: React.FC<CashClosingProps> = ({
                exit={{ opacity: 0, scale: 1.02 }}
                className="space-y-6"
             >
-               <div className="flex items-center justify-between px-2">
-                 <h3 className="font-black text-slate-800 text-xl">Cierres Anteriores</h3>
+                <div className="flex items-center justify-between px-2">
+                 <div className="flex items-center gap-3">
+                   <h3 className="font-black text-slate-800 text-xl">Cierres Anteriores</h3>
+                   <button 
+                     onClick={loadHistory}
+                     className="p-2 text-slate-400 hover:text-slate-900 transition-colors bg-white rounded-lg border border-slate-100 shadow-sm disabled:opacity-50"
+                     title="Refrescar Historial"
+                     disabled={isLoadingHistory}
+                   >
+                     <RefreshCw size={14} className={isLoadingHistory ? "animate-spin" : ""} />
+                   </button>
+                 </div>
                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-full flex items-center gap-2">
                     <History size={12} /> Orden: Más reciente primero
                  </span>
                </div>
                
-               <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
+               <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden relative">
+                  {isLoadingHistory && (
+                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center">
+                       <RefreshCw className="animate-spin text-blue-600" size={32} />
+                    </div>
+                  )}
+
                   <div className="overflow-x-auto no-scrollbar">
                     <table className="w-full text-left border-separate border-spacing-0 min-w-[800px]">
                       <thead>
