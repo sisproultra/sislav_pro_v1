@@ -627,12 +627,9 @@ const CashClosing: React.FC<CashClosingProps> = ({
                    <div className="flex gap-4">
                       <div className="flex-1 space-y-1">
                         <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Saldo Inicial</label>
-                        <input 
-                           type="number"
-                           value={openingBalance}
-                           onChange={e => setOpeningBalance(e.target.value)}
-                           className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-sm text-gray-600 focus:bg-white"
-                        />
+                        <div className="w-full px-4 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-500">
+                           {currency} {parseFloat(openingBalance).toFixed(2)}
+                        </div>
                       </div>
                       <div className="flex-1 space-y-1">
                         <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Total Movimiento</label>

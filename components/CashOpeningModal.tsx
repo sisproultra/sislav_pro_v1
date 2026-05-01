@@ -12,8 +12,8 @@ interface CashOpeningModalProps {
 }
 
 const CashOpeningModal: React.FC<CashOpeningModalProps> = ({ isOpen, onClose, onConfirm, company }) => {
-  const [amount, setAmount] = useState('250.00');
-  const [turno, setTurno] = useState(() => new Date().getHours() < 14 ? 'MAÑANA' : 'TARDE');
+  const [amount, setAmount] = useState('');
+  const [turno, setTurno] = useState(() => new Date().getHours() < 12 ? 'MAÑANA' : 'TARDE');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +23,7 @@ const CashOpeningModal: React.FC<CashOpeningModalProps> = ({ isOpen, onClose, on
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const val = parseFloat(amount);
-    if (isNaN(val) || val < 0) {
+    if (amount === '' || isNaN(val) || val < 0) {
       setError("Por favor ingrese un monto inicial válido.");
       return;
     }
@@ -85,8 +85,8 @@ const CashOpeningModal: React.FC<CashOpeningModalProps> = ({ isOpen, onClose, on
             )}
 
             <div className="space-y-4">
-              {/* Turno Selector */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Turno Selector - Hidden as requested */}
+              <div className="hidden grid grid-cols-2 gap-3">
                  <button 
                    type="button"
                    onClick={() => setTurno('MAÑANA')}
