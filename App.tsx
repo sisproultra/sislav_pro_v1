@@ -57,6 +57,7 @@ import { printInvoiceDirectly } from './utils/printService';
 import SaaSLogin from './views/SaaSLogin';
 import { applyDynamicManifest } from './utils/pwaUtils';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
+import { VersionGuard } from './components/VersionGuard';
 import OwnerLogin from './views/OwnerLogin';
 import OwnerDashboard from './views/OwnerDashboard';
 import InvoiceReceipt from './components/InvoiceReceipt';
@@ -1766,7 +1767,7 @@ export default function App() {
                 setCurrentView('view:dashboard'); 
             }} />;
             case 'view:yape': return <YapeMonitor company={activeSucursal} />;
-            case 'view:settings': return <Settings company={activeSucursal} setCompany={setActiveSucursal} />;
+            case 'view:settings': return <Settings company={activeSucursal} setCompany={setActiveSucursal} user={authSession?.user} />;
             case 'DEV_CONFIG': 
                 return (
                     <DevConfig 
@@ -1952,6 +1953,7 @@ export default function App() {
 
     return (
         <div className={`min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300 font-sans selection:bg-indigo-100 selection:text-indigo-900`}>
+            <VersionGuard />
             <PWAInstallPrompt />
             <Layout 
             currentView={currentView} 

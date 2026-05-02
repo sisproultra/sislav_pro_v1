@@ -35,9 +35,10 @@ import {
     Building, Globe, Loader2, X, Save, Palette, 
     LogIn, LogOut, Video, Trash2, Upload, LayoutGrid, Plus, ShieldCheck, PlayCircle, ImageIcon, Check, ChevronDown, ChevronUp, CreditCard, WashingMachine, Tag, Layers, Key, ShieldAlert, Store, ArrowRight, AlertTriangle, Building2, MapPin, Hash, Sparkles,
     Phone, FileText, Smartphone, MessageCircle, Settings2, Info, Printer, Youtube, Play, Edit, Zap, Search, Percent, CircleDollarSign, Copy, RefreshCcw, RotateCcw, Settings, Menu, Bot, Droplets, Link, Database, Code, Shield, KeyRound, Clock, UserPlus, Camera,
-    Terminal, CheckCircle2, Users, FileCheck
+    Terminal, CheckCircle2, Users, FileCheck, Cpu
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
+import { APP_VERSION } from '../components/VersionGuard';
 
 const LATAM_CODES = [
   { code: '+51', name: 'Perú', iso: 'pe' },
@@ -1561,6 +1562,27 @@ export const SuperAdmin: React.FC<{
         } catch (e) { alert("Error al guardar ajustes."); } finally { setIsSaving(false); }
     };
 
+    const [isUpdatingVersion, setIsUpdatingVersion] = useState(false);
+    const [minVersionInput, setMinVersionInput] = useState(APP_VERSION);
+
+    const handleUpdateAppVersion = async () => {
+        if (!minVersionInput) return;
+        setIsUpdatingVersion(true);
+        try {
+            const { error } = await supabase
+                .from('app_config')
+                .upsert({ key: 'min_required_version', value: minVersionInput }, { onConflict: 'key' });
+
+            if (error) throw error;
+            alert(`Versión mínima requerida actualizada a: ${minVersionInput}. El cambio es inmediato para todos los usuarios.`);
+        } catch (err: any) {
+            console.error("Error updating version:", err);
+            alert("Error al actualizar versión: " + err.message);
+        } finally {
+            setIsUpdatingVersion(false);
+        }
+    };
+
     const toggleAccordion = (id: string) => {
         setActiveAccordion(activeAccordion === id ? null : id);
         setCatalogItem({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA' });
@@ -2287,6 +2309,55 @@ export const SuperAdmin: React.FC<{
                                     </div>
                                 </div>
                                 <button onClick={handleSaveSettings} disabled={isSaving} className="w-full py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-3xl font-bold text-sm uppercase tracking-[0.25em] shadow-xl shadow-emerald-900/40 transition-all active:scale-95 flex justify-center items-center gap-4 disabled:opacity-50">{isSaving ? <Loader2 className="animate-spin" /> : <Save size={24} strokeWidth={3}/>} GUARDAR AJUSTES DE CONTACTO</button>
+                                
+                                {/* CONTROL DE DISTRIBUCIÓN / VERSIÓN */}
+                                <div className="p-8 bg-slate-900/80 rounded-[2.5rem] border border-white/5 shadow-inner relative overflow-hidden group mt-6">
+                                    <div className="absolute -right-10 -bottom-10 opacity-5 group-hover:opacity-10 transition-opacity">
+                                        <Shield size={160} className="text-white" />
+                                    </div>
+                                    
+                                    <div className="relative z-10 space-y-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="bg-indigo-600 p-3 rounded-2xl shadow-lg shadow-indigo-600/20">
+                                                <Cpu size={24} className="text-white" />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-xl uppercase tracking-tight text-white flex items-center gap-2">
+                                                    Gestión de Despliegue
+                                                    <span className="bg-indigo-500/20 text-indigo-400 text-[8px] px-2 py-0.5 rounded-full border border-indigo-500/30 font-black">SISTEMA VIVO</span>
+                                                </h4>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Forzar actualización de clientes en tiempo real</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
+                                            <div className="space-y-3">
+                                                <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-2">Versión Mínima Requerida</label>
+                                                <input 
+                                                    value={minVersionInput}
+                                                    onChange={e => setMinVersionInput(e.target.value)}
+                                                    className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-4 font-mono font-black text-lg text-white text-center outline-none focus:border-indigo-500 transition-all"
+                                                    placeholder="1.2.0"
+                                                />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <button 
+                                                    onClick={handleUpdateAppVersion}
+                                                    disabled={isUpdatingVersion}
+                                                    className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-3xl font-bold text-sm uppercase tracking-[0.25em] shadow-xl shadow-indigo-900/40 transition-all active:scale-95 flex justify-center items-center gap-4 disabled:opacity-50"
+                                                >
+                                                    {isUpdatingVersion ? <Loader2 className="animate-spin" /> : <RefreshCcw size={24} strokeWidth={3}/>} 
+                                                    DISTRIBUIR ACTUALIZACIÓN
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-4 border-t border-white/5 flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                            <span>Estado del Sistema: <span className="text-emerald-400">Sincronizado</span></span>
+                                            <span>Versión Actual: <span className="text-indigo-400 font-mono tracking-normal">{APP_VERSION}</span></span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}

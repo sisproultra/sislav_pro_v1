@@ -190,6 +190,9 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
           <p className="text-text3 text-[10px] font-bold uppercase tracking-widest">
             SISLAV - +51931200353
           </p>
+          <p className="text-text3 text-[9px] font-black uppercase tracking-widest opacity-20 -mt-2">
+            Versión 1.2.0
+          </p>
           <a 
             href="https://wa.me/51931200353" 
             target="_blank" 

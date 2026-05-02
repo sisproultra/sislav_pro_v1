@@ -1,0 +1,105 @@
+import React, { useState, useEffect } from 'react';
+import { RefreshCcw, AlertTriangle } from 'lucide-react';
+import { supabase } from '../services/dbService'; 
+import { motion, AnimatePresence } from 'motion/react';
+
+export const APP_VERSION = '1.2.0';
+
+export const VersionGuard: React.FC = () => {
+    const [isOutdated, setIsOutdated] = useState(false);
+    const [minVersion, setMinVersion] = useState('');
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const checkVersion = async () => {
+            try {
+                const { data } = await supabase
+                    .from('app_config')
+                    .select('value')
+                    .eq('key', 'min_required_version')
+                    .single();
+
+                const required = data?.value || APP_VERSION;
+                setMinVersion(required);
+                if (APP_VERSION < required) setIsOutdated(true);
+            } catch (err) {
+                console.error('Error inicial de versión:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        checkVersion();
+
+        // SUSCRIPCIÓN EN TIEMPO REAL
+        const subscription = supabase
+            .channel('app_config_changes')
+            .on('postgres_changes', { 
+                event: 'UPDATE', 
+                schema: 'public', 
+                table: 'app_config',
+                filter: 'key=eq.min_required_version'
+            }, (payload) => {
+                const newVal = payload.new.value;
+                setMinVersion(newVal);
+                if (APP_VERSION < newVal) {
+                    setIsOutdated(true);
+                } else {
+                    setIsOutdated(false);
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(subscription);
+        };
+    }, []);
+
+    const handleUpdate = () => {
+        // Limpiar caché y recargar
+        window.location.reload();
+    };
+
+    if (loading || !isOutdated) return null;
+
+    return (
+        <AnimatePresence>
+            <div className="fixed inset-0 z-[10000] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-6">
+                <motion.div 
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl text-center border border-slate-100"
+                >
+                    <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <AlertTriangle className="text-amber-500 w-10 h-10" />
+                    </div>
+
+                    <h2 className="text-2xl font-black text-slate-900 leading-tight uppercase tracking-tight">
+                        Actualización Obligatoria
+                    </h2>
+                    
+                    <div className="mt-4 space-y-3">
+                        <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                            Estás usando la versión <span className="text-indigo-600 font-bold">{APP_VERSION}</span>. 
+                            Se requiere la versión <span className="text-slate-900 font-bold">{minVersion}</span> para continuar garantizando la seguridad de tus datos.
+                        </p>
+                    </div>
+
+                    <div className="mt-8 space-y-4">
+                        <button
+                            onClick={handleUpdate}
+                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-black text-sm transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-3 active:scale-95"
+                        >
+                            <RefreshCcw size={18} />
+                            ACTUALIZAR AHORA
+                        </button>
+                        
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                            SISLAV PRO — V1.0
+                        </p>
+                    </div>
+                </motion.div>
+            </div>
+        </AnimatePresence>
+    );
+};

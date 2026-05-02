@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Building, Upload, Image as ImageIcon, Save, CheckCircle2, Settings as SettingsIcon, X, Clock, Loader2, FileText, Layout, Sparkles, ShieldCheck, DollarSign } from 'lucide-react';
-import { Company, Sucursal } from '../types';
-import { dbUploadImage, dbGetTicketConfig, dbSaveTicketConfig, getActiveHoldingId, dbUpdateSucursalConfig } from '../services/dbService';
+import { Building, Upload, Image as ImageIcon, Save, CheckCircle2, Settings as SettingsIcon, X, Clock, Loader2, FileText, Layout, Sparkles, ShieldCheck, DollarSign, Cpu } from 'lucide-react';
+import { Company, Sucursal, UserRole } from '../types';
+import { dbUploadImage, dbGetTicketConfig, dbSaveTicketConfig, getActiveHoldingId, dbUpdateSucursalConfig, supabase } from '../services/dbService';
+import { APP_VERSION } from '../components/VersionGuard';
 
 interface SettingsProps {
   company: Sucursal;
   setCompany: (c: Sucursal) => void;
+  user?: any;
 }
 
-const Settings: React.FC<SettingsProps> = ({ company, setCompany }) => {
+const Settings: React.FC<SettingsProps> = ({ company, setCompany, user }) => {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdatingVersion, setIsUpdatingVersion] = useState(false);
   
   const [primaryColor, setPrimaryColor] = useState(company.primaryColor || '#0054A6');
   const [secondaryColor, setSecondaryColor] = useState(company.secondaryColor || '#10B981');
+
+  const [minVersionInput, setMinVersionInput] = useState(APP_VERSION);
 
   // Estado para la configuración de ticket
   const [ticketConfig, setTicketConfig] = useState({
@@ -106,6 +111,24 @@ const Settings: React.FC<SettingsProps> = ({ company, setCompany }) => {
       }
   };
 
+  const handleUpdateAppVersion = async () => {
+      if (!minVersionInput) return;
+      setIsUpdatingVersion(true);
+      try {
+          const { error } = await supabase
+              .from('app_config')
+              .upsert({ key: 'min_required_version', value: minVersionInput }, { onConflict: 'key' });
+
+          if (error) throw error;
+          alert(`Versión mínima requerida actualizada a: ${minVersionInput}`);
+      } catch (err: any) {
+          console.error("Error updating version:", err);
+          alert("Error al actualizar versión: " + err.message);
+      } finally {
+          setIsUpdatingVersion(false);
+      }
+  };
+
   return (
     <div className="p-4 h-full overflow-y-auto bg-slate-50 no-scrollbar">
       <div className="max-w-[1600px] mx-auto">
@@ -128,6 +151,49 @@ const Settings: React.FC<SettingsProps> = ({ company, setCompany }) => {
                           <h3 className="text-xl font-bold text-slate-900 pb-3 border-b flex items-center gap-4 uppercase tracking-tight">
                               <Layout size={24} className="text-indigo-600"/> Configuración de Ticket
                           </h3>
+
+                          {/* CONTROL DE VERSIÓN (Solo SAAS_MASTER) */}
+                          {user?.role === UserRole.SAAS_MASTER && (
+                            <div className="p-6 bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden relative group">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <Cpu size={80} className="text-white" />
+                                </div>
+                                <div className="relative z-10">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="bg-indigo-500 p-2 rounded-xl text-white shadow-lg shadow-indigo-500/20">
+                                            <ShieldCheck size={20} />
+                                        </div>
+                                        <h4 className="text-white font-black text-sm uppercase tracking-widest">Control de Distribución</h4>
+                                    </div>
+                                    <p className="text-slate-400 text-[10px] font-bold uppercase mb-4 leading-tight">
+                                        Establezca la versión mínima requerida para forzar actualización en todos los clientes.
+                                    </p>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex-1">
+                                            <label className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1 block ml-1">Próxima Versión Requerida</label>
+                                            <input 
+                                                value={minVersionInput}
+                                                onChange={(e) => setMinVersionInput(e.target.value)}
+                                                placeholder="Ej: 1.2.1"
+                                                className="w-full bg-slate-800 border border-slate-700 text-white p-3 rounded-xl font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                                            />
+                                        </div>
+                                        <button 
+                                            onClick={handleUpdateAppVersion}
+                                            disabled={isUpdatingVersion}
+                                            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all mt-4.5 self-end flex items-center gap-2"
+                                        >
+                                            {isUpdatingVersion ? <Loader2 className="animate-spin" size={14}/> : <Save size={14}/>}
+                                            Publicar
+                                        </button>
+                                    </div>
+                                    <div className="mt-4 flex items-center gap-2">
+                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">Versión Actual del Código:</span>
+                                        <span className="bg-slate-800 text-indigo-400 px-2 py-0.5 rounded text-[10px] font-mono font-bold border border-slate-700">{APP_VERSION}</span>
+                                    </div>
+                                </div>
+                            </div>
+                          )}
                           
                           <div className="space-y-6">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

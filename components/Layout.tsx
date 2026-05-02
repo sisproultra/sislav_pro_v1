@@ -446,6 +446,9 @@ const Layout: React.FC<LayoutProps> = ({
                     <Shield size={10} className="shrink-0 opacity-70" />
                     {currentUser?.role || 'Visitante'}
                   </p>
+                  <p className={`text-[7px] font-black opacity-30 tracking-tight uppercase mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                    v1.2.0
+                  </p>
                 </div>
               )}
               <div className="flex items-center gap-1">

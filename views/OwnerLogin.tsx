@@ -201,6 +201,9 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
           <p className={`text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-text3' : 'text-gray-400'}`}>
             SISLAV - +51931200353
           </p>
+          <p className={`text-[9px] font-black uppercase tracking-widest opacity-20 -mt-2 ${isDarkMode ? 'text-text3' : 'text-gray-400'}`}>
+            Versión 1.2.0
+          </p>
           <a 
             href="https://wa.me/51931200353" 
             target="_blank" 
