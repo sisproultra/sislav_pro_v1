@@ -4,8 +4,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="theme-color" content="#4f8ef7" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧺</text></svg>" />
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧺</text></svg>" />
+    <link rel="icon" id="dynamic-favicon" type="image/png" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" id="dynamic-apple-icon" href="/icons/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SISLAV - CONTROL TOTAL</title>
     <meta name="description" content="SISLAV - Sistema de Control Total para Lavanderías" />
@@ -140,15 +140,19 @@
               const isLogistica = window.location.pathname.includes('/logistica');
               document.title = isLogistica ? `LOGÍSTICA ${razonSocial}` : `${razonSocial} - CONTROL TOTAL`;
               
-              if (isLogistica) {
-                const logo = s.url_favicon_logistica || s.url_favicon || s.url_logo;
-                if (logo) {
-                  const linkIcon = document.querySelector('link[rel="icon"]');
-                  if (linkIcon) linkIcon.setAttribute('href', logo);
-                }
+              // Actualizar favicon dinámicamente
+              const faviconEl = document.getElementById('dynamic-favicon');
+              const appleEl = document.getElementById('dynamic-apple-icon');
+              const logoUrl = isLogistica 
+                ? (s.url_favicon_logistica || s.url_favicon || s.url_logo)
+                : (s.url_favicon || s.url_logo);
+
+              if (logoUrl) {
+                if (faviconEl) faviconEl.setAttribute('href', logoUrl);
+                if (appleEl) appleEl.setAttribute('href', logoUrl);
               }
 
-              // Inyección dinámica del manifest para PWA corregida
+              // El manifest ya viene correcto desde la Edge Function /api/manifest
               const manifestLink = document.querySelector('link[rel="manifest"]');
               let manifestUrl = slug ? `/manifest.json?s=${slug}` : (ownerId ? `/manifest.json?o=${ownerId}` : '/manifest.json');
               if (isLogistica) {
@@ -156,11 +160,6 @@
               }
               if (manifestLink) {
                 manifestLink.setAttribute('href', manifestUrl);
-              } else {
-                const link = document.createElement('link');
-                link.rel = 'manifest';
-                link.href = manifestUrl;
-                document.head.appendChild(link);
               }
             } else {
               window.__BRANDING_STATUS__ = 'failed';
