@@ -56,6 +56,7 @@ import { EvolutionService } from './services/evolutionService';
 import { printInvoiceDirectly } from './utils/printService';
 import SaaSLogin from './views/SaaSLogin';
 import { applyDynamicManifest } from './utils/pwaUtils';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import OwnerLogin from './views/OwnerLogin';
 import OwnerDashboard from './views/OwnerDashboard';
 import InvoiceReceipt from './components/InvoiceReceipt';
@@ -1950,7 +1951,9 @@ export default function App() {
     };
 
     return (
-        <Layout 
+        <div className={`min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300 font-sans selection:bg-indigo-100 selection:text-indigo-900`}>
+            <PWAInstallPrompt />
+            <Layout 
             currentView={currentView} 
             setView={handleViewChange} 
             company={activeSucursal} 
@@ -2064,5 +2067,6 @@ export default function App() {
             )}
             <DebugOverlay />
         </Layout>
+        </div>
     );
 }
