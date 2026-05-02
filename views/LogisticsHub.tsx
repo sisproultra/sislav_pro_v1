@@ -85,7 +85,6 @@ const LogisticsHub: React.FC = () => {
                     estado: 'EN_TRANSITO'
                 });
             } else if (activeTab === 'OUTGOING') {
-                // Salientes: Pendientes y En Tránsito
                 const pending = await dbGetGuiasRemision({
                     sucursal_origen_id: currentBranchId!,
                     estado: 'PENDIENTE'
@@ -94,32 +93,37 @@ const LogisticsHub: React.FC = () => {
                     sucursal_origen_id: currentBranchId!,
                     estado: 'EN_TRANSITO'
                 });
-                data = [...pending, ...transit].sort((a, b) => 
-                    new Date(b.fecha_registro).getTime() - new Date(a.fecha_registro).getTime()
-                );
+                data = [...pending, ...transit];
             } else {
-                // Historia: Entregadas
                 data = await dbGetGuiasRemision({
                     sucursal_id: currentBranchId!,
                     estado: 'ENTREGADO'
                 });
             }
             
-            setGuias(data);
-
-            // Calculate summaries for the dashboard
-            if (activeTab === 'INCOMING') {
-                setSummary(prev => ({ ...prev, incoming: data.length }));
-            }
+            const sortedData = [...data].sort((a, b) => 
+                new Date(b.fecha_registro).getTime() - new Date(a.fecha_registro).getTime()
+            );
             
-            // Fetch total pending to dispatch for the summary
-            if (sucursalInfo) {
-                const pendItems = await dbGetItemsPendientesLogistica(currentBranchId!, sucursalInfo.tipo_sucursal);
-                setSummary(prev => ({ 
-                    ...prev, 
-                    pending: pendItems.length,
-                    outgoing: data.filter(g => g.estado === 'EN_TRANSITO' && g.sucursal_origen_id === currentBranchId).length
-                }));
+            setGuias(sortedData);
+
+            // DASHBOARD COUNTS - Fetch all necessary data for summary
+            try {
+                if (sucursalInfo) {
+                    const [inc, out, pend] = await Promise.all([
+                        dbGetGuiasRemision({ sucursal_destino_id: currentBranchId!, estado: 'EN_TRANSITO' }),
+                        dbGetGuiasRemision({ sucursal_origen_id: currentBranchId!, estado: 'EN_TRANSITO' }),
+                        dbGetItemsPendientesLogistica(currentBranchId!, sucursalInfo.tipo_sucursal)
+                    ]);
+                    
+                    setSummary({
+                        incoming: inc.length,
+                        outgoing: out.length,
+                        pending: pend.length
+                    });
+                }
+            } catch (sumErr) {
+                console.error("Error updating dashboard summary:", sumErr);
             }
         } catch (error) {
             console.error("Error loading guias:", error);

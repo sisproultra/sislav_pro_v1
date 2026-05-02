@@ -215,23 +215,21 @@ const Layout: React.FC<LayoutProps> = ({
   const monitorRequests = async () => {
       const reqs = await dbGetPickupRequests();
       const seenPickups = JSON.parse(localStorage.getItem('sislav_seen_pickups') || '[]');
-      const unreadPickups = reqs.filter(r => r.isSelfScheduled && !r.isReadByAdmin && !seenPickups.includes(r.id));
+      const unreadPickups = reqs.filter(r => !r.isReadByAdmin && !seenPickups.includes(r.id));
       setPendingAutoRequests(unreadPickups);
 
       const { invoices: invs } = await dbGetInvoices();
       const seenDeliveries = JSON.parse(localStorage.getItem('sislav_seen_deliveries') || '[]');
       
-      const unreadDeliveries = invs.filter(inv => 
-        // FIX: Changed 'IN_ROUTE_DELIVERY' to 'EN_RUTA' to match OrderStatus type
-        inv.orderStatus === 'EN_RUTA' && 
+    const unreadDeliveries = invs.filter(inv => 
+        (inv.orderStatus === 'EN_RUTA' || inv.orderStatus === 'LISTO') && 
         !inv.vistoDelivery && 
-        // FIX: Replaced 'STORE' with 'TIENDA' to fix type mismatch with Invoice origin
         inv.origin !== 'TIENDA' && 
         !seenDeliveries.includes(inv.id)
       );
       setPendingDeliveries(unreadDeliveries);
       
-      const shouldPlaySound = unreadPickups.length > 0 || (unreadDeliveries.length > 0 && userRole === UserRole.DELIVERY);
+      const shouldPlaySound = unreadPickups.length > 0 || unreadDeliveries.length > 0;
       
       if (shouldPlaySound) playNotificationSound();
       else stopNotificationSound();
@@ -245,10 +243,10 @@ const Layout: React.FC<LayoutProps> = ({
 
   const playNotificationSound = () => {
     if (!audioRef.current) {
-        audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audioRef.current = new Audio('https://yvgshdypqanlcgxdyvls.supabase.co/storage/v1/object/public/laundry-assets/burbujas.mp3');
         audioRef.current.loop = true;
     }
-    audioRef.current.play().catch(() => {});
+    audioRef.current.play().catch(e => console.warn("Audio play blocked:", e));
   };
 
   const stopNotificationSound = () => {

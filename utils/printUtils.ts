@@ -12,8 +12,26 @@ export const printGuiaRemision = (guia: any, items: any[], branchInfo: any) => {
       ? (cliente.nombres || cliente.nombre || cliente.razon_social || 'S/N CLIENTE')
       : cliente;
     
-    const prenda = item.nombre_prenda || item.itemName || item.items_venta?.descripcion || (Array.isArray(item.items_venta) ? item.items_venta[0]?.descripcion : '') || 'PRENDA';
-    const ticket = item.ticketNumber || venta?.codigo_orden || '-';
+    // 1. Identificar la data de la prenda (puede estar anidada o directa)
+    const iv = Array.isArray(item.items_venta) ? item.items_venta[0] : (item.items_venta || item);
+    
+    // 2. Extraer descripción de prenda
+    const prenda = item.nombre_prenda || 
+                   item.itemName || 
+                   item.name ||
+                   iv?.descripcion || 
+                   iv?.nombre || 
+                   iv?.name ||
+                   item.descripcion ||
+                   'PRENDA';
+    
+    // 3. Extraer detalles adicionales
+    const color = item.color || iv?.color || item.items_venta?.color || '';
+    const marca = item.marca || iv?.marca || item.items_venta?.marca || '';
+    const estado = item.estado_prenda || iv?.estado_prenda || item.items_venta?.estado || '';
+    const observaciones = item.detalle || item.details || item.observaciones || iv?.observaciones || iv?.details || '';
+    
+    const ticket = item.ticketNumber || venta?.codigo_orden || item.venta_codigo || '-';
 
     return `
       <tr>
@@ -21,8 +39,13 @@ export const printGuiaRemision = (guia: any, items: any[], branchInfo: any) => {
         <td style="padding:8px 6px; border-bottom:1px solid #eee; font-weight:bold;">${ticket}</td>
         <td style="padding:8px 6px; border-bottom:1px solid #eee; text-transform:uppercase;">${clienteNombre}</td>
         <td style="padding:8px 6px; border-bottom:1px solid #eee; text-transform:uppercase;">
-          ${prenda}
-          ${item.detalle || item.details || item.observaciones ? `<div style="font-size:9px; font-style:italic; color:#666;">${item.detalle || item.details || item.observaciones}</div>` : ''}
+          <div style="font-weight:bold;">${prenda}</div>
+          <div style="font-size:9px; color:#666;">
+            ${color ? `<span>COLOR: ${color}</span>` : ''}
+            ${marca ? `<span style="margin-left:5px;">MARCA: ${marca}</span>` : ''}
+            ${estado ? `<div style="margin-top:2px;">ESTADO: ${estado}</div>` : ''}
+            ${observaciones ? `<div style="font-style:italic;">OBS: ${observaciones}</div>` : ''}
+          </div>
         </td>
         <td style="padding:8px 6px; border-bottom:1px solid #eee; text-align:right; font-weight:bold;">${item.cantidad || 1}</td>
       </tr>
@@ -137,13 +160,41 @@ export const printGuiaRemision = (guia: any, items: any[], branchInfo: any) => {
       </div>
 
       <script>
+        // Función para verificar si las imágenes (como QR o Logo) cargaron
+        function checkImages() {
+          const images = document.querySelectorAll('img');
+          let loaded = 0;
+          if (images.length === 0) return Promise.resolve();
+          return new Promise((resolve) => {
+            images.forEach(img => {
+              if (img.complete) {
+                loaded++;
+                if (loaded === images.length) resolve();
+              } else {
+                img.addEventListener('load', () => {
+                  loaded++;
+                  if (loaded === images.length) resolve();
+                });
+                img.addEventListener('error', () => {
+                  loaded++;
+                  if (loaded === images.length) resolve();
+                });
+              }
+            });
+            // Timeout de seguridad para imágenes
+            setTimeout(resolve, 2000);
+          });
+        }
+
         window.onload = () => {
-          setTimeout(() => {
-            window.print();
+          checkImages().then(() => {
             setTimeout(() => {
-              window.close();
-            }, 500);
-          }, 500);
+              window.print();
+              setTimeout(() => {
+                window.close();
+              }, 1000);
+            }, 800);
+          });
         };
       </script>
     </body>
