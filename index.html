@@ -4,8 +4,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="theme-color" content="#4f8ef7" />
-    <link rel="icon" id="dynamic-favicon" type="image/png" href="/icons/icon-192.png" />
-    <link rel="apple-touch-icon" id="dynamic-apple-icon" href="/icons/icon-192.png" />
+    <link rel="icon" id="dynamic-favicon" type="image/png" href="/icons/icon-192.png" crossorigin="use-credentials" />
+    <link rel="apple-touch-icon" id="dynamic-apple-icon" href="/icons/icon-192.png" crossorigin="use-credentials" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SISLAV - CONTROL TOTAL</title>
     <meta name="description" content="SISLAV - Sistema de Control Total para Lavanderías" />
@@ -15,6 +15,7 @@
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="manifest" id="dynamic-manifest" href="/manifest.json" crossorigin="use-credentials" />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -91,10 +92,8 @@
           manifestUrl += (manifestUrl.includes('?') ? '&' : '?') + 'type=logistica';
         }
         
-        const link = document.createElement('link');
-        link.rel = 'manifest';
-        link.href = manifestUrl;
-        document.head.appendChild(link);
+        const manifestLink = document.getElementById('dynamic-manifest');
+        if (manifestLink) manifestLink.href = manifestUrl;
 
         const SUPABASE_URL = 'https://yvgshdypqanlcgxdyvls.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2Z3NoZHlwcWFubGNneGR5dmxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NjYyODIsImV4cCI6MjA4NTE0MjI4Mn0.B65RRA4u5-a_6E-blMvQXMKf39521esSif4XODdzfNE';
@@ -150,16 +149,6 @@
               if (logoUrl) {
                 if (faviconEl) faviconEl.setAttribute('href', logoUrl);
                 if (appleEl) appleEl.setAttribute('href', logoUrl);
-              }
-
-              // El manifest ya viene correcto desde la Edge Function /api/manifest
-              const manifestLink = document.querySelector('link[rel="manifest"]');
-              let manifestUrl = slug ? `/manifest.json?s=${slug}` : (ownerId ? `/manifest.json?o=${ownerId}` : '/manifest.json');
-              if (isLogistica) {
-                manifestUrl += (manifestUrl.includes('?') ? '&' : '?') + 'type=logistica';
-              }
-              if (manifestLink) {
-                manifestLink.setAttribute('href', manifestUrl);
               }
             } else {
               window.__BRANDING_STATUS__ = 'failed';

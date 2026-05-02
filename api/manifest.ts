@@ -10,6 +10,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const isLogistica = type === 'logistica';
 
   let name = 'SISLAV SUCURSAL';
+  let shortName = 'SISLAV';
   let iconUrl = '/icons/icon-512.png';
   let themeColor = '#1A6EF5';
   let bgColor = '#0d0f14';
@@ -35,10 +36,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const record = Array.isArray(data) ? data[0] : data;
 
       if (record) {
-        name = record.nombre_sucursal || 
+        name = record.nombre_comercial || 
+               record.nombre_sucursal || 
                record.nombre_empresa || 
                'SISLAV SUCURSAL';
         
+        shortName = (record.nombre_comercial || record.nombre_sucursal || record.nombre_empresa || 'SISLAV').substring(0, 12);
+
         // Para logística, usar favicon_logistica si existe
         const logoField = isLogistica 
           ? (record.url_favicon_logistica || record.url_favicon || record.url_logo)
@@ -51,20 +55,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   } catch (e) {
     console.error('Error fetching branding for manifest:', e);
-    // Fallback al manifest genérico
   }
 
   // Construir start_url con los parámetros originales
-  if (slug) startUrl = `/?s=${slug}`;
-  else if (ownerId) startUrl = `/?o=${ownerId}`;
+  const urlParams = new URLSearchParams();
+  if (slug) urlParams.set('s', slug as string);
+  if (ownerId) urlParams.set('o', ownerId as string);
+  if (isLogistica) urlParams.set('type', 'logistica');
   
-  if (isLogistica) {
-    startUrl += (startUrl.includes('?') ? '&' : '?') + 'type=logistica';
-  }
+  const searchStr = urlParams.toString();
+  startUrl = searchStr ? `/?${searchStr}` : '/';
 
   const manifest = {
     name: name,
-    short_name: name.length > 15 ? name.substring(0, 15) : name,
+    short_name: shortName,
     description: `Sistema de gestión — ${name}`,
     start_url: startUrl,
     scope: '/',
@@ -77,19 +81,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         src: iconUrl,
         sizes: '192x192',
         type: 'image/png',
-        purpose: 'any maskable'
+        purpose: 'any'
       },
       {
         src: iconUrl,
         sizes: '512x512',
         type: 'image/png',
-        purpose: 'any maskable'
+        purpose: 'any'
       },
       {
         src: iconUrl,
-        sizes: '180x180',
+        sizes: '192x192',
         type: 'image/png',
-        purpose: 'any'
+        purpose: 'maskable'
+      },
+      {
+        src: iconUrl,
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable'
       }
     ]
   };
