@@ -14,6 +14,8 @@ interface LogisticsDriverPOSProps {
     onLogout: () => void;
 }
 
+import { applyDynamicManifest } from '../utils/pwaUtils';
+
 const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout }) => {
     const [guias, setGuias] = useState<GuiaRemision[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -26,6 +28,7 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout }) => 
     const [showScanner, setShowScanner] = useState(false);
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+    const [holdingBranding, setHoldingBranding] = useState<any>(null);
     const notifiedGuias = useRef<Set<string>>(new Set());
 
     // Notification Sound
@@ -42,6 +45,30 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout }) => 
 
     useEffect(() => {
         loadMyGuias();
+
+        // Aplicar branding del holding para el PWA de Delivery
+        import('../services/dbService').then(async db => {
+            const authSessionStr = localStorage.getItem('sislav_auth_session');
+            if (authSessionStr) {
+                const session = JSON.parse(authSessionStr);
+                const holdingId = session.user?.holding_id;
+                if (holdingId) {
+                    const branding = await db.dbGetHoldingBranding(holdingId);
+                    if (branding) {
+                        setHoldingBranding(branding);
+                        applyDynamicManifest({
+                            name: branding.nombre_comercial || branding.nombre_sucursal || 'SISLAV DELIVERY',
+                            shortName: (branding.nombre_comercial || branding.nombre_sucursal || 'SISLAV').substring(0, 12),
+                            iconUrl: branding.url_favicon_logistica || branding.url_favicon || branding.url_logo,
+                            themeColor: branding.color_primario || '#4f8ef7',
+                            backgroundColor: branding.color_secundario || '#0d0f14',
+                            startUrl: window.location.href
+                        });
+                        document.title = `${branding.nombre_comercial || branding.nombre_sucursal} - LOGÍSTICA`;
+                    }
+                }
+            }
+        });
 
         // Real-time subscription for new/updated guias
         const channel = (async () => {

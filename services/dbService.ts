@@ -50,11 +50,11 @@ const getCached = (key: string, ttlMs: number = 30000) => {
     return entry.data;
 };
 
-const setCache = (key: string, data: any) => {
+export const setCache = (key: string, data: any) => {
     queryCache.set(key, { data, timestamp: Date.now() });
 };
 
-const invalidateCache = (prefix: string) => {
+export const invalidateCache = (prefix: string) => {
     for (const key of Array.from(queryCache.keys())) {
         if (key.startsWith(prefix)) {
             queryCache.delete(key);
@@ -475,7 +475,8 @@ export const dbGetHoldingBranding = async (holdingId: string) => {
     // Convert to branding format compatible with LogisticsLogin
     return {
         id: data.id,
-        nombre_sucursal: data.nombre_empresa,
+        nombre_sucursal: data.nombre_comercial || data.nombre_empresa,
+        nombre_comercial: data.nombre_comercial,
         url_logo: data.url_logo,
         url_favicon: data.url_favicon,
         url_favicon_logistica: data.url_favicon_logistica,
@@ -546,7 +547,8 @@ export const normalizeSucursal = (s: any): any => {
         currencySymbol: s.moneda_simbolo ?? 'S/',
         modulos_config: s.modulos_config ?? {},
         doc_enforce_enabled: s.doc_enforce_enabled ?? false,
-        doc_enforce_threshold: s.doc_enforce_threshold ?? 700
+        doc_enforce_threshold: s.doc_enforce_threshold ?? 700,
+        cash_management_type: s.cash_management_type || 'DAILY'
     };
 };
 
@@ -1262,6 +1264,7 @@ export const dbUpdateSunatResponse = async (ventaId: string, response: SunatResp
     };
     const { error = null } = await supabase.from('ventas').update(payload).eq('id', ventaId);
     if (error) throw error;
+    invalidateCache('invoices');
 };
 
 export const dbDeletePickupRequest = async (id: string) => {
@@ -2083,6 +2086,7 @@ export const dbUpdateInvoiceStatus = async (id: string, status: OrderStatus, pho
     if (photos) { payload.url_foto_evidencia_1 = photos[0] || null; payload.url_foto_evidencia_2 = photos[1] || null; payload.url_foto_evidencia_3 = photos[2] || null; }
     const { error } = await supabase.from('ventas').update(payload).eq('id', id);
     if (error) throw error;
+    invalidateCache('invoices');
 };
 
 export const dbAddPayment = async (ventaId: string, amount: number, methodName: string, pUserId?: string | null, pCashSessionId?: string | null) => {
@@ -2544,6 +2548,8 @@ export const dbUpdateSucursalConfig = async (id: string, updates: any) => {
     if (updates.limite_reconteo !== undefined) payload.limite_reconteo = updates.limite_reconteo;
     if (updates.doc_enforce_enabled !== undefined) payload.doc_enforce_enabled = updates.doc_enforce_enabled;
     if (updates.doc_enforce_threshold !== undefined) payload.doc_enforce_threshold = updates.doc_enforce_threshold;
+    if (updates.cash_management_type !== undefined) payload.cash_management_type = updates.cash_management_type;
+    if (updates.cashManagementType !== undefined) payload.cash_management_type = updates.cashManagementType;
 
     const { error } = await supabase.from('sucursales').update(payload).eq('id', id);
     if (error) throw error;
@@ -3041,6 +3047,7 @@ export const dbConvertInvoice = async (invoiceId: string, targetType: InvoiceTyp
         throw updateError;
     }
 
+    invalidateCache('invoices');
     return updatedVenta;
 };
 
@@ -3262,6 +3269,7 @@ export const dbGetCashClosings = async (): Promise<CashClosing[]> => {
         expectedCash: Number(c.esperado) || 0, 
         actualCash: Number(c.real) || 0, 
         difference: Number(c.diferencia) || 0, 
+        liquidation: Number(c.monto_liquidacion) || 0,
         transactions: typeof c.transacciones_json === 'string' ? JSON.parse(c.transacciones_json) : (c.transacciones_json || []),
         topCategories: typeof (c as any).top_categories_json === 'string' 
             ? JSON.parse((c as any).top_categories_json) 
@@ -3276,6 +3284,7 @@ export const dbUpdateCashClosing = async (id: string, c: CashClosing) => {
             ventas_efectivo: c.cashSales, 
             gastos: c.expenses, 
             real: c.actualCash, 
+            monto_liquidacion: c.liquidation || 0,
             estado: 'CERRADO',
             otras_ventas_json: Object.entries(c.otherSales).map(([methodName, amount]) => ({ methodName, amount })),
             transacciones_json: c.transactions || [],
@@ -3283,6 +3292,34 @@ export const dbUpdateCashClosing = async (id: string, c: CashClosing) => {
         })
         .eq('id', id);
     if (error) throw error;
+};
+
+export const dbGetLastAccumulatedBalance = async (branchId: string, userId: string): Promise<number> => {
+    const holdingId = getActiveHoldingId();
+    
+    let query = supabase
+        .from('cierres_caja')
+        .select('real, monto_liquidacion')
+        .eq('sucursal_id', branchId)
+        .eq('usuario_id', userId)
+        .eq('estado', 'CERRADO');
+    
+    if (holdingId) {
+        query = query.eq('empresa_holding_id', holdingId);
+    }
+
+    const { data, error } = await query
+        .order('fecha_cierre', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (error || !data) return 0;
+
+    // Fórmula: Saldo Final - Liquidación = Lo que queda para el siguiente turno
+    const lastReal = Number(data.real) || 0;
+    const lastLiquidation = Number(data.monto_liquidacion) || 0;
+    
+    return Math.max(0, lastReal - lastLiquidation);
 };
 
 export const dbCreateCashClosing = async (c: CashClosing) => {
@@ -3315,8 +3352,13 @@ export const dbCreateCashClosing = async (c: CashClosing) => {
         ventas_efectivo: c.cashSales, 
         gastos: c.expenses, 
         real: c.actualCash, 
+        monto_liquidacion: c.liquidation || 0,
+        esperado: c.expectedCash,
+        diferencia: c.difference,
         estado: 'CERRADO',
         registrado_por: c.cajero,
+        caja: c.caja,
+        turno: c.turno,
         otras_ventas_json: Object.entries(c.otherSales).map(([methodName, amount]) => ({ methodName, amount })),
         transacciones_json: c.transactions || [],
         top_categories_json: c.topCategories || []

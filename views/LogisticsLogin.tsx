@@ -12,11 +12,14 @@ interface LogisticsLoginProps {
   sucursal?: any;
 }
 
+import { applyDynamicManifest } from '../utils/pwaUtils';
+
 export default function LogisticsLogin({ onLogin, isDarkMode, toggleTheme, sucursal }: LogisticsLoginProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [holdingBranding, setHoldingBranding] = useState<any>(null);
   
   const [localSucursal, setLocalSucursal] = useState<any>(() => {
     return sucursal || (window as any).__SUCURSAL_BRANDING__ || null;
@@ -31,17 +34,27 @@ export default function LogisticsLogin({ onLogin, isDarkMode, toggleTheme, sucur
 
   const brandPrimary = localSucursal?.color_primario || '#4f8ef7';
 
+  // Obtener branding del holding para el PWA de Delivery
   React.useEffect(() => {
-    // Sincronizar Favicon Logística
-    const faviconUrl = localSucursal?.faviconLogisticaUrl || localSucursal?.url_favicon_logistica;
-    if (faviconUrl) {
-      const link: HTMLLinkElement = document.querySelector("link[rel*='icon']") || document.createElement('link');
-      link.type = 'image/x-icon';
-      link.rel = 'shortcut icon';
-      link.href = faviconUrl;
-      document.getElementsByTagName('head')[0].appendChild(link);
+    if (localSucursal?.empresa_holding_id || localSucursal?.id) {
+       const idToFetch = localSucursal.empresa_holding_id || localSucursal.id;
+       import('../services/dbService').then(db => {
+         db.dbGetHoldingBranding(idToFetch).then(branding => {
+            if (branding) {
+              setHoldingBranding(branding);
+              applyDynamicManifest({
+                name: branding.nombre_comercial || branding.nombre_sucursal || 'SISLAV DELIVERY',
+                shortName: (branding.nombre_comercial || branding.nombre_sucursal || 'SISLAV').substring(0, 12),
+                iconUrl: branding.url_favicon_logistica || branding.url_favicon || branding.url_logo || localSucursal?.url_logo,
+                themeColor: branding.color_primario || brandPrimary,
+                backgroundColor: branding.color_secundario || '#0d0f14',
+                startUrl: window.location.href
+              });
+            }
+         });
+       });
     }
-  }, [localSucursal]);
+  }, [localSucursal?.id, localSucursal?.empresa_holding_id]);
 
   // Si se espera branding pero aún está cargando
   if (!localSucursal && brandingStatus === 'loading') {

@@ -467,6 +467,7 @@ export interface CashClosing extends BaseEntity {
     expectedCash: number;
     actualCash: number;
     difference: number;
+    liquidation?: number;
     transactions: any[];
     topCategories?: { name: string; quantity: number; amount: number }[];
 }
@@ -568,6 +569,7 @@ export interface SaasCompany {
     id: string;
     ruc: string;
     name: string;
+    nombre_comercial?: string;
     logoUrl?: string;
     faviconUrl?: string;
     faviconLogisticaUrl?: string;
@@ -621,6 +623,7 @@ export interface SaasBranch {
     use_order_reset?: boolean;
     limite_reconteo?: number;
     sucursal_tipo?: SucursalType;
+    cash_management_type?: CashManagementType;
 }
 
 export enum SucursalType {
@@ -632,6 +635,11 @@ export enum SucursalType {
     COMERCIAL = 'COMERCIAL',
     SOCIO = 'SOCIO',
     ALIANZA = 'ALIANZA'
+}
+
+export enum CashManagementType {
+    DAILY = 'DAILY',
+    ACCUMULATIVE = 'ACCUMULATIVE'
 }
 
 export interface GuiaRemision {

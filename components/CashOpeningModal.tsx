@@ -1,8 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Banknote, X, CheckCircle2, AlertTriangle, TrendingUp, Clock, Calculator } from 'lucide-react';
+import { Banknote, X, CheckCircle2, AlertTriangle, TrendingUp, Clock, Calculator, Loader2 } from 'lucide-react';
 import { Company } from '../types';
+import { dbGetLastAccumulatedBalance } from '../services/dbService';
 
 interface CashOpeningModalProps {
   isOpen: boolean;
@@ -15,10 +16,33 @@ const CashOpeningModal: React.FC<CashOpeningModalProps> = ({ isOpen, onClose, on
   const [amount, setAmount] = useState('');
   const [turno, setTurno] = useState(() => new Date().getHours() < 12 ? 'MAÑANA' : 'TARDE');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const primaryColor = company.primaryColor || '#0054A6';
   const currency = company.currencySymbol || 'S/';
+
+  useEffect(() => {
+    if (isOpen && (company as any).cash_management_type === 'ACCUMULATIVE') {
+      const fetchLastBalance = async () => {
+        setIsLoadingBalance(true);
+        try {
+          const userId = localStorage.getItem('sislav_active_user_uuid');
+          if (userId && company.id) {
+            const balance = await dbGetLastAccumulatedBalance(company.id, userId);
+            setAmount(balance.toFixed(2));
+          }
+        } catch (err) {
+          console.error("Error al cargar saldo acumulado:", err);
+        } finally {
+          setIsLoadingBalance(false);
+        }
+      };
+      fetchLastBalance();
+    } else if (isOpen) {
+        setAmount('0.00'); // Reset para modo diario si se desea, o dejar vacío
+    }
+  }, [isOpen, company.id, (company as any).cash_management_type]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +131,10 @@ const CashOpeningModal: React.FC<CashOpeningModalProps> = ({ isOpen, onClose, on
 
               {/* Amount Input */}
               <div className="space-y-2">
-                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Monto Inicial en Efectivo</label>
+                 <div className="flex justify-between items-center ml-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Monto Inicial en Efectivo</label>
+                    {isLoadingBalance && <Loader2 size={12} className="animate-spin text-slate-400" />}
+                 </div>
                  <div className="relative">
                     <div className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-400">{currency}</div>
                     <input 
@@ -116,10 +143,16 @@ const CashOpeningModal: React.FC<CashOpeningModalProps> = ({ isOpen, onClose, on
                       value={amount}
                       onChange={e => setAmount(e.target.value)}
                       autoFocus
-                      className="w-full pl-14 pr-6 py-6 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none focus:bg-white focus:ring-4 focus:ring-slate-100 transition-all font-black text-4xl text-slate-800 shadow-inner"
+                      readOnly={isLoadingBalance || (company as any).cash_management_type === 'ACCUMULATIVE'}
+                      className={`w-full pl-14 pr-6 py-6 border-2 rounded-3xl outline-none transition-all font-black text-4xl text-slate-800 shadow-inner ${((company as any).cash_management_type === 'ACCUMULATIVE') ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100 focus:bg-white focus:ring-4 focus:ring-slate-100'}`}
                       placeholder="0.00"
                     />
                  </div>
+                 {(company as any).cash_management_type === 'ACCUMULATIVE' && (
+                    <p className="text-[10px] font-bold text-amber-600 px-4 mt-1 italic">
+                      Modo Acumulativo activo: Se carga automáticamente el saldo final de su turno anterior.
+                    </p>
+                 )}
               </div>
             </div>
 

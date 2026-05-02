@@ -8,7 +8,7 @@ import {
     SaasCompany, SaasBranch
 } from './types';
 import {
-    dbGetSucursalBySlug, dbGlobalLogin, setDbBranchContext, getActiveBranchId, getActiveHoldingId, withTimeout,
+    dbGetSucursalBySlug, dbGlobalLogin, setDbBranchContext, getActiveBranchId, getActiveHoldingId, withTimeout, invalidateCache,
     dbGetProducts, dbGetClients, dbGetInvoices, dbGetOrderStats, dbGetExpenses, dbGetSupplies,
     dbGetPaymentMethods, dbSaveCategory, dbUpdateCategory,
     dbSavePaymentMethod, dbUpdatePaymentMethod,
@@ -55,6 +55,7 @@ import { calculateTotals, formatOrderNumber, roundToOneDecimal } from './utils/c
 import { EvolutionService } from './services/evolutionService';
 import { printInvoiceDirectly } from './utils/printService';
 import SaaSLogin from './views/SaaSLogin';
+import { applyDynamicManifest } from './utils/pwaUtils';
 import OwnerLogin from './views/OwnerLogin';
 import OwnerDashboard from './views/OwnerDashboard';
 import InvoiceReceipt from './components/InvoiceReceipt';
@@ -187,6 +188,10 @@ export default function App() {
     };
 
     const refreshData = useCallback(async (manual: boolean = false) => {
+        // Forzar limpieza de cache interno de dbService
+        invalidateCache('invoices');
+        invalidateCache('orderStats');
+
         // Solo invalidar queries dinámicas, no las estáticas
         queryClient.invalidateQueries({ queryKey: ['invoices'] });
         queryClient.invalidateQueries({ queryKey: ['orderStats'] });
@@ -342,71 +347,24 @@ export default function App() {
     // EFECTO DINÁMICO: Actualizar Favicon, Título y Manifest según Sucursal activa
     useEffect(() => {
         if (activeSucursal) {
-            document.title = `${activeSucursal.razonSocial || 'SISLAV'} - CONTROL TOTAL`;
-            
-            // Priorizamos url_favicon para la identidad visual como App
             const iconUrl = activeSucursal.url_favicon || activeSucursal.url_logo || activeSucursal.logoUrl;
             
             if (iconUrl) {
-                const head = document.getElementsByTagName('head')[0];
-                
-                // Favicon dinámico
-                let link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
-                if (!link) {
-                    link = document.createElement('link');
-                    link.rel = 'icon';
-                    head.appendChild(link);
-                }
-                link.href = iconUrl;
+                applyDynamicManifest({
+                    name: activeSucursal.nombre_comercial || activeSucursal.nombre_sucursal || activeSucursal.razonSocial || "SISLAV SUCURSAL",
+                    shortName: (activeSucursal.nombre_comercial || activeSucursal.nombre_sucursal || "SISLAV").substring(0, 12),
+                    iconUrl,
+                    themeColor: activeSucursal.color_primario || "#1A6EF5",
+                    backgroundColor: activeSucursal.color_secundario || "#0d0f14",
+                    startUrl: window.location.href
+                });
+            }
 
-                // Apple Touch Icon (Crítico para "Instalar como App")
-                let appleLink = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
-                if (!appleLink) {
-                    appleLink = document.createElement('link');
-                    appleLink.rel = 'apple-touch-icon';
-                    head.appendChild(appleLink);
-                }
-                appleLink.href = iconUrl;
-
-                // DYNAMIC MANIFEST (Branding nivel ultra-personalizado como APP)
-                const manifest = {
-                    "name": activeSucursal.razonSocial || "SISLAV - CONTROL TOTAL",
-                    "short_name": activeSucursal.nombre_sucursal || "SISLAV",
-                    "description": "Sistema de Control Total para Lavanderías",
-                    "start_url": window.location.origin + window.location.pathname + window.location.search,
-                    "display": "standalone",
-                    "background_color": "#0d0f14",
-                    "theme_color": activeSucursal.color_primario || "#4f8ef7",
-                    "icons": [
-                        {
-                            "src": iconUrl,
-                            "sizes": "192x192",
-                            "type": "image/png",
-                            "purpose": "any maskable"
-                        },
-                        {
-                            "src": iconUrl,
-                            "sizes": "512x512",
-                            "type": "image/png",
-                            "purpose": "any maskable"
-                        }
-                    ]
-                };
-
-                const stringManifest = JSON.stringify(manifest);
-                const blob = new Blob([stringManifest], {type: 'application/json'});
-                const manifestURL = URL.createObjectURL(blob);
-                
-                let manifestLink = document.querySelector("link[rel='manifest']") as HTMLLinkElement;
-                if (!manifestLink) {
-                    manifestLink = document.createElement('link');
-                    manifestLink.rel = 'manifest';
-                    head.appendChild(manifestLink);
-                }
-                manifestLink.href = manifestURL;
+            if (activeSucursal.nombre_comercial || activeSucursal.nombre_sucursal || activeSucursal.razonSocial) {
+                document.title = `${activeSucursal.nombre_comercial || activeSucursal.nombre_sucursal || activeSucursal.razonSocial} - CONTROL TOTAL`;
             }
         }
-    }, [activeSucursal]);
+    }, [activeSucursal?.id]);
 
     const [products, setProducts] = useState<Product[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -1487,6 +1445,24 @@ export default function App() {
             const sunatRes = await sendBillToSunat(invoice, activeSucursal);
             await dbUpdateSunatResponse(invoice.id, sunatRes);
             
+            // OPTIMISTIC UPDATE: Actualizar localmente el estado del comprobante para evitar problemas de asincronía
+            setInvoices(prevInvs => prevInvs.map(inv => 
+                inv.id === invoice.id 
+                    ? { 
+                        ...inv, 
+                        sunatStatus: (sunatRes.success ? 'ACCEPTED' : 'REJECTED') as any,
+                        sunatResponse: {
+                            success: sunatRes.success,
+                            description: sunatRes.description,
+                            hash: sunatRes.hash,
+                            pdfUrl: sunatRes.pdfUrl,
+                            xmlUrl: sunatRes.xmlUrl,
+                            cdrUrl: sunatRes.cdrUrl
+                        }
+                      } 
+                    : inv
+            ));
+
             if (sunatRes.success) {
                 alert("✅ Comprobante aceptado por SUNAT con éxito.");
             } else {

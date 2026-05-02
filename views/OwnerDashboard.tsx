@@ -33,12 +33,29 @@ interface OwnerDashboardProps {
 
 const COLORS = ['#4f8ef7', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
+import { applyDynamicManifest } from '../utils/pwaUtils';
+
 export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDarkMode, toggleTheme }: OwnerDashboardProps) {
   const [data, setData] = useState<OwnerDashboardData | null>(null);
   const [branches, setBranches] = useState<any[]>([]);
   const [holdingInfo, setHoldingInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState(30);
+
+  // Aplicar manifest dinámico cuando se carga la información del holding
+  useEffect(() => {
+    if (holdingInfo) {
+      applyDynamicManifest({
+        name: holdingInfo.nombre_comercial || holdingInfo.name || 'SISLAV OWNER',
+        shortName: (holdingInfo.nombre_comercial || holdingInfo.name || 'SISLAV').substring(0, 12),
+        iconUrl: holdingInfo.url_favicon || holdingInfo.url_logo || 'https://lavanderiasislav.com/favicon.png',
+        themeColor: holdingInfo.color_primario || '#1A6EF5',
+        backgroundColor: holdingInfo.color_secundario || '#0d0f14',
+        startUrl: window.location.href
+      });
+      document.title = `${holdingInfo.nombre_comercial || holdingInfo.name} - PANEL OWNER`;
+    }
+  }, [holdingInfo?.id]);
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
   const [isCustomDate, setIsCustomDate] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'logistics'>('dashboard');

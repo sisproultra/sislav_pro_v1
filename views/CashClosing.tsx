@@ -40,6 +40,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
     activeCashSession ? activeCashSession.openingBalance.toFixed(2) : '0.00'
   );
   const [actualCash, setActualCash] = useState('');
+  const [liquidation, setLiquidation] = useState('');
   const [isClosing, setIsClosing] = useState(false);
   const [activeView, setActiveView] = useState<'CURRENT' | 'HISTORY' | 'PROJECTIONS'>('CURRENT');
   const [closingHistory, setClosingHistory] = useState<CashClosingType[]>([]);
@@ -283,6 +284,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
           expectedCash: summary.expectedCash, 
           actualCash: cashCount, 
           difference: diff, 
+          liquidation: parseFloat(liquidation) || 0,
           transactions: allPayments, 
           topCategories: summary.topCategories
       };
@@ -349,7 +351,10 @@ const CashClosing: React.FC<CashClosingProps> = ({
               <div class="row"><span>EGRESOS:</span> <span>- ${currency} ${report.expenses.toFixed(2)}</span></div>
               <div class="divider"></div>
               <div class="row bold"><span>TOTAL EFECTIVO:</span> <span>${currency} ${report.expectedCash.toFixed(2)}</span></div>
-              <div class="row bold"><span>EFECTIVO REAL:</span> <span>${currency} ${report.actualCash.toFixed(2)}</span></div>
+              <div class="row bold"><span>EFECTIVO REAL:</span> <span class="bold">${currency} ${report.actualCash.toFixed(2)}</span></div>
+              <div class="row"><span>LIQUIDACIÓN:</span> <span>- ${currency} ${(report.liquidation || 0).toFixed(2)}</span></div>
+              <div class="divider"></div>
+              <div class="row bold"><span>SALDO SIGUIENTE:</span> <span>${currency} ${(report.actualCash - (report.liquidation || 0)).toFixed(2)}</span></div>
               <div class="row"><span>DIFERENCIA:</span> <span class="${report.difference < 0 ? 'bold' : ''}">${currency} ${report.difference.toFixed(2)}</span></div>
 
               <div class="section-title">2. COBRANZAS POR TIPO</div>
@@ -624,6 +629,25 @@ const CashClosing: React.FC<CashClosingProps> = ({
                      </div>
                    </div>
 
+                   {(company as any).cash_management_type === 'ACCUMULATIVE' && (
+                     <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Monto a Liquidar (Entrega al dueño)</label>
+                       <div className="relative">
+                          <div className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-gray-400">{currency}</div>
+                          <input 
+                             type="number"
+                             value={liquidation}
+                             onChange={e => setLiquidation(e.target.value)}
+                             className="w-full pl-14 pr-6 py-6 bg-emerald-50 border-2 border-emerald-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-emerald-100 outline-none font-black text-4xl transition-all shadow-inner text-emerald-800"
+                             placeholder="0.00"
+                          />
+                       </div>
+                       <p className="text-[10px] font-bold text-gray-400 px-2 italic">
+                         El saldo restante ({currency} {Math.max(0, (parseFloat(actualCash) || 0) - (parseFloat(liquidation) || 0)).toFixed(2)}) se mantendrá como inicio para la próxima caja.
+                       </p>
+                     </div>
+                   )}
+
                    <div className="flex gap-4">
                       <div className="flex-1 space-y-1">
                         <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Saldo Inicial</label>
@@ -759,6 +783,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100">Fecha y Hora</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100">Turno / Cajero</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Efectivo Real</th>
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Liquidado</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Diferencia</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-center">Acciones</th>
                         </tr>
@@ -792,6 +817,11 @@ const CashClosing: React.FC<CashClosingProps> = ({
                               <td className="px-6 py-5 text-right">
                                 <span className="text-sm font-black text-slate-900 tabular-nums">
                                   {currency} {report.actualCash.toFixed(2)}
+                                </span>
+                              </td>
+                              <td className="px-6 py-5 text-right">
+                                <span className={`text-xs font-bold tabular-nums ${(report.liquidation || 0) > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                  {currency} {(report.liquidation || 0).toFixed(2)}
                                 </span>
                               </td>
                               <td className="px-6 py-5 text-right">

@@ -28,7 +28,8 @@ import {
     SaasGlobalConfig,
     UserRole,
     InvoiceType,
-    SucursalType
+    SucursalType,
+    CashManagementType
 } from '../types';
 import { 
     Building, Globe, Loader2, X, Save, Palette, 
@@ -846,6 +847,7 @@ export const SuperAdmin: React.FC<{
     const [catalogItem, setCatalogItem] = useState({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA' });
     const [newVideo, setNewVideo] = useState({ title: '', url: '' });
     const [compName, setCompName] = useState('');
+    const [compNombreComercial, setCompNombreComercial] = useState('');
     const [compRuc, setCompRuc] = useState('');
     const [compOwner, setCompOwner] = useState('');
     const [compPhone, setCompPhone] = useState('');
@@ -895,6 +897,7 @@ export const SuperAdmin: React.FC<{
     const [brFaviconUrl, setBrFaviconUrl] = useState('');
     const [brIsActive, setBrIsActive] = useState(true);
     const [brType, setBrType] = useState<SucursalType>(SucursalType.ESTANDAR);
+    const [brCashManagementType, setBrCashManagementType] = useState<CashManagementType>(CashManagementType.DAILY);
     const [brPorcentajeIgv, setBrPorcentajeIgv] = useState('18.00');
     const [brMonedaSimbolo, setBrMonedaSimbolo] = useState('S/');
     const [brUseOrderReset, setBrUseOrderReset] = useState(false);
@@ -1037,6 +1040,7 @@ export const SuperAdmin: React.FC<{
         setBrCobranza(false); setBrColorPrimary('#0054A6'); setBrColorSecondary('#10B981');
         setBrLogoUrl(''); setBrFaviconUrl(''); setBrIsActive(true);
         setBrType(SucursalType.ESTANDAR);
+        setBrCashManagementType(CashManagementType.DAILY);
         setBrPorcentajeIgv('18.00'); setBrMonedaSimbolo('S/');
         setBrUseOrderReset(false); setBrLimiteReconteo('10000');
         setBrModulosConfig(DEFAULT_MODULES_CONFIG);
@@ -1056,6 +1060,7 @@ export const SuperAdmin: React.FC<{
         setBrSlug(branch.slug);
         setBrIsActive(branch.isActive);
         setBrType(branch.sucursal_tipo || SucursalType.ESTANDAR);
+        setBrCashManagementType(branch.cash_management_type || CashManagementType.DAILY);
         setBrCobranza(branch.cobranza || false);
         setBrColorPrimary(branch.primaryColor);
         setBrColorSecondary(branch.secondaryColor);
@@ -1215,6 +1220,7 @@ export const SuperAdmin: React.FC<{
         setIsEditingCompany(true);
         setEditingCompanyId(company.id);
         setCompName(company.name);
+        setCompNombreComercial(company.nombre_comercial || '');
         setCompRuc(company.ruc);
         setCompOwner(company.ownerName);
         setCompPhone(company.phone);
@@ -1233,6 +1239,7 @@ export const SuperAdmin: React.FC<{
         setIsEditingCompany(false);
         setEditingCompanyId(null);
         setCompName(''); 
+        setCompNombreComercial('');
         setCompRuc(''); 
         setCompOwner(''); 
         setCompPhone(''); 
@@ -1263,6 +1270,7 @@ export const SuperAdmin: React.FC<{
         try {
             const companyData = { 
                 name: compName, 
+                nombre_comercial: compNombreComercial,
                 ruc: compRuc, 
                 ownerName: compOwner, 
                 phone: compPhone, 
@@ -1400,6 +1408,7 @@ export const SuperAdmin: React.FC<{
             limite_reconteo: brLimiteReconteo,
             doc_enforce_enabled: brDocEnforceEnabled,
             doc_enforce_threshold: brDocEnforceThreshold,
+            cash_management_type: brCashManagementType,
             puntos_equivalencia: parseFloat(brPuntosEq),
             cobranza: brCobranza,
             color_primario: brColorPrimary,
@@ -2313,6 +2322,7 @@ export const SuperAdmin: React.FC<{
                                     </div>
                                 </div>
                                 <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Razón Social</label><input required value={compName} onChange={e => setCompName(e.target.value.toUpperCase())} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20 uppercase" placeholder="LAVANDERIA SAC" /></div>
+                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1 text-indigo-400">Nombre Comercial (PWA)</label><input value={compNombreComercial} onChange={e => setCompNombreComercial(e.target.value.toUpperCase())} className="w-full bg-slate-800 border-2 border-indigo-500/30 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-black outline-none focus:ring-4 focus:ring-indigo-600/20 uppercase shadow-[0_0_15px_rgba(79,70,229,0.1)]" placeholder="BRIGTH & CLEAN" /></div>
                                 <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Representante</label><input required value={compOwner} onChange={e => setCompOwner(e.target.value.toUpperCase())} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20 uppercase" placeholder="JUAN PEREZ" /></div>
                                 <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Teléfono</label><input required value={compPhone} onChange={e => setCompPhone(e.target.value)} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20" placeholder="999888777" /></div>
                                 <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Correo Admin</label><input required type="email" value={compEmail} onChange={e => setCompEmail(e.target.value.toLowerCase())} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20 lowercase" placeholder="admin@empresa.com" /></div>
@@ -2469,88 +2479,126 @@ export const SuperAdmin: React.FC<{
                         </div>
                         <form onSubmit={handleSaveBranch} className="p-6 md:p-10 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
                             {branchModalTab === 'GENERAL' && (
-                                <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div className="space-y-6">
-                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">RUC Sucursal</label><div className="flex gap-2"><input required value={brRuc} onChange={e => setBrRuc(e.target.value)} className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 transition-all shadow-inner" placeholder="20XXXXXXXXX" /><button type="button" onClick={handleSearchBranchRuc} disabled={isSearchingRuc} className="bg-slate-900 text-white px-5 rounded-2xl shadow-xl transition-all active:scale-90">{isSearchingRuc ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}</button></div></div>
-                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Razón Social (SUNAT)</label><input required value={brRazonSocial} onChange={e => setBrRazonSocial(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 uppercase shadow-inner" placeholder="LAVANDERIA SAC" /></div>
-                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Comercial</label><input required value={brName} onChange={e => setBrName(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 uppercase shadow-inner" placeholder="LAUNDRY SEDE NORTE" /></div>
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Tipo de Sucursal</label>
-                                                <select 
-                                                    value={brType} 
-                                                    onChange={e => setBrType(e.target.value as SucursalType)} 
-                                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner appearance-none cursor-pointer"
-                                                >
-                                                    {Object.values(SucursalType).map(type => (
-                                                        <option key={type} value={type}>{type}</option>
-                                                    ))}
-                                                </select>
+                                <div className="space-y-10 animate-in slide-in-from-right-4 duration-300">
+                                    {/* SECCIÓN FISCAL */}
+                                    <div className="space-y-6">
+                                        <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                                            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                                                <FileCheck size={18} />
                                             </div>
-                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Identificador Slug (URL)</label><input disabled={isEditingBranch} value={brSlug} onChange={e => setBrSlug(e.target.value.toLowerCase().replace(/\s+/g, '_'))} className="w-full bg-slate-100 border-2 border-slate-100 rounded-2xl px-5 py-4 text-indigo-600 font-mono text-sm outline-none" placeholder="sede_norte" /></div>
+                                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Configuración Fiscal</h4>
                                         </div>
-                                        <div className="space-y-6">
-                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Dirección Física</label><div className="relative"><MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input required value={brAddress} onChange={e => setBrAddress(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 uppercase shadow-inner" placeholder="AV. LIMA 123..." /></div></div>
-                                            <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Teléfono Público</label><div className="relative"><Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input value={brPhone} onChange={e => setBrPhone(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="999888777" /></div></div>
-                                            
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Ubigeo</label><input value={brUbigeo} onChange={e => setBrUbigeo(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" maxLength={6} placeholder="150114" /></div>
-                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Urbanización</label><input value={brUrbanizacion} onChange={e => setBrUrbanizacion(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="PUEBLO LIBRE" /></div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">RUC Sucursal</label>
+                                                <div className="flex gap-2">
+                                                    <input required value={brRuc} onChange={e => setBrRuc(e.target.value)} className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 transition-all shadow-inner" placeholder="20XXXXXXXXX" />
+                                                    <button type="button" onClick={handleSearchBranchRuc} disabled={isSearchingRuc} className="bg-slate-900 text-white px-5 rounded-2xl shadow-xl transition-all active:scale-90">{isSearchingRuc ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}</button>
+                                                </div>
                                             </div>
-
-                                            <div className="grid grid-cols-3 gap-4">
-                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Distrito</label><input value={brDistrito} onChange={e => setBrDistrito(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-[11px] font-bold text-slate-900 outline-none focus:border-indigo-500 shadow-inner" /></div>
-                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Provincia</label><input value={brProvincia} onChange={e => setBrProvincia(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-[11px] font-bold text-slate-900 outline-none focus:border-indigo-500 shadow-inner" /></div>
-                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Departamento</label><input value={brDepartamento} onChange={e => setBrDepartamento(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-[11px] font-bold text-slate-900 outline-none focus:border-indigo-500 shadow-inner" /></div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Razón Social (SUNAT)</label>
+                                                <input required value={brRazonSocial} onChange={e => setBrRazonSocial(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 uppercase shadow-inner" placeholder="LAVANDERIA SAC" />
                                             </div>
-                                            <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Color Primario</label><div className="flex gap-3 items-center bg-slate-100 p-3 rounded-2xl border border-slate-200"><input type="color" value={brColorPrimary} onChange={e => setBrColorPrimary(e.target.value)} className="w-10 h-10 rounded-xl cursor-pointer border-2 border-white shadow-md" /><span className="font-mono text-xs font-bold text-slate-400 uppercase">{brColorPrimary}</span></div></div><div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Color Secundario</label><div className="flex gap-3 items-center bg-slate-100 p-3 rounded-2xl border border-slate-200"><input type="color" value={brColorSecondary} onChange={e => setBrColorSecondary(e.target.value)} className="w-10 h-10 rounded-xl cursor-pointer border-2 border-white shadow-md" /><span className="font-mono text-xs font-bold text-slate-400 uppercase">{brColorSecondary}</span></div></div></div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <div className="space-y-6">
+                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Dirección Física</label><div className="relative"><MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input required value={brAddress} onChange={e => setBrAddress(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 uppercase shadow-inner" placeholder="AV. LIMA 123..." /></div></div>
+                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Teléfono Público</label><div className="relative"><Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input value={brPhone} onChange={e => setBrPhone(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="999888777" /></div></div>
+                                            </div>
+                                            <div className="space-y-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Ubicación</label>
+                                                    <div className="grid grid-cols-2 gap-4 mt-2">
+                                                        <div className="space-y-2"><label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Ubigeo</label><input value={brUbigeo} onChange={e => setBrUbigeo(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" maxLength={6} placeholder="150114" /></div>
+                                                        <div className="space-y-2"><label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Urbanización</label><input value={brUrbanizacion} onChange={e => setBrUrbanizacion(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="PUEBLO LIBRE" /></div>
+                                                    </div>
+                                                    <div className="grid grid-cols-3 gap-3 mt-3">
+                                                        <div className="space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Distrito</label><input value={brDistrito} onChange={e => setBrDistrito(e.target.value.toUpperCase())} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 text-[9px] font-bold text-slate-900 outline-none" /></div>
+                                                        <div className="space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Provincia</label><input value={brProvincia} onChange={e => setBrProvincia(e.target.value.toUpperCase())} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 text-[9px] font-bold text-slate-900 outline-none" /></div>
+                                                        <div className="space-y-1"><label className="text-[8px] font-bold text-slate-400 uppercase">Dpto.</label><input value={brDepartamento} onChange={e => setBrDepartamento(e.target.value.toUpperCase())} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 text-[9px] font-bold text-slate-900 outline-none" /></div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div className="space-y-4">
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Logotipo Principal</label>
-                                            <div className="flex flex-col gap-4">
-                                                <div className="flex items-center gap-6">
-                                                    <div className="w-24 h-24 rounded-3xl bg-slate-50 flex items-center justify-center p-3 shadow-inner border-2 border-dashed border-slate-200 shrink-0">
-                                                        {isSaving ? <Loader2 className="animate-spin text-indigo-600" /> : brLogoUrl ? <img src={brLogoUrl} className="w-full h-full object-contain" /> : <ImageIcon size={32} className="text-slate-300" />}
-                                                    </div>
-                                                    <label className="bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-2xl font-bold text-[10px] uppercase tracking-widest cursor-pointer shadow-xl transition-all">
-                                                        SUBIR IMAGEN
-                                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleBranchAssetUpload('LOGO', e)} />
-                                                    </label>
-                                                </div>
+
+                                    {/* SECCIÓN BRANDING */}
+                                    <div className="space-y-6">
+                                        <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                                            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                                                <Palette size={18} />
+                                            </div>
+                                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Configuración Branding</h4>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <div className="space-y-6">
                                                 <div className="space-y-2">
-                                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">O pegar URL directa</label>
-                                                    <input 
-                                                        value={brLogoUrl} 
-                                                        onChange={e => setBrLogoUrl(e.target.value)} 
-                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[10px] font-mono outline-none focus:border-indigo-500 transition-all" 
-                                                        placeholder="https://ejemplo.com/logo.png" 
-                                                    />
+                                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Comercial</label>
+                                                    <input required value={brName} onChange={e => setBrName(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 uppercase shadow-inner" placeholder="LAUNDRY SEDE NORTE" />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Color Primario</label><div className="flex gap-3 items-center bg-slate-100 p-3 rounded-2xl border border-slate-200"><input type="color" value={brColorPrimary} onChange={e => setBrColorPrimary(e.target.value)} className="w-10 h-10 rounded-xl cursor-pointer border-2 border-white shadow-md" /><span className="font-mono text-xs font-bold text-slate-400 uppercase">{brColorPrimary}</span></div></div>
+                                                    <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Color Secundario</label><div className="flex gap-3 items-center bg-slate-100 p-3 rounded-2xl border border-slate-200"><input type="color" value={brColorSecondary} onChange={e => setBrColorSecondary(e.target.value)} className="w-10 h-10 rounded-xl cursor-pointer border-2 border-white shadow-md" /><span className="font-mono text-xs font-bold text-slate-400 uppercase">{brColorSecondary}</span></div></div>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-6">
+                                                <div className="grid grid-cols-2 gap-6">
+                                                     <div className="space-y-2">
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Logotipo Principal</label>
+                                                        <div className="flex flex-col gap-3">
+                                                            <div className="w-full h-24 rounded-2xl bg-slate-50 flex items-center justify-center p-3 shadow-inner border-2 border-dashed border-slate-200">
+                                                                {isSaving ? <Loader2 className="animate-spin text-indigo-600" /> : brLogoUrl ? <img src={brLogoUrl} className="w-full h-full object-contain" /> : <ImageIcon size={24} className="text-slate-300" />}
+                                                            </div>
+                                                            <label className="w-full py-2 bg-slate-900 hover:bg-black text-white text-center rounded-xl font-bold text-[8px] uppercase tracking-widest cursor-pointer transition-all">
+                                                                SUBIR LOGO
+                                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleBranchAssetUpload('LOGO', e)} />
+                                                            </label>
+                                                        </div>
+                                                     </div>
+                                                     <div className="space-y-2">
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Favicon / Icono</label>
+                                                        <div className="flex flex-col gap-3">
+                                                            <div className="w-full h-24 rounded-2xl bg-slate-50 flex items-center justify-center p-2 shadow-inner border-2 border-dashed border-slate-200">
+                                                                {isSaving ? <Loader2 className="animate-spin text-indigo-600" /> : brFaviconUrl ? <img src={brFaviconUrl} className="w-full h-full object-contain" /> : <Layers size={21} className="text-slate-300" />}
+                                                            </div>
+                                                            <label className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-center rounded-xl font-bold text-[8px] uppercase tracking-widest cursor-pointer border border-slate-200 transition-all">
+                                                                SUBIR ICONO
+                                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleBranchAssetUpload('FAVICON', e)} />
+                                                            </label>
+                                                        </div>
+                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="space-y-4">
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Favicon / Icono</label>
-                                            <div className="flex flex-col gap-4">
-                                                <div className="flex items-center gap-6">
-                                                    <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center p-2 shadow-inner border-2 border-dashed border-slate-200 shrink-0">
-                                                        {isSaving ? <Loader2 className="animate-spin text-indigo-600" /> : brFaviconUrl ? <img src={brFaviconUrl} className="w-full h-full object-contain" /> : <Layers size={24} className="text-slate-300" />}
+                                    </div>
+
+                                    {/* SECCIÓN NEGOCIO */}
+                                    <div className="space-y-6">
+                                        <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                                            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                                                <Store size={18} />
+                                            </div>
+                                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Configuración Negocio</h4>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <div className="space-y-6">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Tipo de Sucursal</label>
+                                                        <select value={brType} onChange={e => setBrType(e.target.value as SucursalType)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner appearance-none cursor-pointer">
+                                                            {Object.values(SucursalType).map(type => <option key={type} value={type}>{type}</option>)}
+                                                        </select>
                                                     </div>
-                                                    <label className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-3 rounded-2xl font-bold text-[10px] uppercase tracking-widest cursor-pointer border border-slate-200 transition-all">
-                                                        SUBIR IMAGEN
-                                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleBranchAssetUpload('FAVICON', e)} />
-                                                    </label>
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest ml-1">Tipo de Caja</label>
+                                                        <select value={brCashManagementType} onChange={e => setBrCashManagementType(e.target.value as CashManagementType)} className="w-full bg-indigo-50 border-2 border-indigo-100 rounded-2xl px-5 py-4 text-indigo-900 font-black outline-none focus:border-indigo-500 shadow-inner appearance-none cursor-pointer">
+                                                            <option value={CashManagementType.DAILY}>DIARIO (ESTÁNDAR)</option>
+                                                            <option value={CashManagementType.ACCUMULATIVE}>ACUMULATIVO</option>
+                                                        </select>
+                                                    </div>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">O pegar URL directa</label>
-                                                    <input 
-                                                        value={brFaviconUrl} 
-                                                        onChange={e => setBrFaviconUrl(e.target.value)} 
-                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[10px] font-mono outline-none focus:border-indigo-500 transition-all" 
-                                                        placeholder="https://ejemplo.com/favicon.ico" 
-                                                    />
-                                                </div>
+                                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Identificador Slug (URL)</label><input disabled={isEditingBranch} value={brSlug} onChange={e => setBrSlug(e.target.value.toLowerCase().replace(/\s+/g, '_'))} className="w-full bg-slate-100 border-2 border-slate-100 rounded-2xl px-5 py-4 text-indigo-600 font-mono text-sm outline-none" placeholder="sede_norte" /></div>
                                             </div>
                                         </div>
                                     </div>

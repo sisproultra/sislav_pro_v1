@@ -4,6 +4,8 @@ import { ShieldCheck, Lock, User, Loader2, ArrowRight, Sun, Moon, Mail, Building
 import { motion } from 'framer-motion';
 import { UserRole } from '../types';
 
+import { applyDynamicManifest } from '../utils/pwaUtils';
+
 interface OwnerLoginProps {
   onLogin: (session: any) => void;
   isDarkMode: boolean;
@@ -35,14 +37,22 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
         .then(({ data }) => {
           if (data) {
             setCompanyInfo(data);
-            if (data.url_favicon) {
-              const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement || document.createElement('link');
-              link.rel = 'icon';
-              link.href = data.url_favicon;
-              document.getElementsByTagName('head')[0].appendChild(link);
+            
+            const iconUrl = data.url_favicon || data.url_logo;
+            
+            if (iconUrl) {
+              applyDynamicManifest({
+                name: data.nombre_comercial || data.nombre_empresa || 'SISLAV',
+                shortName: (data.nombre_comercial || data.nombre_empresa || 'SISLAV').substring(0, 12),
+                iconUrl,
+                themeColor: data.color_primario || '#1A6EF5',
+                backgroundColor: data.color_secundario || '#0d0f14',
+                startUrl: window.location.href
+              });
             }
-            if (data.nombre_empresa) {
-              document.title = `${data.nombre_empresa} - Panel de Propietario`;
+
+            if (data.nombre_comercial || data.nombre_empresa) {
+              document.title = `${data.nombre_comercial || data.nombre_empresa} - Panel de Propietario`;
             }
           }
         });
