@@ -15,7 +15,7 @@ import HelpModal from './HelpModal';
 import BirthdayModal from './BirthdayModal';
 import StoreModal from './StoreModal';
 import { EvolutionService } from '../services/evolutionService';
-import { dbGetPickupRequests, dbMarkPickupAsRead, dbGetInvoices, dbMarkDeliveryAsSeen, dbGetBirthdaysToday } from '../services/dbService';
+import { dbGetPickupRequests, dbMarkPickupAsRead, dbGetInvoices, dbMarkDeliveryAsSeen, dbGetBirthdaysToday, dbGetGuiasRemision } from '../services/dbService';
 
 import { APP_VERSION } from './VersionGuard';
 
@@ -221,15 +221,30 @@ const Layout: React.FC<LayoutProps> = ({
       const { invoices: invs } = await dbGetInvoices();
       const seenDeliveries = JSON.parse(localStorage.getItem('sislav_seen_deliveries') || '[]');
       
-    const unreadDeliveries = invs.filter(inv => 
+      const unreadDeliveries = invs.filter(inv => 
         (inv.orderStatus === 'EN_RUTA' || inv.orderStatus === 'LISTO') && 
         !inv.vistoDelivery && 
         inv.origin !== 'TIENDA' && 
         !seenDeliveries.includes(inv.id)
       );
       setPendingDeliveries(unreadDeliveries);
+
+      // Monitor Guías from Logistics Hub assigned to this driver
+      let unreadGuias: any[] = [];
+      if (currentUser?.id && currentUser.role === UserRole.DELIVERY) {
+          try {
+              const guias = await dbGetGuiasRemision({ 
+                  chofer_id: currentUser.id,
+                  estado: 'EN_TRANSITO'
+              });
+              unreadGuias = guias.filter(g => !seenDeliveries.includes(g.id));
+          } catch (e) {
+              console.error("Error monitoring guias for sound:", e);
+          }
+      }
       
-      const shouldPlaySound = unreadPickups.length > 0 || unreadDeliveries.length > 0;
+      const isDeliveryUser = currentUser?.role === UserRole.DELIVERY;
+      const shouldPlaySound = unreadPickups.length > 0 || (unreadDeliveries.length > 0 && isDeliveryUser) || unreadGuias.length > 0;
       
       if (shouldPlaySound) playNotificationSound();
       else stopNotificationSound();
