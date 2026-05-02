@@ -5,7 +5,7 @@ import { GuiaRemision } from '../types';
 import { dbGetLogisticsDrivers, dbCreateGuiaRemision, getActiveBranchId } from '../services/dbService';
 import { getOwnerSucursales } from '../src/services/ownerService';
 import { format } from 'date-fns';
-import LogisticsGuidePrint from './LogisticsGuidePrint';
+import { printGuiaRemision } from '../utils/printUtils';
 
 interface LogisticsBulkDispatchModalProps {
     isOpen: boolean;
@@ -184,10 +184,10 @@ const LogisticsBulkDispatchModal: React.FC<LogisticsBulkDispatchModalProps> = ({
                 fecha_registro: new Date().toISOString()
             };
 
-            setCreatedGuia(guiaForPrint);
-            setShowPrintPreview(true);
+            printGuiaRemision(guiaForPrint, itemsToDispatch, originBranch);
             
             if (onSuccess) onSuccess();
+            onClose();
         } catch (error) {
             console.error("Error creating logistics guide:", error);
             alert("Error al generar la guía de remisión.");
@@ -197,19 +197,6 @@ const LogisticsBulkDispatchModal: React.FC<LogisticsBulkDispatchModalProps> = ({
     };
 
     if (!isOpen) return null;
-
-    if (showPrintPreview && createdGuia) {
-        return (
-            <LogisticsGuidePrint 
-                guia={createdGuia}
-                items={selectedItems.filter(it => selectedIds.has(it.uniqueId || it.id))}
-                onClose={() => {
-                    setShowPrintPreview(false);
-                    onClose();
-                }}
-            />
-        );
-    }
 
     return (
         <div className="fixed inset-0 bg-slate-950/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">

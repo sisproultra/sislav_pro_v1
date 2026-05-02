@@ -2096,8 +2096,48 @@ export const dbAddPayment = async (ventaId: string, amount: number, methodName: 
     const user = localStorage.getItem('sislav_current_user_name') || 'SISTEMA';
     
     // 1. Obtener método de pago
-    const { data: metodo } = await supabase.from('metodos_pago').select('id').eq('sucursal_id', branchId).ilike('nombre', methodName.trim()).maybeSingle();
-    if (!metodo) throw new Error("Método de pago no encontrado: " + methodName);
+    const cleanMethodName = methodName.trim().toUpperCase();
+    const { data: metodoExistente } = await supabase.from('metodos_pago')
+        .select('id')
+        .eq('sucursal_id', branchId)
+        .ilike('nombre', cleanMethodName)
+        .maybeSingle();
+
+    let metodoId: string;
+
+    if (!metodoExistente) {
+        // AUTO-CREACIÓN PARA MÉTODOS ESTÁNDAR SI NO EXISTEN (Resiliencia)
+        const commonMethods: Record<string, string> = {
+            'YAPE': '003',
+            'PLIN': '003',
+            'EFECTIVO': '009',
+            'TARJETA': '006',
+            'TRANSFERENCIA': '003',
+            'DEPÓSITO': '001'
+        };
+
+        if (commonMethods[cleanMethodName]) {
+            console.log(`✨ Creando método de pago estándar faltante: ${cleanMethodName}`);
+            const { data: nuevoMetodo, error: createError } = await supabase.from('metodos_pago').insert({
+                sucursal_id: branchId,
+                empresa_holding_id: holdingId,
+                nombre: cleanMethodName,
+                activo: true,
+                codigo_sunat: commonMethods[cleanMethodName],
+                fecha_registro: new Date().toISOString()
+            }).select('id').single();
+
+            if (createError || !nuevoMetodo) {
+                console.error("Error auto-creando método de pago:", createError);
+                throw new Error("Método de pago no encontrado y no se pudo crear: " + methodName);
+            }
+            metodoId = nuevoMetodo.id;
+        } else {
+            throw new Error("Método de pago no encontrado: " + methodName);
+        }
+    } else {
+        metodoId = metodoExistente.id;
+    }
     
     // 2. Insertar pago
     let userId = pUserId || getActiveUserId();
@@ -2108,7 +2148,7 @@ export const dbAddPayment = async (ventaId: string, amount: number, methodName: 
 
     const { error: payError } = await supabase.from('pagos_venta').insert({ 
         venta_id: ventaId, 
-        metodo_pago_id: metodo.id, 
+        metodo_pago_id: metodoId, 
         monto: amount, 
         registrado_por: user,
         usuario_id: userId,

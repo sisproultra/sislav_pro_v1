@@ -11,6 +11,7 @@ import { dbGetGuiasRemision, dbGetGuiaDetails, dbUpdateGuiaEstado, getActiveBran
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import LogisticsBulkDispatchModal from '../components/LogisticsBulkDispatchModal';
+import { printGuiaRemision } from '../utils/printUtils';
 
 const LogisticsHub: React.FC = () => {
     const [guias, setGuias] = useState<GuiaRemision[]>([]);
@@ -198,6 +199,19 @@ const LogisticsHub: React.FC = () => {
             alert("Error al recibir la guía.");
         } finally {
             setIsUpdating(false);
+        }
+    };
+
+    const handlePrintGuia = async (guia: GuiaRemision) => {
+        try {
+            setIsLoadingDetails(true);
+            const items = await dbGetGuiaDetails(guia.id);
+            printGuiaRemision(guia, items || [], sucursalInfo);
+        } catch (error) {
+            console.error("Error printing guia:", error);
+            alert("Error al preparar la impresión de la guía.");
+        } finally {
+            setIsLoadingDetails(false);
         }
     };
 
@@ -458,7 +472,10 @@ const LogisticsHub: React.FC = () => {
                                                 Esta guía está en tránsito. El chofer {selectedGuia.chofer?.nombre_completo} tiene la custodia actual.
                                             </p>
                                         </div>
-                                        <button className="w-full mt-4 py-3 border-2 border-slate-200 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2">
+                                        <button 
+                                            onClick={() => handlePrintGuia(selectedGuia)}
+                                            className="w-full mt-4 py-3 border-2 border-slate-200 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-50 hover:text-slate-600 transition-colors"
+                                        >
                                             <Printer size={14} /> REIMPRIMIR GUÍA
                                         </button>
                                     </div>
