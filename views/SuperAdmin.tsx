@@ -1565,6 +1565,20 @@ export const SuperAdmin: React.FC<{
     const [isUpdatingVersion, setIsUpdatingVersion] = useState(false);
     const [minVersionInput, setMinVersionInput] = useState(APP_VERSION);
 
+    useEffect(() => {
+        const fetchCurrentMinVersion = async () => {
+            try {
+                const { data } = await supabase
+                    .from('app_config')
+                    .select('value')
+                    .eq('key', 'min_required_version')
+                    .single();
+                if (data?.value) setMinVersionInput(data.value);
+            } catch (e) { console.error("Error fetching min version:", e); }
+        };
+        fetchCurrentMinVersion();
+    }, []);
+
     const handleUpdateAppVersion = async () => {
         if (!minVersionInput) return;
         setIsUpdatingVersion(true);

@@ -10,6 +10,14 @@ export const VersionGuard: React.FC = () => {
     const [minVersion, setMinVersion] = useState('');
     const [loading, setLoading] = useState(true);
 
+    const versionToNumber = (v: string) => {
+        const parts = v.split('.');
+        const major = parseInt(parts[0]) || 0;
+        const minor = parseInt(parts[1]) || 0;
+        const patch = parseInt(parts[2]) || 0;
+        return major * 10000 + minor * 100 + patch;
+    };
+
     useEffect(() => {
         const checkVersion = async () => {
             try {
@@ -21,7 +29,10 @@ export const VersionGuard: React.FC = () => {
 
                 const required = data?.value || APP_VERSION;
                 setMinVersion(required);
-                if (APP_VERSION < required) setIsOutdated(true);
+                
+                if (versionToNumber(APP_VERSION) < versionToNumber(required)) {
+                    setIsOutdated(true);
+                }
             } catch (err) {
                 console.error('Error inicial de versión:', err);
             } finally {
@@ -31,18 +42,17 @@ export const VersionGuard: React.FC = () => {
 
         checkVersion();
 
-        // SUSCRIPCIÓN EN TIEMPO REAL
         const subscription = supabase
             .channel('app_config_changes')
             .on('postgres_changes', { 
-                event: 'UPDATE', 
+                event: '*', 
                 schema: 'public', 
                 table: 'app_config',
                 filter: 'key=eq.min_required_version'
-            }, (payload) => {
+            }, (payload: any) => {
                 const newVal = payload.new.value;
                 setMinVersion(newVal);
-                if (APP_VERSION < newVal) {
+                if (versionToNumber(APP_VERSION) < versionToNumber(newVal)) {
                     setIsOutdated(true);
                 } else {
                     setIsOutdated(false);
@@ -55,9 +65,32 @@ export const VersionGuard: React.FC = () => {
         };
     }, []);
 
-    const handleUpdate = () => {
-        // Limpiar caché y recargar
-        window.location.reload();
+    const handleUpdate = async () => {
+        try {
+            // 1. Eliminar Service Workers
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (const registration of registrations) {
+                    await registration.unregister();
+                }
+            }
+
+            // 2. Limpiar Caches
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                for (const name of cacheNames) {
+                    await caches.delete(name);
+                }
+            }
+
+            // 3. Hard Reload con Bypass de Cache mediante parámetro único
+            const url = new URL(window.location.href);
+            url.searchParams.set('reload_v', Date.now().toString());
+            window.location.href = url.toString();
+        } catch (e) {
+            console.error("Error en hard reload:", e);
+            window.location.reload();
+        }
     };
 
     if (loading || !isOutdated) return null;

@@ -21,6 +21,20 @@ const Settings: React.FC<SettingsProps> = ({ company, setCompany, user }) => {
 
   const [minVersionInput, setMinVersionInput] = useState(APP_VERSION);
 
+  useEffect(() => {
+    const fetchMin = async () => {
+        try {
+            const { data } = await supabase
+                .from('app_config')
+                .select('value')
+                .eq('key', 'min_required_version')
+                .single();
+            if (data?.value) setMinVersionInput(data.value);
+        } catch (e) {}
+    };
+    if (user?.role === UserRole.SAAS_MASTER) fetchMin();
+  }, [user]);
+
   // Estado para la configuración de ticket
   const [ticketConfig, setTicketConfig] = useState({
       politicas: '',
