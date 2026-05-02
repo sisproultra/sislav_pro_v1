@@ -6,6 +6,8 @@ import { UserRole } from '../types';
 
 import { applyDynamicManifest } from '../utils/pwaUtils';
 
+import { APP_VERSION } from '../components/VersionGuard';
+
 interface OwnerLoginProps {
   onLogin: (session: any) => void;
   isDarkMode: boolean;
@@ -202,7 +204,7 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
             SISLAV - +51931200353
           </p>
           <p className={`text-[9px] font-black uppercase tracking-widest opacity-20 -mt-2 ${isDarkMode ? 'text-text3' : 'text-gray-400'}`}>
-            Versión 1.2.0
+            Versión {APP_VERSION}
           </p>
           <a 
             href="https://wa.me/51931200353" 

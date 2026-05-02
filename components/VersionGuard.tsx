@@ -3,7 +3,7 @@ import { RefreshCcw, AlertTriangle } from 'lucide-react';
 import { supabase } from '../services/dbService'; 
 import { motion, AnimatePresence } from 'motion/react';
 
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.3.0';
 
 export const VersionGuard: React.FC = () => {
     const [isOutdated, setIsOutdated] = useState(false);

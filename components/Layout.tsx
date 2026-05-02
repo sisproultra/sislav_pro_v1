@@ -17,6 +17,8 @@ import StoreModal from './StoreModal';
 import { EvolutionService } from '../services/evolutionService';
 import { dbGetPickupRequests, dbMarkPickupAsRead, dbGetInvoices, dbMarkDeliveryAsSeen, dbGetBirthdaysToday } from '../services/dbService';
 
+import { APP_VERSION } from './VersionGuard';
+
 interface LayoutProps {
   currentView: string;
   setView: (view: any) => void;
@@ -447,7 +449,7 @@ const Layout: React.FC<LayoutProps> = ({
                     {currentUser?.role || 'Visitante'}
                   </p>
                   <p className={`text-[7px] font-black opacity-30 tracking-tight uppercase mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                    v1.2.0
+                    v{APP_VERSION}
                   </p>
                 </div>
               )}

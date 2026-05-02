@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Lock, User, ShieldCheck, Loader2, Store, ArrowRight, AlertTriangle, ShieldAlert, Sun, Moon } from 'lucide-react';
 import { Sucursal } from '../types';
 
+import { APP_VERSION } from '../components/VersionGuard';
+
 interface SaaSLoginProps {
   onLogin: (u: string, p: string) => Promise<void>;
   sucursal: Sucursal | null;
@@ -191,7 +193,7 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
             SISLAV - +51931200353
           </p>
           <p className="text-text3 text-[9px] font-black uppercase tracking-widest opacity-20 -mt-2">
-            Versión 1.2.0
+            Versión {APP_VERSION}
           </p>
           <a 
             href="https://wa.me/51931200353" 
