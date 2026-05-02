@@ -233,91 +233,7 @@ const LogisticsBulkDispatchModal: React.FC<LogisticsBulkDispatchModalProps> = ({
 
                 <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 bg-slate-50">
                     
-                    {/* ITEMS LIST (ACCORDION) */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between px-2">
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                <Package size={14} /> Detalle de Carga
-                            </h4>
-                            <button 
-                                onClick={toggleAll}
-                                className="text-[10px] font-black text-accent uppercase tracking-widest hover:bg-accent/10 px-3 py-1.5 rounded-lg transition-all"
-                            >
-                                {selectedIds.size === selectedItems.length ? 'Desmarcar Todo' : 'Marcar Todo'}
-                            </button>
-                        </div>
-
-                        <div className="space-y-3">
-                            {orderIds.map(orderId => {
-                                const items = groupedItems[orderId];
-                                const isExpanded = expandedOrders.has(orderId);
-                                const orderNumber = items[0]?.ticketNumber || orderId;
-                                const itemsSelectedInOrder = items.filter(it => selectedIds.has(it.uniqueId || it.id)).length;
-                                const isAllSelectedInOrder = itemsSelectedInOrder === items.length;
-
-                                return (
-                                    <div key={orderId} className={`bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-accent shadow-lg shadow-slate-200' : 'border-slate-100'}`}>
-                                        {/* ORDER HEADER */}
-                                        <div className="flex items-center p-3 md:p-4 gap-3">
-                                            <button 
-                                                onClick={() => toggleOrderSelection(orderId)}
-                                                className={`transition-colors ${isAllSelectedInOrder ? 'text-accent' : 'text-slate-300'}`}
-                                            >
-                                                {isAllSelectedInOrder ? <CheckSquare size={20} /> : <Square size={20} />}
-                                            </button>
-                                            
-                                            <div onClick={() => toggleOrder(orderId)} className="flex-1 flex items-center justify-between cursor-pointer group">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center font-black text-slate-400 text-xs border border-slate-100">
-                                                        #{items.length}
-                                                    </div>
-                                                    <div>
-                                                        <h5 className="font-black text-slate-800 text-sm">ORDEN #{orderNumber}</h5>
-                                                        <p className="text-[10px] text-slate-400 font-bold uppercase">{itemsSelectedInOrder} de {items.length} seleccionadas</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    {isExpanded ? <ChevronDown size={20} className="text-slate-300" /> : <ChevronRight size={20} className="text-slate-300" />}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* GARMENTS LIST */}
-                                        {isExpanded && (
-                                            <div className="border-t border-slate-50 bg-slate-50/50 p-2 space-y-1">
-                                                {items.map(item => {
-                                                    const isSelected = selectedIds.has(item.uniqueId || item.id);
-                                                    return (
-                                                        <div 
-                                                            key={item.uniqueId || item.id}
-                                                            onClick={() => toggleSelection(item.uniqueId || item.id)}
-                                                            className={`flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer ${isSelected ? 'bg-white shadow-sm border border-slate-100' : 'opacity-60 hover:opacity-100'}`}
-                                                        >
-                                                            <div className={`transition-colors ${isSelected ? 'text-emerald-500' : 'text-slate-200'}`}>
-                                                                {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
-                                                            </div>
-                                                            <div className="flex-1">
-                                                                <div className="flex justify-between items-start">
-                                                                    <h6 className="font-bold text-xs text-slate-700 uppercase">{item.nombre_prenda}</h6>
-                                                                    <span className="text-[10px] font-black text-slate-800">x{item.cantidad || 1}</span>
-                                                                </div>
-                                                                <p className="text-[9px] text-slate-400 font-medium mb-1 line-clamp-1">{item.detalle || 'Sin detalles'}</p>
-                                                                <div className="flex items-center gap-1.5 text-[8px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded-full w-fit">
-                                                                    <Info size={8} /> Entrega: {item.fecha_entrega ? format(new Date(item.fecha_entrega), 'dd/MM') : '-'}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b border-slate-100">
                         {/* DESTINATION */}
                         <div>
                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -350,6 +266,102 @@ const LogisticsBulkDispatchModal: React.FC<LogisticsBulkDispatchModalProps> = ({
                                     <option key={d.id} value={d.id}>{d.nombre_completo}</option>
                                 ))}
                             </select>
+                        </div>
+                    </div>
+
+                    {/* ITEMS LIST (ACCORDION) */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between px-2">
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <Package size={14} /> Detalle de Carga
+                            </h4>
+                            <button 
+                                onClick={toggleAll}
+                                className="text-[10px] font-black text-accent uppercase tracking-widest hover:bg-accent/10 px-3 py-1.5 rounded-lg transition-all"
+                            >
+                                {selectedIds.size === selectedItems.length ? 'Desmarcar Todo' : 'Marcar Todo'}
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            {orderIds.map(orderId => {
+                                const items = groupedItems[orderId];
+                                const isExpanded = expandedOrders.has(orderId);
+                                const orderNumber = items[0]?.ventas?.codigo_orden || items[0]?.ticketNumber || orderId;
+                                const itemsSelectedInOrder = items.filter(it => selectedIds.has(it.uniqueId || it.id)).length;
+                                const isAllSelectedInOrder = itemsSelectedInOrder === items.length;
+
+                                return (
+                                    <div key={orderId} className={`bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-accent shadow-lg shadow-slate-200' : 'border-slate-100'}`}>
+                                        {/* ORDER HEADER */}
+                                        <div className="flex items-center p-3 md:p-4 gap-3">
+                                            <button 
+                                                onClick={() => toggleOrderSelection(orderId)}
+                                                className={`transition-colors ${isAllSelectedInOrder ? 'text-accent' : 'text-slate-300'}`}
+                                            >
+                                                {isAllSelectedInOrder ? <CheckSquare size={20} /> : <Square size={20} />}
+                                            </button>
+                                            
+                                            <div onClick={() => toggleOrder(orderId)} className="flex-1 flex items-center justify-between cursor-pointer group">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center font-black text-slate-400 text-xs border border-slate-100">
+                                                        #{items.length}
+                                                    </div>
+                                                    <div>
+                                                        <h5 className="font-black text-slate-800 text-sm">ORDEN {items[0]?.ticketNumber || orderNumber}</h5>
+                                                        <p className="text-[10px] text-slate-400 font-bold uppercase">{itemsSelectedInOrder} de {items.length} seleccionadas</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    {isExpanded ? <ChevronDown size={20} className="text-slate-300" /> : <ChevronRight size={20} className="text-slate-300" />}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* GARMENTS LIST */}
+                                        {isExpanded && (
+                                            <div className="border-t border-slate-50 bg-slate-50/50 p-2 space-y-1">
+                                                {items.map(item => {
+                                                    const isSelected = selectedIds.has(item.uniqueId || item.id);
+                                                    return (
+                                                        <div 
+                                                            key={item.uniqueId || item.id}
+                                                            onClick={() => toggleSelection(item.uniqueId || item.id)}
+                                                            className={`flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer ${isSelected ? 'bg-white shadow-sm border border-slate-100' : 'opacity-60 hover:opacity-100'}`}
+                                                        >
+                                                            <div className={`transition-colors ${isSelected ? 'text-emerald-500' : 'text-slate-200'}`}>
+                                                                {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <div className="flex justify-between items-start">
+                                                                    <div className="flex-1">
+                                                                        <h6 className="font-bold text-[11px] text-slate-700 uppercase leading-tight">{item.nombre_prenda || item.itemName || item.descripcion || 'Prenda sin nombre'}</h6>
+                                                                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{item.clientName || item.ventas?.clientes?.nombres || item.ventas?.clientes?.nombre || item.ventas?.clientes?.razon_social || 'S/N Cliente'}</p>
+                                                                    </div>
+                                                                    <span className="text-[11px] font-black text-slate-800 bg-slate-100 px-2 rounded-lg">x{item.cantidad || 1}</span>
+                                                                </div>
+                                                                <div className="mt-1.5 flex flex-col gap-1">
+                                                                    <p className="text-[9px] text-slate-500 font-medium line-clamp-2 italic">{item.detalle || item.details || item.observaciones || 'Sin detalles'}</p>
+                                                                    <div className="flex items-center gap-y-1 gap-x-2 flex-wrap text-[8px] font-black uppercase tracking-widest">
+                                                                        <div className="bg-indigo-50 text-indigo-500 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                                            <Info size={8} /> Entrega: {item.fecha_entrega ? format(new Date(item.fecha_entrega), 'dd/MM') : '-'}
+                                                                        </div>
+                                                                        {item.estado && (
+                                                                            <div className="bg-emerald-50 text-emerald-500 px-2 py-0.5 rounded-full">
+                                                                                {item.estado}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 

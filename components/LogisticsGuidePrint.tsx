@@ -49,33 +49,82 @@ const LogisticsGuidePrint: React.FC<LogisticsGuidePrintProps> = ({ guia, items, 
     const totalPrendas = items.reduce((acc, item) => acc + (item.cantidad || 1), 0);
 
     return (
-        <div className="fixed inset-0 opacity-0 pointer-events-none z-[-1] overflow-hidden">
-            {/* PRINT CONTENT - ONLY VISIBLE TO PRINTER */}
-            <div id="printable-guide" className={`bg-white font-mono text-slate-800 p-6 ${printFormat === '80mm' ? 'w-[80mm]' : 'w-[210mm]'}`}>
-                
-                <style>{`
-                    @media print {
-                        @page { margin: 0; }
-                        body * { display: none !important; }
-                        #printable-guide, #printable-guide * { display: block !important; visibility: visible !important; }
-                        #printable-guide { 
-                            position: absolute !important; 
-                            left: 0 !important; 
-                            top: 0 !important; 
-                            width: ${printFormat === '80mm' ? '80mm' : '210mm'} !important; 
-                            padding: 10px !important;
-                            margin: 0 !important;
-                            box-shadow: none !important;
-                        }
+        <>
+            <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                    @page { 
+                        margin: 0; 
+                        size: auto;
                     }
-                `}</style>
+                    html, body {
+                        height: auto !important;
+                        overflow: visible !important;
+                        background: white !important;
+                    }
+                    body * { 
+                        visibility: hidden !important; 
+                        display: none !important;
+                    }
+                    #printable-guide, #printable-guide * { 
+                        visibility: visible !important; 
+                        display: block !important;
+                    }
+                    #printable-guide { 
+                        position: absolute !important; 
+                        left: 0 !important; 
+                        top: 0 !important; 
+                        width: ${printFormat === '80mm' ? '80mm' : '100%'} !important; 
+                        height: auto !important;
+                        padding: 5mm !important;
+                        margin: 0 !important;
+                        box-shadow: none !important;
+                        background: white !important;
+                        z-index: 99999 !important;
+                        display: flex !important;
+                        flex-direction: column !important;
+                    }
+                    table {
+                        width: 100% !important;
+                        border-collapse: collapse !important;
+                        display: table !important;
+                    }
+                    th, td {
+                        border-bottom: 1px solid #e2e8f0 !important;
+                        display: table-cell !important;
+                    }
+                    tr {
+                        display: table-row !important;
+                    }
+                    thead {
+                        display: table-header-group !important;
+                    }
+                    tbody {
+                        display: table-row-group !important;
+                    }
+                    img {
+                        display: block !important;
+                        margin-left: auto !important;
+                        margin-right: auto !important;
+                    }
+                    .no-print {
+                        display: none !important;
+                    }
+                }
+            `}} />
 
-                        {/* HEADER */}
-                        <div className="text-center border-b-2 border-dashed border-slate-200 pb-4 mb-4">
-                            <h1 className="font-bold text-lg uppercase mb-1">Guía de Traslado</h1>
-                            <p className="text-xl font-black mb-1">{guia.codigo_guia}</p>
-                            {qrUrl && <img src={qrUrl} className="w-32 h-32 mx-auto my-2" alt="QR Guide" />}
-                        </div>
+            <div className="fixed inset-0 opacity-0 pointer-events-none z-[-1] overflow-hidden no-print">
+                {/* Esta clase no-print y la div oculta previenen que aparezca en el DOM normal visible */}
+            </div>
+
+            {/* PRINT CONTENT - SEPARATE CONTAINER */}
+            <div id="printable-guide" className={`bg-white font-mono text-slate-800 p-6 ${printFormat === '80mm' ? 'w-[80mm]' : 'w-[210mm]'} hidden print:block`}>
+                
+                {/* HEADER */}
+                <div className="text-center border-b-2 border-dashed border-slate-200 pb-4 mb-4">
+                    <h1 className="font-bold text-lg uppercase mb-1">Guía de Traslado</h1>
+                    <p className="text-xl font-black mb-1">{guia.codigo_guia}</p>
+                    {qrUrl && <img src={qrUrl} className="w-32 h-32 mx-auto my-2" alt="QR Guide" />}
+                </div>
 
                         {/* INFO */}
                         <div className="space-y-1 text-xs mb-4">
@@ -102,26 +151,34 @@ const LogisticsGuidePrint: React.FC<LogisticsGuidePrintProps> = ({ guia, items, 
                         </div>
 
                         {/* DETAIL TABLE */}
-                        <div className="border-t-2 border-b-2 border-dashed border-slate-200 py-4 mb-4">
-                            <table className="w-full text-[10px] sm:text-xs">
+                        <div className="border-t-2 border-b-2 border-dashed border-slate-200 py-4 mb-4 overflow-x-auto">
+                            <table className="w-full text-[9px] leading-tight">
                                 <thead>
-                                    <tr className="border-b border-slate-100">
-                                        <th className="text-left pb-2 font-black uppercase">Orden / Prenda</th>
-                                        <th className="text-right pb-2 font-black uppercase">Cant</th>
+                                    <tr className="border-b border-slate-200">
+                                        <th className="text-left pb-2 font-black uppercase w-8">#</th>
+                                        <th className="text-left pb-2 font-black uppercase w-16">Ticket</th>
+                                        <th className="text-left pb-2 font-black uppercase w-20">Cliente</th>
+                                        <th className="text-left pb-2 font-black uppercase">Servicio / Detalle</th>
+                                        <th className="text-right pb-2 font-black uppercase w-8">Cant</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {items.map((item, idx) => (
-                                        <tr key={idx} className="border-b border-slate-50">
-                                            <td className="py-2">
-                                                <div className="font-bold uppercase">#{item.ordenNumber || 'S/N'}</div>
-                                                <div className="uppercase opacity-70">{item.nombre_prenda}</div>
-                                                {item.detalle && <div className="text-[9px] italic opacity-50">{item.detalle}</div>}
-                                                <div className="text-[9px] font-bold text-indigo-600">ENTREGA: {item.fecha_entrega ? format(new Date(item.fecha_entrega), 'dd/MM/yyyy') : '-'}</div>
-                                            </td>
-                                            <td className="text-right py-2 font-bold">{item.cantidad || 1}</td>
-                                        </tr>
-                                    ))}
+                                    {items.map((item, idx) => {
+                                        const ticket = item.ticketNumber || item.ventas?.codigo_orden || item.ordenNumber || 'S/N';
+                                        const cliente = item.clientName || item.ventas?.clientes?.nombres || item.ventas?.clientes?.nombre || item.cliente_nombre || '-';
+                                        return (
+                                            <tr key={idx} className="border-b border-slate-100">
+                                                <td className="py-2 align-top">{idx + 1}</td>
+                                                <td className="py-2 align-top font-bold">{ticket}</td>
+                                                <td className="py-2 align-top uppercase">{cliente}</td>
+                                                <td className="py-2 align-top">
+                                                    <div className="font-bold uppercase">{item.nombre_prenda || item.itemName || item.descripcion || 'PRENDA'}</div>
+                                                    {(item.detalle || item.details || item.observaciones) && <div className="text-[8px] italic opacity-70">{item.detalle || item.details || item.observaciones}</div>}
+                                                </td>
+                                                <td className="text-right py-2 align-top font-bold">{item.cantidad || 1}</td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -146,7 +203,7 @@ const LogisticsGuidePrint: React.FC<LogisticsGuidePrintProps> = ({ guia, items, 
                             SISLAV LOGISTICS HUB
                         </div>
                     </div>
-                </div>
+        </>
     );
 };
 

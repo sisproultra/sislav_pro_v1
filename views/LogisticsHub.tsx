@@ -22,6 +22,7 @@ const LogisticsHub: React.FC = () => {
     const [missingItems, setMissingItems] = useState<Record<string, boolean>>({});
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [summary, setSummary] = useState({ incoming: 0, outgoing: 0, pending: 0 });
     
     const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
     const [pendingItems, setPendingItems] = useState<any[]>([]);
@@ -51,12 +52,17 @@ const LogisticsHub: React.FC = () => {
         try {
             const items = await dbGetItemsPendientesLogistica(currentBranchId!, sucursalInfo.tipo_sucursal);
             // Mapear para que coincida con el formato de OperationItem si es necesario
-            const mappedItems = items.map((it: any) => ({
-                ...it,
-                uniqueId: it.id,
-                clientName: it.ventas?.clientes?.nombres || 'Cliente',
-                ticketNumber: it.ventas?.codigo_orden || '---'
-            }));
+            const mappedItems = items.map((it: any) => {
+                const ventaObj = Array.isArray(it.ventas) ? it.ventas[0] : it.ventas;
+                const clienteObj = Array.isArray(ventaObj?.clientes) ? ventaObj?.clientes[0] : ventaObj?.clientes;
+                
+                return {
+                    ...it,
+                    uniqueId: it.id,
+                    clientName: clienteObj?.nombres || clienteObj?.nombre || clienteObj?.razon_social || 'Cliente',
+                    ticketNumber: ventaObj?.codigo_orden || '---'
+                };
+            });
             setPendingItems(mappedItems);
             setIsDispatchModalOpen(true);
         } catch (error) {
@@ -87,7 +93,9 @@ const LogisticsHub: React.FC = () => {
                     sucursal_origen_id: currentBranchId!,
                     estado: 'EN_TRANSITO'
                 });
-                data = [...pending, ...transit];
+                data = [...pending, ...transit].sort((a, b) => 
+                    new Date(b.fecha_registro).getTime() - new Date(a.fecha_registro).getTime()
+                );
             } else {
                 // Historia: Entregadas
                 data = await dbGetGuiasRemision({
@@ -97,6 +105,21 @@ const LogisticsHub: React.FC = () => {
             }
             
             setGuias(data);
+
+            // Calculate summaries for the dashboard
+            if (activeTab === 'INCOMING') {
+                setSummary(prev => ({ ...prev, incoming: data.length }));
+            }
+            
+            // Fetch total pending to dispatch for the summary
+            if (sucursalInfo) {
+                const pendItems = await dbGetItemsPendientesLogistica(currentBranchId!, sucursalInfo.tipo_sucursal);
+                setSummary(prev => ({ 
+                    ...prev, 
+                    pending: pendItems.length,
+                    outgoing: data.filter(g => g.estado === 'EN_TRANSITO' && g.sucursal_origen_id === currentBranchId).length
+                }));
+            }
         } catch (error) {
             console.error("Error loading guias:", error);
         } finally {
@@ -237,6 +260,37 @@ const LogisticsHub: React.FC = () => {
                 </div>
             </div>
         </div>
+
+            {/* DASHBOARD SUMMARY */}
+            <div className="px-6 py-4 grid grid-cols-1 md:grid-cols-3 gap-4 bg-white border-b border-slate-100">
+                <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                        <Box size={24} />
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pendiente de Envío</p>
+                        <h4 className="text-xl font-black text-slate-800">{summary.pending} <span className="text-[10px] text-slate-400">PRENDAS</span></h4>
+                    </div>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                        <Truck size={24} />
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">En Tránsito (Delivery)</p>
+                        <h4 className="text-xl font-black text-slate-800">{summary.outgoing} <span className="text-[10px] text-slate-400">GUÍAS</span></h4>
+                    </div>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                        <ArrowDownLeft size={24} />
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ingresos Pendientes</p>
+                        <h4 className="text-xl font-black text-slate-800">{summary.incoming} <span className="text-[10px] text-slate-400">GUÍAS</span></h4>
+                    </div>
+                </div>
+            </div>
 
             <div className="flex-1 overflow-hidden flex flex-col md:flex-row p-6 gap-6">
                 

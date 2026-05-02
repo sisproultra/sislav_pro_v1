@@ -20,6 +20,7 @@ export const VersionGuard: React.FC = () => {
 
     useEffect(() => {
         const checkVersion = async () => {
+            console.log("Checking version... Code:", APP_VERSION);
             try {
                 const { data } = await supabase
                     .from('app_config')
@@ -30,8 +31,14 @@ export const VersionGuard: React.FC = () => {
                 const required = data?.value || APP_VERSION;
                 setMinVersion(required);
                 
+                console.log("DB Required Version:", required);
+                
                 if (versionToNumber(APP_VERSION) < versionToNumber(required)) {
+                    console.warn("OUTDATED VERSION DETECTED!");
                     setIsOutdated(true);
+                } else {
+                    console.log("Version is up to date.");
+                    setIsOutdated(false);
                 }
             } catch (err) {
                 console.error('Error inicial de versión:', err);
@@ -50,7 +57,10 @@ export const VersionGuard: React.FC = () => {
                 table: 'app_config',
                 filter: 'key=eq.min_required_version'
             }, (payload: any) => {
-                const newVal = payload.new.value;
+                const newVal = payload?.new?.value;
+                if (!newVal) return;
+                
+                console.log("Realtime version update detected:", newVal);
                 setMinVersion(newVal);
                 if (versionToNumber(APP_VERSION) < versionToNumber(newVal)) {
                     setIsOutdated(true);
