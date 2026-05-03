@@ -1996,6 +1996,83 @@ export const dbGetOrderStats = async (): Promise<{ toCollect: number, toDeliver:
     }
 };
 
+export const dbGetDashboardReportData = async (startDate: string, endDate: string) => {
+    const branchId = getActiveBranchId();
+    if (!branchId) return { invoices: [], payments: [], expenses: [] };
+
+    try {
+        const holdingId = await ensureHoldingId(branchId);
+        
+        // 1. Obtener Ventas en el rango (usando fecha_recepcion o fecha)
+        const { data: ventas, error: vError } = await supabase
+            .from('ventas')
+            .select('*, clientes(*), items_venta(*)')
+            .eq('sucursal_id', branchId)
+            .neq('estado', 'CANCELADO')
+            .gte('fecha_recepcion', `${startDate}T00:00:00.000Z`)
+            .lte('fecha_recepcion', `${endDate}T23:59:59.999Z`);
+
+        if (vError) throw vError;
+
+        // 2. Obtener Pagos de Ventas en el rango (Recaudos) - TABLA pagos_venta
+        const { data: pagos, error: pError } = await supabase
+            .from('pagos_venta')
+            .select('*, ventas(codigo_orden, cliente_id, clientes(nombres, apellidos)), metodos_pago(nombre)')
+            .eq('sucursal_id', branchId)
+            .gte('fecha_pago', `${startDate}T00:00:00.000Z`)
+            .lte('fecha_pago', `${endDate}T23:59:59.999Z`);
+
+        if (pError) throw pError;
+
+        // 3. Obtener Egresos en el rango
+        const { data: gastos, error: gError } = await supabase
+            .from('egresos')
+            .select('*')
+            .eq('sucursal_id', branchId)
+            .gte('fecha_gasto', `${startDate}T00:00:00.000Z`)
+            .lte('fecha_gasto', `${endDate}T23:59:59.999Z`);
+
+        if (gError) throw gError;
+
+        // Mapear ventas al formato Invoice
+        const mappedInvoices = (ventas || []).map(v => {
+            const c = normalizeRelation(v.clientes);
+            return {
+                ...v,
+                date: v.fecha_recepcion || v.fecha,
+                client: c ? {
+                    ...c,
+                    name: fixEncoding(c.nombres || 'CLIENTE'),
+                } : null,
+                totals: { total: Number(v.total) },
+                items: (v.items_venta || []).map((it: any) => ({ ...it, category: it.categoria_nombre })),
+                payments: [] 
+            } as any;
+        });
+
+        return {
+            invoices: mappedInvoices,
+            payments: (pagos || []).map(p => ({
+                ...p,
+                monto: Number(p.monto),
+                metodo_pago_name: p.metodos_pago?.nombre || 'EFECTIVO',
+                venta_codigo: p.ventas?.codigo_orden,
+                cliente_nombre: p.ventas?.clientes ? `${p.ventas.clientes.nombres} ${p.ventas.clientes.apellidos}` : 'CLIENTE'
+            })),
+            expenses: (gastos || []).map(g => ({
+                ...g,
+                amount: Number(g.monto),
+                category: g.categoria,
+                description: g.descripcion,
+                date: g.fecha_gasto
+            }))
+        };
+    } catch (e) {
+        console.error("Error in dbGetDashboardReportData:", e);
+        return { invoices: [], payments: [], expenses: [] };
+    }
+};
+
 export const dbGetInvoiceFull = async (id: string): Promise<Invoice | null> => {
     const { data: v, error } = await supabase.from('ventas').select('*, clientes(*), items_venta(*)').eq('id', id).maybeSingle();
     if (error || !v) return null;

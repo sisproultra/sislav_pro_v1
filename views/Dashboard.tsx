@@ -1,18 +1,19 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   Activity, Clock, CheckCircle2, PackageCheck, AlertTriangle, 
   Users, BarChart3, Layers, Filter, RefreshCw, ArrowRight,
   TrendingUp, Timer, UserCheck, CheckCircle, PieChart as PieChartIcon,
   CalendarDays, ShoppingCart, Wallet, TrendingDown, Calendar,
-  ChevronRight, Award, Briefcase, DollarSign, Cpu, Zap
+  ChevronRight, Award, Briefcase, DollarSign, Cpu, Zap, X, Search
 } from 'lucide-react';
 import { Invoice, Product, Client, Company, Expense, Category, PaymentMethodConfig, Employee, OrderStatus, Machine } from '../types';
 import { roundToOneDecimal } from '../utils/calculations';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, BarChart, Bar, LineChart, Line
+  PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, Cell as BarCell
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
+import { dbGetDashboardReportData } from '../services/dbService';
 
 interface DashboardProps {
   invoices: Invoice[];
@@ -30,7 +31,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ 
   invoices = [], 
-  expenses = [],
+  expenses: propExpenses = [],
   clients = [],
   categories = [],
   paymentMethods = [],
@@ -42,13 +43,76 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [viewMode, setViewMode] = useState<'operativo' | 'financiero'>('operativo');
   const primaryColor = company.primaryColor || '#6366f1';
   
+  // Helper para fechas locales
+  const getLocalDateString = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Rango de fechas - Por defecto últimos 7 días como pidió el usuario
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  
+  const [startDate, setStartDate] = useState(getLocalDateString(sevenDaysAgo));
+  const [endDate, setEndDate] = useState(getLocalDateString(new Date()));
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [hasFetched, setHasFetched] = useState(false);
+  
+  // Datos locales del dashboard (para el rango seleccionado)
+  const [reportData, setReportData] = useState<{
+    invoices: Invoice[],
+    payments: any[],
+    expenses: Expense[]
+  }>({ invoices: [], payments: [], expenses: [] });
+
+  // Modal de detalles por día
+  const [showDayDetails, setShowDayDetails] = useState(false);
+  const [dayDetails, setDayDetails] = useState<{
+    date: string,
+    salesCount: number,
+    totalSales: number,
+    totalCollected: number,
+    payments: any[]
+  } | null>(null);
+
+  const fetchDashboardData = async () => {
+    setIsLoadingData(true);
+    try {
+      const data = await dbGetDashboardReportData(startDate, endDate);
+      setReportData(data);
+      setHasFetched(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [startDate, endDate]);
+
+  // Usamos estrictamente los datos del reporte si ya se hizo el fetch
+  const currentInvoices = hasFetched ? reportData.invoices : invoices;
+  const currentExpenses = hasFetched ? reportData.expenses : propExpenses;
+  const currentPayments = reportData.payments;
+
+  // Helper para etiquetas consistentes
+  const getDayLabel = (dateObj: Date) => {
+    const day = dateObj.getDate();
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return `${day}-${months[dateObj.getMonth()]}`;
+  };
+
   const today = new Date();
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(today.getDate() - 30);
 
   // --- MÉTRICAS OPERATIVAS ---
   const operationalMetrics = useMemo(() => {
-    const activeInvoices = invoices.filter(inv => inv.orderStatus !== 'CANCELADO');
+    const activeInvoices = currentInvoices.filter(inv => inv.orderStatus !== 'CANCELADO');
     const pendingToWash = activeInvoices.filter(inv => inv.orderStatus === 'PENDIENTE' || inv.orderStatus === 'RECIBIDO' || inv.orderStatus === 'EN_LAVADO' || inv.orderStatus === 'EN_SECADO');
     const toDeliver = activeInvoices.filter(inv => inv.orderStatus === 'LISTO' || inv.orderStatus === 'EN_RUTA');
     
@@ -103,52 +167,64 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   // --- MÉTRICAS FINANCIERAS ---
   const financialMetrics = useMemo(() => {
-    const allMonths = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const salesByYear: Record<string, number> = {};
+    const allMonths = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const salesByMonth: Record<string, number> = {};
     allMonths.forEach(m => salesByMonth[m] = 0);
     
-    const currentDay = today.getDate();
-    const monthNameShort = today.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
-    
+    // Generar etiquetas de días para el rango seleccionado
     const salesByDay: Record<string, number> = {};
     const collectionsByDay: Record<string, number> = {};
+    const dayPaymentsMap: Record<string, any[]> = {};
     
-    for (let i = 1; i <= currentDay; i++) {
-      const label = `${i}-${monthNameShort}`;
-      salesByDay[label] = 0;
-      collectionsByDay[label] = 0;
+    const start = new Date(startDate + 'T12:00:00'); // Evitar saltos de día por TZ
+    const end = new Date(endDate + 'T12:00:00');
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    for (let i = 0; i <= diffDays; i++) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + i);
+        const dayLabel = getDayLabel(d);
+        salesByDay[dayLabel] = 0;
+        collectionsByDay[dayLabel] = 0;
+        dayPaymentsMap[dayLabel] = [];
     }
 
     const salesByDayOfWeek: Record<number, number> = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0 };
-    
     const daysNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-    invoices.forEach(inv => {
+    // 1. Procesar Ventas del rango
+    currentInvoices.forEach(inv => {
       if (inv.orderStatus === 'CANCELADO') return;
       const d = new Date(inv.date);
       const year = d.getFullYear().toString();
       const monthIdx = d.getMonth();
       const month = allMonths[monthIdx];
-      const day = d.getDate();
-      const monthName = d.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
-      const dayLabel = `${day}-${monthName}`;
+      const dayLabel = getDayLabel(d);
       const dow = d.getDay();
 
       salesByYear[year] = (salesByYear[year] || 0) + inv.totals.total;
-      if (d.getFullYear() === today.getFullYear()) {
-        salesByMonth[month] = (salesByMonth[month] || 0) + inv.totals.total;
+      if (salesByMonth[month] !== undefined) {
+        salesByMonth[month] += inv.totals.total;
       }
       
-      if (d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()) {
-        salesByDay[dayLabel] = (salesByDay[dayLabel] || 0) + inv.totals.total;
-        
-        // Sumar pagos (si existen) o el total si es pago completo al momento
-        const paidAmount = inv.payments?.reduce((sum, p) => sum + p.monto, 0) || inv.totals.total;
-        collectionsByDay[dayLabel] = (collectionsByDay[dayLabel] || 0) + paidAmount;
+      if (salesByDay[dayLabel] !== undefined) {
+        salesByDay[dayLabel] += inv.totals.total;
       }
       
       salesByDayOfWeek[dow] += inv.totals.total;
+    });
+
+    // 2. Procesar Recaudos (Pagos) - DESDE pagos_venta
+    currentPayments.forEach(p => {
+        const d = new Date(p.fecha_pago);
+        const dayLabel = getDayLabel(d);
+        
+        if (collectionsByDay[dayLabel] !== undefined) {
+            collectionsByDay[dayLabel] += p.monto;
+            dayPaymentsMap[dayLabel].push(p);
+        }
     });
 
     const dowData = Object.entries(salesByDayOfWeek).map(([dow, total]) => ({ 
@@ -156,15 +232,26 @@ const Dashboard: React.FC<DashboardProps> = ({
       total 
     }));
 
-    // Tabla comparativa de ventas por años y meses
-    const allYears = Array.from(new Set(invoices.map(inv => new Date(inv.date).getFullYear()))).sort((a, b) => a - b);
-    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    // Métricas de métodos de pago
+    const paymentMethodsMap: Record<string, number> = {};
+    currentPayments.forEach(p => {
+        const method = p.metodo_pago_name || 'Otros';
+        paymentMethodsMap[method] = (paymentMethodsMap[method] || 0) + p.monto;
+    });
     
-    const comparisonData = months.map((m, mIdx) => {
+    const paymentMethodsData = Object.entries(paymentMethodsMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    // Tabla comparativa de ventas por años y meses
+    const allYears = Array.from(new Set(currentInvoices.map(inv => new Date(inv.date).getFullYear()))).sort((a, b) => a - b);
+    const monthsNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    
+    const comparisonData = monthsNames.map((m, mIdx) => {
       const row: any = { month: m };
       let rowTotal = 0;
       allYears.forEach(y => {
-        const total = invoices
+        const total = currentInvoices
           .filter(inv => {
             const d = new Date(inv.date);
             return d.getFullYear() === y && d.getMonth() === mIdx;
@@ -178,45 +265,47 @@ const Dashboard: React.FC<DashboardProps> = ({
     }).filter(row => row.totalGeneral > 0);
 
     const yearTotals = allYears.map(y => {
-      const total = invoices
+      const total = currentInvoices
         .filter(inv => new Date(inv.date).getFullYear() === y)
         .reduce((sum, inv) => sum + inv.totals.total, 0);
       return { year: y, total };
     });
 
     const winningYear = [...yearTotals].sort((a, b) => b.total - a.total)[0];
-    const grandTotal = yearTotals.reduce((sum, y) => sum + y.total, 0);
-
-    // Métricas de métodos de pago (usando pagos_venta / inv.payments)
-    const paymentMethodsMap: Record<string, number> = {};
-    invoices.forEach(inv => {
-      if (inv.payments && inv.payments.length > 0) {
-        inv.payments.forEach(p => {
-          const method = paymentMethods.find(pm => pm.id === p.metodo_pago_id)?.name || 'Otros';
-          paymentMethodsMap[method] = (paymentMethodsMap[method] || 0) + p.monto;
-        });
-      } else if (inv.paymentMethod) {
-        paymentMethodsMap[inv.paymentMethod] = (paymentMethodsMap[inv.paymentMethod] || 0) + inv.totals.total;
-      }
-    });
-    const paymentMethodsData = Object.entries(paymentMethodsMap)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
 
     return { 
       yearData: Object.entries(salesByYear).map(([name, total]) => ({ name, total })).sort((a, b) => parseInt(a.name) - parseInt(b.name)),
       monthData: allMonths.map(m => ({ name: m, total: salesByMonth[m] })),
       dayData: Object.entries(salesByDay).map(([name, total]) => ({ name, total })),
       collectionData: Object.entries(collectionsByDay).map(([name, total]) => ({ name, total })),
+      dayPaymentsMap,
       dowData,
+      paymentMethodsData,
       comparisonData,
       allYears,
       yearTotals,
       winningYear,
-      grandTotal,
-      paymentMethodsData
+      grandTotal: currentInvoices.reduce((sum, inv) => sum + inv.totals.total, 0)
     };
-  }, [invoices, today, paymentMethods]);
+  }, [currentInvoices, currentPayments, startDate, endDate]);
+
+  const handleChartClick = (data: any) => {
+    if (!data || !data.activeLabel) return;
+    
+    const dayLabel = data.activeLabel;
+    const payments = financialMetrics.dayPaymentsMap[dayLabel] || [];
+    const salesTotal = financialMetrics.dayData.find(d => d.name === dayLabel)?.total || 0;
+    const collectedTotal = financialMetrics.collectionData.find(d => d.name === dayLabel)?.total || 0;
+    
+    setDayDetails({
+      date: dayLabel,
+      salesCount: currentInvoices.filter(inv => getDayLabel(new Date(inv.date)) === dayLabel).length,
+      totalSales: salesTotal,
+      totalCollected: collectedTotal,
+      payments: payments
+    });
+    setShowDayDetails(true);
+  };
 
   // --- MÉTRICAS DE MÁQUINAS ---
   const machineMetrics = useMemo(() => {
@@ -230,12 +319,37 @@ const Dashboard: React.FC<DashboardProps> = ({
       {/* Header & View Selector */}
       <div className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-black text-slate-900 flex items-center gap-2 tracking-tight uppercase">
-              <Activity className="text-indigo-600" />
-              Panel de Control
-            </h1>
-            <p className="text-slate-500 text-xs font-medium">Gestión inteligente de {company.razonSocial || 'Lavandería'}</p>
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-slate-900 flex items-center gap-2 tracking-tight uppercase">
+                <Activity className="text-indigo-600" />
+                Panel de Control
+              </h1>
+              <p className="text-slate-500 text-xs font-medium">Gestional inteligente de {company.razonSocial || 'Lavandería'}</p>
+            </div>
+
+            {/* Filtro de Rango de Fechas */}
+            <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+               <div className="flex items-center gap-1">
+                  <Calendar size={14} className="text-slate-400" />
+                  <input 
+                    type="date" 
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="text-[10px] font-bold border-none focus:ring-0 p-0 w-24 bg-transparent"
+                  />
+               </div>
+               <span className="text-slate-300">|</span>
+               <div className="flex items-center gap-1">
+                  <input 
+                    type="date" 
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="text-[10px] font-bold border-none focus:ring-0 p-0 w-24 bg-transparent"
+                  />
+               </div>
+               {isLoadingData && <RefreshCw size={12} className="animate-spin text-indigo-600" />}
+            </div>
           </div>
           
           <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200 self-start">
@@ -451,12 +565,16 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </h4>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={financialMetrics.dayData}>
+                    <BarChart data={financialMetrics.dayData} onClick={handleChartClick}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} tickFormatter={(v) => `S/${v}`} />
-                      <RechartsTooltip formatter={(v: any) => `S/ ${v.toFixed(2)}`} />
-                      <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 10, fontWeight: 'bold', fill: '#1e40af', formatter: (v: any) => v > 0 ? `S/${v.toFixed(0)}` : '' }} />
+                      <RechartsTooltip cursor={{fill: '#f1f5f9'}} formatter={(v: any) => `S/ ${v.toFixed(2)}`} />
+                      <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 10, fontWeight: 'bold', fill: '#1e40af', formatter: (v: any) => v > 0 ? `S/${v.toFixed(0)}` : '' }}>
+                        {financialMetrics.dayData.map((entry, index) => (
+                           <BarCell key={`cell-${index}`} style={{ cursor: 'pointer' }} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -470,12 +588,16 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </h4>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={financialMetrics.collectionData}>
+                    <BarChart data={financialMetrics.collectionData} onClick={handleChartClick}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} tickFormatter={(v) => `S/${v}`} />
-                      <RechartsTooltip formatter={(v: any) => `S/ ${v.toFixed(2)}`} />
-                      <Bar dataKey="total" fill="#f59e0b" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 10, fontWeight: 'bold', fill: '#92400e', formatter: (v: any) => v > 0 ? `S/${v.toFixed(0)}` : '' }} />
+                      <RechartsTooltip cursor={{fill: '#f1f5f9'}} formatter={(v: any) => `S/ ${v.toFixed(2)}`} />
+                      <Bar dataKey="total" fill="#f59e0b" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 10, fontWeight: 'bold', fill: '#92400e', formatter: (v: any) => v > 0 ? `S/${v.toFixed(0)}` : '' }}>
+                        {financialMetrics.collectionData.map((entry, index) => (
+                           <BarCell key={`cell-${index}`} style={{ cursor: 'pointer' }} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -680,7 +802,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 Histórico de Egresos (Últimos 10)
               </h4>
               <div className="space-y-3">
-                {expenses.slice(0, 10).map((exp, i) => (
+                {currentExpenses.slice(0, 10).map((exp, i) => (
                   <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-white rounded-lg shadow-xs">
@@ -688,16 +810,101 @@ const Dashboard: React.FC<DashboardProps> = ({
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-700">{exp.description}</p>
-                        <p className="text-[10px] text-slate-400 uppercase">{exp.category} • {new Date(exp.date).toLocaleDateString()}</p>
+                        <p className="text-[10px] text-slate-400 uppercase">{exp.category} • {exp.date ? new Date(exp.date).toLocaleDateString() : '-'}</p>
                       </div>
                     </div>
                     <span className="text-sm font-black text-rose-500">- S/ {exp.amount.toFixed(2)}</span>
                   </div>
                 ))}
-                {expenses.length === 0 && <p className="text-center text-slate-400 text-xs py-10">Sin gastos registrados</p>}
+                {currentExpenses.length === 0 && <p className="text-center text-slate-400 text-xs py-10">Sin gastos registrados</p>}
               </div>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showDayDetails && dayDetails && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+               initial={{ scale: 0.95, opacity: 0 }}
+               animate={{ scale: 1, opacity: 1 }}
+               exit={{ scale: 0.95, opacity: 0 }}
+               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Detalle: {dayDetails.date}</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">Resumen de movimientos del día</p>
+                </div>
+                <button onClick={() => setShowDayDetails(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400">
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Ventas Totales</p>
+                      <h4 className="text-xl font-black text-blue-600">S/ {dayDetails.totalSales.toFixed(2)}</h4>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase">{dayDetails.salesCount} Órdenes</p>
+                   </div>
+                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Total Recaudado</p>
+                      <h4 className="text-xl font-black text-amber-600">S/ {dayDetails.totalCollected.toFixed(2)}</h4>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase">{dayDetails.payments.length} Pagos</p>
+                   </div>
+                </div>
+
+                <div>
+                   <h5 className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                     <DollarSign size={14} className="text-indigo-600" />
+                     Desglose por Métodos de Pago
+                   </h5>
+                   <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                      {Object.entries(
+                        dayDetails.payments.reduce((acc: any, p: any) => {
+                          const mName = p.metodo_pago_name || 'Otros';
+                          if (!acc[mName]) acc[mName] = { total: 0, count: 0 };
+                          acc[mName].total += p.monto;
+                          acc[mName].count += 1;
+                          return acc;
+                        }, {})
+                      ).map(([mName, stats]: [string, any], i) => (
+                        <div key={i} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl hover:shadow-sm transition-shadow">
+                           <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                                 <Wallet size={16} className="text-indigo-600" />
+                              </div>
+                              <span className="text-xs font-bold text-slate-700">{mName}</span>
+                           </div>
+                           <div className="text-right">
+                              <p className="text-sm font-black text-slate-900">S/ {stats.total.toFixed(2)}</p>
+                              <p className="text-[9px] font-medium text-slate-400 uppercase">{stats.count} Movimientos</p>
+                           </div>
+                        </div>
+                      ))}
+
+                      {dayDetails.payments.length === 0 && (
+                        <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                           <DollarSign size={24} className="mx-auto text-slate-300 mb-2" />
+                           <p className="text-xs font-medium text-slate-400">No se registraron recaudos este día</p>
+                        </div>
+                      )}
+                   </div>
+                </div>
+              </div>
+              
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button 
+                  onClick={() => setShowDayDetails(false)}
+                  className="px-6 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
