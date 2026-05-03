@@ -148,12 +148,22 @@ const Layout: React.FC<LayoutProps> = ({
 
       // 4. Verificar permisos específicos del usuario (Matriz de Permisos)
       if (!isSaaSMaster && !isOwner && currentUser?.permissions) {
+          // Si el permiso está explícitamente en FALSE, no se ve
           if (currentUser.permissions[permId] === false) {
               return { isVisible: false, isNew: false };
           }
           
-          // Por petición del usuario: Todos los usuarios deben poder acceder a los módulos de su empresa/sucursal
-          // Relaxing restricted roles for common modules
+          // Por petición del usuario: El ADMIN solo ve lo que tiene asignado (TRUE)
+          // a diferencia de otros roles que tienen módulos básicos permitidos por defecto
+          if (currentUser.role === UserRole.ADMIN) {
+              if (currentUser.permissions[permId] === true) {
+                  return { isVisible: true, isNew };
+              }
+              // Si no está explícitamente en TRUE, el ADMIN no lo ve (limite de opciones asignadas)
+              return { isVisible: false, isNew: false };
+          }
+
+          // Otros roles restringidos (CAJERO, etc.)
           const restrictedRoles = [UserRole.CAJERO, UserRole.OPERARIO, UserRole.DELIVERY, UserRole.CONTABILIDAD];
           if (restrictedRoles.includes(currentUser.role as UserRole) && currentUser.permissions[permId] !== true) {
               // Módulos que siempre deben ser visibles si están activos en la sucursal por petición del usuario
@@ -182,6 +192,14 @@ const Layout: React.FC<LayoutProps> = ({
           return { isVisible: true, isNew };
       }
       return { isVisible: !!isSucursalActive, isNew };
+  };
+
+  const isSectionVisible = (items: { id: string, label: string }[]) => {
+    return items.some(it => {
+        const config = getModuleConfig(it.id);
+        const matchesSearch = !sidebarSearch || it.label.toLowerCase().includes(sidebarSearch.toLowerCase());
+        return config.isVisible && matchesSearch;
+    });
   };
 
   useEffect(() => {
@@ -403,7 +421,17 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
           
           <nav className="space-y-0.5">
-            <NavSection label="Principal" isSidebarOpen={isSidebarOpen} />
+            {isSectionVisible([
+              { id: 'view:dashboard', label: 'Dashboard' },
+              { id: 'view:agenda', label: 'Mi Tarea del Día' },
+              { id: 'view:pos', label: 'Nueva Venta' },
+              { id: 'view:orders', label: 'Mis Órdenes' },
+              { id: 'view:operations', label: 'Operación Lavado' },
+              { id: 'view:cash_closing', label: 'Cierre de Caja' },
+              { id: 'view:history', label: 'Documentos Elec.' },
+              { id: 'view:yape', label: 'Mis Yapes' },
+              { id: 'view:my_reports', label: 'Mis Reportes' },
+            ]) && <NavSection label="Principal" isSidebarOpen={isSidebarOpen} />}
             <SidebarItem id="view:dashboard" icon={LayoutDashboard} label="Dashboard" isVisible={getModuleConfig('view:dashboard').isVisible} badge={getModuleConfig('view:dashboard').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:agenda" icon={Calendar} label="Mi Tarea del Día" isVisible={getModuleConfig('view:agenda').isVisible} badge={getModuleConfig('view:agenda').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:pos" icon={ShoppingCart} label="Nueva Venta" isVisible={getModuleConfig('view:pos').isVisible} badge={getModuleConfig('view:pos').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
@@ -414,13 +442,27 @@ const Layout: React.FC<LayoutProps> = ({
             <SidebarItem id="view:yape" icon={Smartphone} label="Mis Yapes" isVisible={getModuleConfig('view:yape').isVisible} badge={getModuleConfig('view:yape').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:my_reports" icon={TrendingUp} label="Mis Reportes" isVisible={getModuleConfig('view:my_reports').isVisible} badge={getModuleConfig('view:my_reports').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
 
-            <NavSection label="Gestión" isSidebarOpen={isSidebarOpen} />
+            {isSectionVisible([
+              { id: 'view:inventory', label: 'Servicios' },
+              { id: 'view:clients', label: 'Clientes' },
+              { id: 'view:employees', label: 'Empleados' },
+              { id: 'view:expenses', label: 'Egresos' },
+            ]) && <NavSection label="Gestión" isSidebarOpen={isSidebarOpen} />}
             <SidebarItem id="view:inventory" icon={ShoppingBasket} label="Servicios" isVisible={getModuleConfig('view:inventory').isVisible} badge={getModuleConfig('view:inventory').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:clients" icon={Users} label="Clientes" isVisible={getModuleConfig('view:clients').isVisible} badge={getModuleConfig('view:clients').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:employees" icon={User} label="Empleados" isVisible={getModuleConfig('view:employees').isVisible} badge={getModuleConfig('view:employees').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:expenses" icon={BadgeDollarSign} label="Egresos" isVisible={getModuleConfig('view:expenses').isVisible} badge={getModuleConfig('view:expenses').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
 
-            <NavSection label="Logística" isSidebarOpen={isSidebarOpen} />
+            {isSectionVisible([
+              { id: 'view:machines', label: 'Máquinas' },
+              { id: 'view:logistics_hub', label: 'Logística Hub' },
+              { id: 'view:callcenter', label: 'Call Center' },
+              { id: 'view:delivery', label: 'Delivery' },
+              { id: 'view:supplies', label: 'Insumos' },
+              { id: 'view:purchases', label: 'Compras' },
+              { id: 'view:package_inventory', label: 'Inv. Paquetes' },
+              { id: 'view:product_counting', label: 'Conteo Inventario' },
+            ]) && <NavSection label="Logística" isSidebarOpen={isSidebarOpen} />}
             <SidebarItem id="view:machines" icon={WashingMachine} label="Máquinas" isVisible={getModuleConfig('view:machines').isVisible} badge={getModuleConfig('view:machines').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:logistics_hub" icon={Truck} label="Logística Hub" isVisible={getModuleConfig('view:logistics_hub').isVisible} badge={getModuleConfig('view:logistics_hub').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:callcenter" icon={Headset} label="Call Center" isVisible={getModuleConfig('view:callcenter').isVisible} badge={getModuleConfig('view:callcenter').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
@@ -430,13 +472,25 @@ const Layout: React.FC<LayoutProps> = ({
             <SidebarItem id="view:package_inventory" icon={PackageOpen} label="Inv. Paquetes" isVisible={getModuleConfig('view:package_inventory').isVisible} badge={getModuleConfig('view:package_inventory').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:product_counting" icon={Boxes} label="Conteo Inventario" isVisible={getModuleConfig('view:product_counting').isVisible} badge={getModuleConfig('view:product_counting').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
 
-            <NavSection label="Marketing" isSidebarOpen={isSidebarOpen} />
+            {isSectionVisible([
+              { id: 'view:loyalty', label: 'Fidelización' },
+              { id: 'view:bonus_points', label: 'Puntos Bonus' },
+              { id: 'view:promotions', label: 'Promociones' },
+              { id: 'view:wa_campaign', label: 'Campaña WA' },
+            ]) && <NavSection label="Marketing" isSidebarOpen={isSidebarOpen} />}
             <SidebarItem id="view:loyalty" icon={Ticket} label="Fidelización" isVisible={getModuleConfig('view:loyalty').isVisible} badge={getModuleConfig('view:loyalty').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:bonus_points" icon={Star} label="Puntos Bonus" isVisible={getModuleConfig('view:bonus_points').isVisible} badge={getModuleConfig('view:bonus_points').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:promotions" icon={Sparkles} label="Promociones" isVisible={getModuleConfig('view:promotions').isVisible} badge={getModuleConfig('view:promotions').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:wa_campaign" icon={Megaphone} label="Campaña WA" isVisible={getModuleConfig('view:wa_campaign').isVisible} badge={getModuleConfig('view:wa_campaign').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
 
-            <NavSection label="Administración" isSidebarOpen={isSidebarOpen} />
+            {isSectionVisible([
+              { id: 'view:modificaciones', label: 'Modificar' },
+              { id: 'view:categories', label: 'Categorías' },
+              { id: 'view:payment_methods', label: 'Pagos' },
+              { id: 'view:reports', label: 'Reportes' },
+              { id: 'view:accounting', label: 'Contabilidad' },
+              { id: 'view:settings', label: 'Ajustes' },
+            ]) && <NavSection label="Administración" isSidebarOpen={isSidebarOpen} />}
             <SidebarItem id="view:modificaciones" icon={PencilLine} label="Modificar" isVisible={getModuleConfig('view:modificaciones').isVisible} badge={getModuleConfig('view:modificaciones').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:categories" icon={Layers} label="Categorías" isVisible={getModuleConfig('view:categories').isVisible} badge={getModuleConfig('view:categories').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:payment_methods" icon={CreditCard} label="Pagos" isVisible={getModuleConfig('view:payment_methods').isVisible} badge={getModuleConfig('view:payment_methods').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />

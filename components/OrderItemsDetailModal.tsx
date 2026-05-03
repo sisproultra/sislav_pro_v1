@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Invoice, OrderStatus, GlobalColor, PaymentMethodConfig } from '../types';
 import { dbGetInvoiceFull } from '../services/dbService';
+import { formatDateSafe, formatTimeSafe, formatDateTimeSafe } from '../utils/calculations';
 
 interface OrderItemsDetailModalProps {
   isOpen: boolean;
@@ -182,7 +183,7 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
                           <div>
                             <p className="font-black text-slate-900 text-[10px] md:text-[11px] uppercase leading-none mb-1">{pm?.name || 'OTRO'}</p>
                             <p className="text-[11px] md:text-[12px] font-bold text-slate-400 uppercase tracking-widest">
-                              {p.date ? new Date(p.date).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) + ' ' + new Date(p.date).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true }) : 'S/F'}
+                              {p.date ? formatDateTimeSafe(p.date) : 'S/F'}
                             </p>
                           </div>
                         </div>

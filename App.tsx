@@ -175,14 +175,13 @@ export default function App() {
 
     useEffect(() => {
         if (authSession) {
-            if (authSession.user.role === UserRole.OWNER) {
-                setCurrentView('view:owner_dashboard');
-            } else if (authSession.user.role === UserRole.SAAS_MASTER) {
-                // El master suele ir al dashboard o puede elegir POS si lo desea, 
-                // pero por ahora lo dejamos en dashboard para gestión global
-                setCurrentView('view:dashboard');
+            const role = authSession.user.role;
+            if (role === UserRole.OWNER || role === UserRole.SAAS_MASTER || role === UserRole.ADMIN || role === UserRole.CAJERO) {
+                // Todos los roles operativos y de gestión de sucursal van primero a NUEVA VENTA
+                navigateToPos();
             } else {
-                // Otros roles (ADMIN, CAJERO, OPERARIO, DELIVERY) van directo a POS
+                // Roles de soporte o logística pueden ir a sus vistas específicas if needed,
+                // pero por defecto POS es el core de la operación
                 navigateToPos();
             }
         }

@@ -18,7 +18,7 @@ import LogisticsDispatchModal from '../components/LogisticsDispatchModal';
 import Tracking from './Tracking';
 import { dbUpdateInvoiceDiscount, dbGetInvoicesForReport } from '../services/dbService';
 import { sendInvoiceViaWhatsApp, generateWhatsAppLink } from '../services/whatsappService';
-import { formatOrderNumber } from '../utils/calculations';
+import { formatOrderNumber, formatDateSafe, formatTimeSafe, formatDateTimeSafe } from '../utils/calculations';
 
 interface MyOrdersProps {
     invoices: Invoice[];
@@ -153,6 +153,8 @@ const MyOrders: React.FC<MyOrdersProps> = ({
 
     const [auditItemId, setAuditItemId] = useState<string | null>(null);
     const [auditItemName, setAuditItemName] = useState('');
+
+    const [showConfirmUnified, setShowConfirmUnified] = useState(false);
 
     const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim() || '#0054A6';
     const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--brand-secondary').trim() || '#10B981';
@@ -454,8 +456,12 @@ const MyOrders: React.FC<MyOrdersProps> = ({
         setPayments([]);
         setPayAmount('');
         setLocalDiscount(inv.descuento?.toString() || '');
-        const readyIds = inv.items.filter(it => it.status === 'LISTO').map(it => it.id);
-        setSelectedItemsToDeliver(new Set(readyIds));
+        // Por defecto seleccionamos TODO lo que no ha sido entregado aún
+        const deliverableIds = inv.items.filter(it => {
+            const isCanceled = (it as any).estado_id === 9 || (it.status as any) === 'ANULADO' || it.status === 'CANCELADO';
+            return it.status !== 'ENTREGADO' && !isCanceled;
+        }).map(it => it.id);
+        setSelectedItemsToDeliver(new Set(deliverableIds));
     };
 
     const handleSendToRoute = (inv: Invoice) => {
@@ -731,9 +737,9 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                         const activeItems = inv.items.filter(it => !((it as any).estado_id === 9 || (it.status as any) === 'ANULADO' || it.status === 'CANCELADO'));
                                         const totalItemsCount = activeItems.length || 1;
                                         const deliveredPercent = Math.round((progress.delivered / totalItemsCount) * 100);
-                                        const genDate = new Date(inv.date);
-                                        const dateStr = genDate.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                                        const timeStr = genDate.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+                                        
+                                        const dateStr = formatDateSafe(inv.date);
+                                        const timeStr = formatTimeSafe(inv.date);
                                         const displayOrderNumber = (inv.ordenNumber && inv.ordenNumber !== '---') 
                                             ? inv.ordenNumber 
                                             : (inv.orderCorrelativoRaw ? formatOrderNumber(inv.orderCorrelativoRaw, company) : '---');
@@ -1291,7 +1297,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                         </p>
                                     </div>
                                     <button
-                                        onClick={handleConfirmUnifiedAction}
+                                        onClick={() => setShowConfirmUnified(true)}
                                         disabled={isProcessingPayment || (payments.length === 0 && selectedItemsToDeliver.size === 0 && discountVal === (selectedOrderToPay.descuento || 0))}
                                         className="bg-white text-indigo-900 px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-bold text-[8px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 shrink-0"
                                     >
@@ -1447,6 +1453,84 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                 <span>FOTO {currentPhotoIndex + 1} DE {viewerPhotos.length}</span>
                                 <span className="w-1 h-1 rounded-full bg-white/20" />
                                 <span>SISLAV AI • REGISTRO VISUAL</span>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {showConfirmUnified && selectedOrderToPay && (
+                    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in">
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden border border-white/20"
+                        >
+                            <div className="p-10 text-center">
+                                <div 
+                                    style={{ backgroundColor: `${primaryColor}10`, color: primaryColor }}
+                                    className="w-24 h-24 rounded-[2rem] mx-auto mb-8 flex items-center justify-center shadow-xl border-4 border-white"
+                                >
+                                    <PackageCheck size={48} strokeWidth={2.5} />
+                                </div>
+                                
+                                <h3 className="text-3xl font-black text-slate-900 uppercase tracking-tight mb-2 leading-none">Confirmar Proceso</h3>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-10">Resumen Final de Operación</p>
+                                
+                                <div className="space-y-4 mb-10">
+                                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 flex flex-col gap-4">
+                                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                            <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Entrega Física</span>
+                                            <span className="text-sm font-black text-slate-900 uppercase">{selectedItemsToDeliver.size} PRENDAS</span>
+                                        </div>
+                                        
+                                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                            <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Total Cobrado</span>
+                                            <span className="text-lg font-black text-emerald-600 uppercase tabular-nums">{currency} {currentTotalPaidInModal.toFixed(2)}</span>
+                                        </div>
+                                        
+                                        {pendingInModal > 0.01 && (
+                                            <div className="flex justify-between items-center bg-rose-50 p-4 rounded-2xl border border-rose-100 shadow-sm">
+                                                <span className="text-[11px] font-black text-rose-400 uppercase tracking-widest">Saldo Pendiente</span>
+                                                <span className="text-sm font-black text-rose-600 uppercase tabular-nums">{currency} {pendingInModal.toFixed(2)}</span>
+                                            </div>
+                                        )}
+
+                                        {changeInModal > 0.01 && (
+                                            <div className="flex justify-between items-center bg-amber-50 p-4 rounded-2xl border border-amber-100 shadow-sm">
+                                                <span className="text-[11px] font-black text-amber-500 uppercase tracking-widest">Vuelto a Entregar</span>
+                                                <span className="text-sm font-black text-amber-700 uppercase tabular-nums">{currency} {changeInModal.toFixed(2)}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="px-4">
+                                        <p className="text-xs font-bold text-slate-500 uppercase leading-relaxed">
+                                            ¿Está seguro que desea procesar la {selectedItemsToDeliver.size > 0 ? 'entrega de prendas' : ''} {selectedItemsToDeliver.size > 0 && payments.length > 0 ? 'y el' : ''} {payments.length > 0 ? 'cobro' : ''} para el cliente <span className="text-slate-900 font-black">{selectedOrderToPay.client.name.toUpperCase()}</span>?
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex flex-col gap-3">
+                                    <button 
+                                        onClick={() => {
+                                            setShowConfirmUnified(false);
+                                            handleConfirmUnifiedAction();
+                                        }}
+                                        style={{ backgroundColor: primaryColor }}
+                                        className="w-full py-5 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3"
+                                    >
+                                        <CheckCircle2 size={20} strokeWidth={3} /> SÍ, PROCESAR TODO
+                                    </button>
+                                    <button 
+                                        onClick={() => setShowConfirmUnified(false)}
+                                        className="w-full py-3 text-slate-400 font-black text-[10px] uppercase hover:text-rose-600 transition-colors"
+                                    >
+                                        CANCELAR Y REVISAR
+                                    </button>
+                                </div>
                             </div>
                         </motion.div>
                     </div>

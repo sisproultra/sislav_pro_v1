@@ -4,8 +4,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="theme-color" content="#4f8ef7" />
-    <link rel="icon" id="dynamic-favicon" type="image/png" href="/icons/icon-192.png" crossorigin="use-credentials" />
-    <link rel="apple-touch-icon" id="dynamic-apple-icon" href="/icons/icon-192.png" crossorigin="use-credentials" />
+    <link rel="icon" id="dynamic-favicon" type="image/png" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" id="dynamic-apple-icon" href="/icons/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SISLAV - CONTROL TOTAL</title>
     <meta name="description" content="SISLAV - Sistema de Control Total para Lavanderías" />
@@ -13,15 +13,22 @@
     <meta property="og:description" content="Sistema de gestión integral para lavanderías." />
     <meta property="og:image" content="https://lavanderiasislav.com/logo-sislav.png" />
     <meta property="og:type" content="website" />
+    <!-- PWA iOS support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" id="apple-app-title" content="SISLAV" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!--
+      FIX CRÍTICO: el manifest apunta a /api/manifest (endpoint dinámico),
+      NO a /manifest.json (archivo estático que no existe o es genérico).
+      El script de abajo reemplaza el href con los query params de la URL.
+    -->
     <link rel="manifest" id="dynamic-manifest" href="/manifest.json" crossorigin="use-credentials" />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Shim crítico para compatibilidad de librerías en el navegador
       window.process = { env: { API_KEY: "" } };
-      
       tailwind.config = {
         theme: {
           extend: {
@@ -31,79 +38,69 @@
               display: ['Outfit', 'Inter', 'sans-serif'],
             },
             colors: {
-              bg: 'var(--bg)',
-              bg2: 'var(--bg2)',
-              bg3: 'var(--bg3)',
-              surface: 'var(--surface)',
-              surface2: 'var(--surface2)',
-              text: 'var(--text)',
-              text2: 'var(--text2)',
-              text3: 'var(--text3)',
-              accent: {
-                DEFAULT: 'var(--accent)',
-                glow: 'var(--accent-glow)',
-              },
-              sunat: {
-                primary: '#0054A6',
-                secondary: '#D42D1F',
-              },
-              brand: {
-                primary: 'var(--brand-primary, #4f8ef7)',
-                secondary: 'var(--brand-secondary, #22c55e)',
-              }
+              bg: 'var(--bg)', bg2: 'var(--bg2)', bg3: 'var(--bg3)',
+              surface: 'var(--surface)', surface2: 'var(--surface2)',
+              text: 'var(--text)', text2: 'var(--text2)', text3: 'var(--text3)',
+              accent: { DEFAULT: 'var(--accent)', glow: 'var(--accent-glow)' },
+              sunat: { primary: '#0054A6', secondary: '#D42D1F' },
+              brand: { primary: 'var(--brand-primary, #4f8ef7)', secondary: 'var(--brand-secondary, #22c55e)' }
             },
-            borderRadius: {
-              'radius': '10px',
-              'radius-lg': '14px',
-            }
+            borderRadius: { 'radius': '10px', 'radius-lg': '14px' }
           }
         }
       }
     </script>
     <style>
       :root {
-        --brand-primary: #4f8ef7;
-        --brand-secondary: #22c55e;
-        --bg: #0d0f14;
-        --bg2: #13161e;
-        --bg3: #1a1e28;
-        --surface: #1e2330;
-        --surface2: #242938;
-        --border: rgba(255,255,255,0.07);
-        --border2: rgba(255,255,255,0.12);
-        --text: #f0f2f7;
-        --text2: #8b90a0;
-        --text3: #555b6e;
-        --accent: #4f8ef7;
-        --accent-glow: rgba(79,142,247,0.15);
+        --brand-primary: #4f8ef7; --brand-secondary: #22c55e;
+        --bg: #0d0f14; --bg2: #13161e; --bg3: #1a1e28;
+        --surface: #1e2330; --surface2: #242938;
+        --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.12);
+        --text: #f0f2f7; --text2: #8b90a0; --text3: #555b6e;
+        --accent: #4f8ef7; --accent-glow: rgba(79,142,247,0.15);
       }
     </style>
 
     <script>
-      (function() {
+      (function () {
         const params = new URLSearchParams(window.location.search);
         const slug = params.get('s');
         const ownerId = params.get('o');
-        const isLogistica = window.location.pathname.includes('/logistica');
-        
-        // --- INYECCIÓN INMEDIATA DEL MANIFEST ---
-        let manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
-        if (isLogistica) {
-          manifestUrl += (manifestUrl.includes('?') ? '&' : '?') + 'type=logistica';
-        }
-        
-        const manifestLink = document.getElementById('dynamic-manifest');
-        if (manifestLink) manifestLink.href = manifestUrl;
+        const isLogistica = window.location.pathname.includes('/logistica') || params.get('type') === 'logistica';
 
+        // ── FIX 1: Manifest apunta a /api/manifest con los params correctos ──
+        const manifestParams = new URLSearchParams();
+        if (slug) manifestParams.set('s', slug);
+        if (ownerId) manifestParams.set('o', ownerId);
+        if (isLogistica) manifestParams.set('type', 'logistica');
+        const manifestUrl = '/manifest.json' + (manifestParams.toString() ? '?' + manifestParams.toString() : '');
+        const manifestLink = document.getElementById('dynamic-manifest');
+        if (manifestLink) manifestLink.setAttribute('href', manifestUrl);
+
+        // ── FIX 2: Captura del evento de instalación PWA (beforeinstallprompt) ──
+        window.__pwaInstallPrompt__ = null;
+        window.addEventListener('beforeinstallprompt', function (e) {
+          e.preventDefault(); // Evita el banner automático del browser
+          window.__pwaInstallPrompt__ = e;
+          // Dispara evento custom para que React lo escuche
+          window.dispatchEvent(new CustomEvent('pwa-install-ready'));
+          console.log('[PWA] Banner de instalación listo ✅');
+        });
+
+        window.addEventListener('appinstalled', function () {
+          window.__pwaInstallPrompt__ = null;
+          window.dispatchEvent(new CustomEvent('pwa-installed'));
+          console.log('[PWA] App instalada ✅');
+        });
+
+        // ── Branding dinámico desde Supabase ──
         const SUPABASE_URL = 'https://yvgshdypqanlcgxdyvls.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2Z3NoZHlwcWFubGNneGR5dmxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NjYyODIsImV4cCI6MjA4NTE0MjI4Mn0.B65RRA4u5-a_6E-blMvQXMKf39521esSif4XODdzfNE';
 
         if (slug || ownerId) {
           window.__BRANDING_STATUS__ = 'loading';
-          
-          let table = ownerId ? 'empresas_holding' : 'sucursales';
+          const table = ownerId ? 'empresas_holding' : 'sucursales';
           let queryUrl = `${SUPABASE_URL}/rest/v1/${table}?select=*`;
-          
           if (slug) {
             queryUrl += `&slug=eq.${slug}`;
           } else if (ownerId) {
@@ -119,45 +116,49 @@
               'Range': '0-0'
             }
           })
-          .then(r => r.json())
-          .then(data => {
-            const s = Array.isArray(data) ? data[0] : data;
-            if (s) {
-              window.__SUCURSAL_BRANDING__ = s;
-              window.__BRANDING_STATUS__ = 'ready';
-              
-              const primary = s.color_primario || '#0054A6';
-              const secondary = s.color_secundario || '#10B981';
-              
-              const root = document.documentElement;
-              root.style.setProperty('--brand-primary', primary);
-              root.style.setProperty('--brand-secondary', secondary);
-              root.style.setProperty('--accent', primary);
-              root.style.setProperty('--primary-color', primary);
-              
-              const razonSocial = s.nombre_sucursal || s.nombre_empresa || s.razon_social || 'SISLAV';
-              const isLogistica = window.location.pathname.includes('/logistica');
-              document.title = isLogistica ? `LOGÍSTICA ${razonSocial}` : `${razonSocial} - CONTROL TOTAL`;
-              
-              // Actualizar favicon dinámicamente
-              const faviconEl = document.getElementById('dynamic-favicon');
-              const appleEl = document.getElementById('dynamic-apple-icon');
-              const logoUrl = isLogistica 
-                ? (s.url_favicon_logistica || s.url_favicon || s.url_logo)
-                : (s.url_favicon || s.url_logo);
+            .then(r => r.json())
+            .then(data => {
+              const s = Array.isArray(data) ? data[0] : data;
+              if (s) {
+                window.__SUCURSAL_BRANDING__ = s;
+                window.__BRANDING_STATUS__ = 'ready';
 
-              if (logoUrl) {
-                if (faviconEl) faviconEl.setAttribute('href', logoUrl);
-                if (appleEl) appleEl.setAttribute('href', logoUrl);
+                const primary = s.color_primario || '#0054A6';
+                const secondary = s.color_secundario || '#10B981';
+                const root = document.documentElement;
+                root.style.setProperty('--brand-primary', primary);
+                root.style.setProperty('--brand-secondary', secondary);
+                root.style.setProperty('--accent', primary);
+                root.style.setProperty('--primary-color', primary);
+                document.querySelector('meta[name="theme-color"]')?.setAttribute('content', primary);
+
+                const razonSocial = s.nombre_sucursal || s.nombre_empresa || s.razon_social || 'SISLAV';
+                document.title = isLogistica ? `LOGÍSTICA ${razonSocial}` : `${razonSocial} - CONTROL TOTAL`;
+
+                // Actualizar apple-mobile-web-app-title para iOS
+                const appleTitleEl = document.getElementById('apple-app-title');
+                if (appleTitleEl) appleTitleEl.setAttribute('content', razonSocial);
+
+                const logoUrl = isLogistica
+                  ? (s.url_favicon_logistica || s.url_favicon || s.url_logo)
+                  : (s.url_favicon || s.url_logo);
+
+                if (logoUrl) {
+                  document.getElementById('dynamic-favicon')?.setAttribute('href', logoUrl);
+                  document.getElementById('dynamic-apple-icon')?.setAttribute('href', logoUrl);
+                }
+
+                // Guardar nombre para el prompt de instalación
+                window.__SUCURSAL_NOMBRE__ = razonSocial;
+                window.__SUCURSAL_LOGO__ = logoUrl || null;
+              } else {
+                window.__BRANDING_STATUS__ = 'failed';
               }
-            } else {
+            })
+            .catch(e => {
+              console.error('❌ [Pre-load] Error:', e);
               window.__BRANDING_STATUS__ = 'failed';
-            }
-          })
-          .catch(e => {
-            console.error('❌ [Pre-load] Error:', e);
-            window.__BRANDING_STATUS__ = 'failed';
-          });
+            });
         } else {
           window.__BRANDING_STATUS__ = 'none';
         }
@@ -165,20 +166,12 @@
     </script>
 
     <style>
-      /* Light Theme Overrides */
       .light-theme {
-        --bg: #f1f5f9;
-        --bg2: #ffffff;
-        --bg3: #e2e8f0;
-        --surface: #ffffff;
-        --surface2: #f8fafc;
-        --border: rgba(0,0,0,0.06);
-        --border2: rgba(0,0,0,0.12);
-        --text: #0f172a;
-        --text2: #475569;
-        --text3: #94a3b8;
-        --accent: #3b82f6;
-        --accent-glow: rgba(59,130,246,0.1);
+        --bg: #f1f5f9; --bg2: #ffffff; --bg3: #e2e8f0;
+        --surface: #ffffff; --surface2: #f8fafc;
+        --border: rgba(0,0,0,0.06); --border2: rgba(0,0,0,0.12);
+        --text: #0f172a; --text2: #475569; --text3: #94a3b8;
+        --accent: #3b82f6; --accent-glow: rgba(59,130,246,0.1);
       }
       body {
         font-family: 'DM Sans', sans-serif;
@@ -191,43 +184,144 @@
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 10px; }
       ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
-
-      /* Custom utility classes from the provided HTML */
       .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
       .tbl th { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
       .tbl td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
-
       @keyframes neon-pulse {
-        0%, 100% { 
-          filter: brightness(1.2) drop-shadow(0 0 3px var(--brand-primary));
-          opacity: 0.9;
-        }
-        50% { 
-          filter: brightness(1.8) drop-shadow(0 0 10px var(--brand-primary));
-          opacity: 1;
-        }
+        0%, 100% { filter: brightness(1.2) drop-shadow(0 0 3px var(--brand-primary)); opacity: 0.9; }
+        50% { filter: brightness(1.8) drop-shadow(0 0 10px var(--brand-primary)); opacity: 1; }
       }
       .neon-badge {
         animation: neon-pulse 1.5s infinite ease-in-out;
         border: 1px solid var(--brand-primary);
         box-shadow: 0 0 8px var(--brand-primary), inset 0 0 4px var(--brand-primary);
-        background: transparent;
-        font-weight: 900;
-        letter-spacing: 0.05em;
+        background: transparent; font-weight: 900; letter-spacing: 0.05em;
       }
       @keyframes blink-badge {
         0%, 100% { opacity: 1; transform: scale(1); }
         50% { opacity: 0.8; transform: scale(0.95); }
       }
-      .animate-blink-badge {
-        animation: blink-badge 1.5s infinite;
+      .animate-blink-badge { animation: blink-badge 1.5s infinite; }
+
+      /* ── Banner de instalación PWA ── */
+      #pwa-install-banner {
+        display: none;
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 99999;
+        background: var(--surface, #1e2330);
+        border: 1px solid var(--border2, rgba(255,255,255,0.12));
+        border-radius: 16px;
+        padding: 14px 18px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        display: none;
+        align-items: center;
+        gap: 12px;
+        min-width: 280px;
+        max-width: 340px;
+        animation: slideUp 0.3s ease;
+      }
+      #pwa-install-banner.visible { display: flex !important; }
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+        to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+      }
+      #pwa-install-banner img {
+        width: 44px; height: 44px; border-radius: 10px; object-fit: cover; flex-shrink: 0;
+      }
+      #pwa-install-banner .pwa-info { flex: 1; }
+      #pwa-install-banner .pwa-info strong { display: block; font-size: 14px; color: var(--text, #f0f2f7); font-family: 'Outfit', sans-serif; }
+      #pwa-install-banner .pwa-info span { font-size: 12px; color: var(--text2, #8b90a0); }
+      #pwa-btn-install {
+        background: var(--brand-primary, #4f8ef7);
+        color: #fff; border: none; border-radius: 8px;
+        padding: 8px 14px; font-size: 13px; font-weight: 600;
+        cursor: pointer; white-space: nowrap; flex-shrink: 0;
+      }
+      #pwa-btn-install:hover { opacity: 0.85; }
+      #pwa-btn-close {
+        background: transparent; border: none;
+        color: var(--text3, #555b6e); font-size: 18px;
+        cursor: pointer; padding: 4px; line-height: 1; flex-shrink: 0;
       }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-</head>
+  </head>
   <body class="bg-gray-50 text-gray-800 antialiased h-screen overflow-hidden">
     <div id="root" class="h-full"></div>
-    <!-- Vite resolverá esta ruta durante el proceso de build en Vercel -->
+
+    <!-- Banner de instalación PWA (nativo, sin React) -->
+    <div id="pwa-install-banner" role="dialog" aria-label="Instalar aplicación">
+      <img id="pwa-banner-icon" src="/icons/icon-192.png" alt="Logo" />
+      <div class="pwa-info">
+        <strong id="pwa-banner-name">SISLAV</strong>
+        <span>Instalar como aplicación</span>
+      </div>
+      <button id="pwa-btn-install">Instalar</button>
+      <button id="pwa-btn-close" aria-label="Cerrar">×</button>
+    </div>
+
     <script type="module" src="/index.tsx"></script>
+
+    <script>
+      // Mostrar el banner cuando el evento esté listo
+      (function () {
+        const banner = document.getElementById('pwa-install-banner');
+        const btnInstall = document.getElementById('pwa-btn-install');
+        const btnClose = document.getElementById('pwa-btn-close');
+        const bannerIcon = document.getElementById('pwa-banner-icon');
+        const bannerName = document.getElementById('pwa-banner-name');
+
+        function showBanner() {
+          // Actualizar nombre e ícono con el branding de la sucursal
+          const nombre = window.__SUCURSAL_NOMBRE__;
+          const logo = window.__SUCURSAL_LOGO__;
+          if (nombre) bannerName.textContent = nombre;
+          if (logo) bannerIcon.src = logo;
+          // Actualizar color del botón con el color primario de la sucursal
+          const primary = getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim();
+          if (primary) btnInstall.style.background = primary;
+          banner.classList.add('visible');
+        }
+
+        // Si el evento ya llegó antes de que este script cargara
+        if (window.__pwaInstallPrompt__) {
+          setTimeout(showBanner, 1500);
+        }
+
+        // Escuchar el evento custom disparado desde el head
+        window.addEventListener('pwa-install-ready', function () {
+          setTimeout(showBanner, 1500); // pequeño delay para que cargue el branding
+        });
+
+        btnInstall.addEventListener('click', async function () {
+          const prompt = window.__pwaInstallPrompt__;
+          if (!prompt) return;
+          banner.classList.remove('visible');
+          await prompt.prompt();
+          const { outcome } = await prompt.userChoice;
+          console.log('[PWA] User choice:', outcome);
+          window.__pwaInstallPrompt__ = null;
+        });
+
+        btnClose.addEventListener('click', function () {
+          banner.classList.remove('visible');
+          // No volver a mostrar en esta sesión
+          sessionStorage.setItem('pwa-banner-dismissed', '1');
+        });
+
+        // No mostrar si ya fue descartado en esta sesión
+        if (sessionStorage.getItem('pwa-banner-dismissed')) {
+          window.removeEventListener('pwa-install-ready', showBanner);
+        }
+
+        // Ocultar banner si ya está instalada
+        window.addEventListener('pwa-installed', function () {
+          banner.classList.remove('visible');
+        });
+      })();
+    </script>
   </body>
 </html>

@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Invoice, Expense, Employee, CashClosing as CashClosingType, Company, UserRole } from '../types';
 import { dbGetCashClosings, dbCreateCashClosing, dbUpdateCashClosing } from '../services/dbService';
+import { formatDateSafe, formatTimeSafe, formatDateTimeSafe } from '../utils/calculations';
 import { 
   Calculator, Printer, Banknote, History, Save, Clock, CheckCircle2, 
   ChevronRight, List, Trash2, Eye, AlertTriangle, Plus, X, ArrowRight, 
@@ -89,7 +90,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
 
       if (userLastClosing) return new Date(userLastClosing.fechaCierre);
 
-      if (closingHistory.length === 0) return new Date(0);
+      if (closingHistory.length === 0) return new Date();
       const sorted = [...closingHistory].sort((a, b) => new Date(b.fechaCierre).getTime() - new Date(a.fechaCierre).getTime());
       return new Date(sorted[0].fechaCierre);
   }, [closingHistory, activeCashSession, currentUserName]);
@@ -1081,7 +1082,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
                                </div>
                                <div className="text-right">
                                   <span className="font-black text-slate-900">{currency} {t.amount.toFixed(2)}</span>
-                                  <p className="text-[8px] font-bold text-slate-400 uppercase">{new Date(t.date).toLocaleTimeString('es-PE', { hour12: false })}</p>
+                                  <p className="text-[8px] font-bold text-slate-400 uppercase">{formatTimeSafe(t.date)}</p>
                                </div>
                             </div>
                          ))}

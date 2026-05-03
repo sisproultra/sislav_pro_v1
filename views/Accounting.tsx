@@ -191,9 +191,12 @@ const Accounting: React.FC<AccountingProps> = ({ invoices, paymentMethods, compa
         // --- HOJA 2: DETALLE DE COBRANZA ---
         const cobranzaData = paymentsInRange.map(p => {
             const method = paymentMethods.find(m => m.id === p.metodo_pago_id);
+            const dateStr = p.date || '';
+            const isValidDate = dateStr && !isNaN(new Date(dateStr).getTime());
+            
             return {
-                'FECHA COBRO': p.date ? (new Date(p.date).toLocaleDateString('es-PE')) : '---',
-                'HORA': new Date(p.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                'FECHA COBRO': isValidDate ? (new Date(dateStr).toLocaleDateString('es-PE')) : '---',
+                'HORA': isValidDate ? new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---',
                 'DOCUMENTO': p.invoice ? `${p.invoice.serie}-${p.invoice.correlativo}` : '---',
                 'CLIENTE': p.invoice?.client?.name || '---',
                 'MÉTODO PAGO': method ? method.name : 'OTROS',
