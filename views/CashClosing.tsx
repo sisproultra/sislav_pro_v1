@@ -469,10 +469,45 @@ const CashClosing: React.FC<CashClosingProps> = ({
                             {currency} {summary.expectedCash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </h2>
                     </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Clock size={12} className="text-indigo-500" />
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Iniciado el</span>
+                            </div>
+                            <span className="text-[10px] font-black text-slate-600">
+                                {activeCashSession 
+                                    ? formatDateTimeSafe(activeCashSession.fecha_apertura || activeCashSession.fechaApertura)
+                                    : formatDateTimeSafe(lastClosingDate.toISOString())
+                                }
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Users size={12} className="text-indigo-500" />
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Responsable</span>
+                            </div>
+                            <span className="text-[10px] font-black text-slate-600 truncate max-w-[120px] text-right uppercase">
+                                {activeCashSession 
+                                    ? (activeCashSession.registrado_por || activeCashSession.cajero || 'SISTEMA')
+                                    : currentUserName
+                                }
+                            </span>
+                        </div>
+                        {activeCashSession && (
+                            <div className="mt-1 flex justify-start">
+                                <span className="bg-green-100 text-green-700 text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest flex items-center gap-1">
+                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                                    Caja Abierta
+                                </span>
+                            </div>
+                        )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
+                  <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-gray-400 bg-gray-50/50 p-2 rounded-lg">
                     <InfoIcon size={14} />
-                    <span>Incluye saldo inicial + ventas efectivo - egresos efectivo</span>
+                    <span className="leading-tight">Incluye saldo inicial + ventas efectivo - egresos efectivo</span>
                   </div>
                 </div>
 

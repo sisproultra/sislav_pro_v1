@@ -123,6 +123,23 @@ const RefreshCw = ({ size, className }: any) => (
 export default function App() {
     const queryClient = useQueryClient();
     
+    // NAVIGATION & VIEW STATE (Top-most declarations to avoid TDZ errors)
+    const [currentView, setCurrentView] = useState<string>(() => {
+        try {
+            const saved = localStorage.getItem('sislav_current_view');
+            return saved || 'view:dashboard';
+        } catch (e) {
+            return 'view:dashboard';
+        }
+    });
+    const [clientsSearch, setClientsSearch] = useState('');
+    const [clientsPage, setClientsPage] = useState(1);
+    const [clientsTotal, setClientsTotal] = useState(0);
+    const [invoicesSearch, setInvoicesSearch] = useState('');
+    const [invoicesPage, setInvoicesPage] = useState(1);
+    const [invoicesTotal, setInvoicesTotal] = useState(0);
+    const [initialPickupForPos, setInitialPickupForPos] = useState<PickupRequest | null>(null);
+
     const [trackingId, setTrackingId] = useState<string | null>(() => {
         const params = new URLSearchParams(window.location.search);
         return params.get('t');
@@ -144,24 +161,32 @@ export default function App() {
     const [isResolving, setIsResolving] = useState(true);
     
     // CASH SESSION LOCK
-    const { data: activeCashSession, refetch: refetchCashSession, isLoading: isLoadingCashSession } = useQuery({
-        queryKey: ['activeCashSession', authSession?.user?.id],
+    const { data: activeCashSession, refetch: refetchCashSession, isLoading: isLoadingCashSession, isFetching: isFetchingCashSession, status: cashSessionStatus } = useQuery({
+        queryKey: ['activeCashSession', authSession?.user?.id, activeSucursal?.id],
         queryFn: () => dbGetActiveCashClosing(),
-        enabled: !!authSession?.user?.id && !!activeSucursal
+        enabled: !isResolving && !!authSession?.user?.id && !!activeSucursal
     });
 
     const [isCashOpeningModalOpen, setIsCashOpeningModalOpen] = useState(false);
     const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
     const checkCajaOpen = useCallback((action: () => void) => {
-        if (isLoadingCashSession) return;
+        // Si aún está resolviendo sesión global o cargando sesión de caja, las acciones se encolan
+        if (isResolving || isLoadingCashSession || isFetchingCashSession || cashSessionStatus === 'pending') {
+            console.log("⏳ Encolando acción mientras carga la sesión de caja...");
+            setPendingAction(() => action);
+            return;
+        }
+
         if (activeCashSession) {
+            console.log("✅ Sesión de caja detectada:", activeCashSession.id);
             action();
         } else {
+            console.log("⚠️ No hay sesión de caja activa, abriendo modal...");
             setPendingAction(() => action);
             setIsCashOpeningModalOpen(true);
         }
-    }, [activeCashSession, isLoadingCashSession]);
+    }, [activeCashSession, isLoadingCashSession, isFetchingCashSession, cashSessionStatus, isResolving]);
 
     const navigateToPos = (initialPickup?: any) => {
         checkCajaOpen(() => {
@@ -174,19 +199,33 @@ export default function App() {
         });
     };
 
+    const initialNavRef = useRef(false);
     useEffect(() => {
-        if (authSession) {
+        if (authSession && !initialNavRef.current && currentView === 'view:dashboard') {
             const role = authSession.user.role;
             const timer = setTimeout(() => {
-                if (role === UserRole.OWNER || role === UserRole.SAAS_MASTER || role === UserRole.ADMIN || role === UserRole.CAJERO) {
-                    navigateToPos();
-                } else {
+                if (authSession) {
+                    initialNavRef.current = true;
                     navigateToPos();
                 }
             }, 5000); // 5 segundos de cortesía solicitado por el usuario
             return () => clearTimeout(timer);
         }
-    }, [authSession]);
+    }, [authSession, currentView]);
+
+    // EFECTO DE REINTENTO: Si hubo una acción pendiente esperando a que la caja cargue
+    useEffect(() => {
+        if (!isLoadingCashSession && !isFetchingCashSession && cashSessionStatus === 'success' && pendingAction) {
+            if (activeCashSession) {
+                console.log("🔄 Ejecutando acción encolada tras carga de sesión...");
+                pendingAction();
+                setPendingAction(null);
+            } else if (!isCashOpeningModalOpen) {
+                console.log("⚠️ No se encontró sesión tras la carga, abriendo modal...");
+                setIsCashOpeningModalOpen(true);
+            }
+        }
+    }, [activeCashSession, isLoadingCashSession, isFetchingCashSession, cashSessionStatus, pendingAction, isCashOpeningModalOpen]);
 
     const handleConfirmCashOpening = async (amount: number, turno: string) => {
         await dbOpenCashClosing(amount, turno);
@@ -322,9 +361,8 @@ export default function App() {
 
     const isOwnerPath = window.location.pathname === '/owner-login' || !!new URLSearchParams(window.location.search).get('o');
 
-    const [currentView, setCurrentView] = useState('view:dashboard');
-
     useEffect(() => {
+        localStorage.setItem('sislav_current_view', currentView);
         if (currentView === 'view:cash_closing') {
             setInvoicesSearch('');
             setInvoicesPage(1);
@@ -378,13 +416,7 @@ export default function App() {
 
     const [products, setProducts] = useState<Product[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
-    const [clientsTotal, setClientsTotal] = useState(0);
-    const [clientsPage, setClientsPage] = useState(1);
-    const [clientsSearch, setClientsSearch] = useState('');
     const [invoices, setInvoices] = useState<Invoice[]>([]);
-    const [invoicesTotal, setInvoicesTotal] = useState(0);
-    const [invoicesPage, setInvoicesPage] = useState(1);
-    const [invoicesSearch, setInvoicesSearch] = useState('');
     const [globalOrderStats, setGlobalOrderStats] = useState({ toCollect: 0, toDeliver: 0 });
     const [categories, setCategories] = useState<Category[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
@@ -398,7 +430,6 @@ export default function App() {
     
     const [isFastOrderOpen, setIsFastOrderOpen] = useState(false);
     const [activePickupForFastOrder, setActivePickupForFastOrder] = useState<PickupRequest | null>(null);
-    const [initialPickupForPos, setInitialPickupForPos] = useState<PickupRequest | null>(null);
 
     const [showCobranzaModal, setShowCobranzaModal] = useState(false);
     const [hasClosedCobranza, setHasClosedCobranza] = useState(false);
