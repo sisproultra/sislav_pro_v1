@@ -140,9 +140,15 @@ const CashOpeningModal: React.FC<CashOpeningModalProps> = ({ isOpen, onClose, on
                     <input 
                       type="number" 
                       step="0.01"
+                      min="0"
                       required
                       value={amount}
-                      onChange={e => setAmount(e.target.value)}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '' || parseFloat(val) >= 0) {
+                          setAmount(val);
+                        }
+                      }}
                       autoFocus
                       readOnly={isLoadingBalance || (company as any).cash_management_type === 'ACCUMULATIVE'}
                       className={`w-full pl-14 pr-6 py-6 border-2 rounded-3xl outline-none transition-all font-black text-4xl text-slate-800 shadow-inner ${((company as any).cash_management_type === 'ACCUMULATIVE') ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100 focus:bg-white focus:ring-4 focus:ring-slate-100'}`}

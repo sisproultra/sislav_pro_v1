@@ -161,7 +161,11 @@ const Layout: React.FC<LayoutProps> = ({
               if (currentUser.permissions[permId] === true) {
                   return { isVisible: true, isNew };
               }
-              // Si no está explícitamente en TRUE, el ADMIN no lo ve (limite de opciones asignadas)
+              // Si el permiso no está definido, el Dashboard y POS son visibles por defecto para ADMIN
+              if (currentUser.permissions[permId] === undefined && ['view:dashboard', 'view:pos'].includes(permId)) {
+                  return { isVisible: true, isNew };
+              }
+              // Si está en false o no está definido para otros módulos, no se ve
               return { isVisible: false, isNew: false };
           }
 
@@ -580,10 +584,15 @@ const Layout: React.FC<LayoutProps> = ({
                 )}
                 <div className={`flex items-center gap-1.5 rounded-md border text-[8px] font-bold uppercase transition-all overflow-hidden pr-2 ${waStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-bg3 text-text3 border-border'}`}><div className="relative w-5 h-5 flex items-center justify-center shrink-0"><img src="https://iili.io/fXXft0Q.png" className={`w-3.5 h-3.5 object-contain ${waStatus !== 'connected' ? 'grayscale opacity-40' : ''}`} alt="WA" />{waStatus === 'connected' && <div className="absolute top-1 right-1 w-1 h-1 bg-emerald-500 rounded-full animate-pulse" />}</div><span className="leading-none">{waStatus === 'connected' ? 'WA ON' : 'WA OFF'}</span></div>
                 
-                {isCashOpen && (
+                {isCashOpen ? (
                   <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-500 text-white text-[8px] font-black border border-emerald-400 uppercase shadow-sm">
                     <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                     CAJA ABIERTA
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-rose-600 text-white text-[8px] font-black border border-rose-500 uppercase shadow-sm scale-95 opacity-90">
+                    <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                    CAJA CERRADA
                   </div>
                 )}
              </div>

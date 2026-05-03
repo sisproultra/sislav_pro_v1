@@ -676,8 +676,14 @@ const CashClosing: React.FC<CashClosingProps> = ({
                         <div className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-gray-400">{currency}</div>
                         <input 
                            type="number"
+                           min="0"
                            value={actualCash}
-                           onChange={e => setActualCash(e.target.value)}
+                           onChange={e => {
+                             const val = e.target.value;
+                             if (val === '' || parseFloat(val) >= 0) {
+                               setActualCash(val);
+                             }
+                           }}
                            className="w-full pl-14 pr-6 py-6 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none font-black text-4xl transition-all shadow-inner text-slate-800"
                            placeholder="0.00"
                         />
@@ -691,8 +697,14 @@ const CashClosing: React.FC<CashClosingProps> = ({
                           <div className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-gray-400">{currency}</div>
                           <input 
                              type="number"
+                             min="0"
                              value={liquidation}
-                             onChange={e => setLiquidation(e.target.value)}
+                             onChange={e => {
+                               const val = e.target.value;
+                               if (val === '' || parseFloat(val) >= 0) {
+                                 setLiquidation(val);
+                               }
+                             }}
                              className="w-full pl-14 pr-6 py-6 bg-emerald-50 border-2 border-emerald-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-emerald-100 outline-none font-black text-4xl transition-all shadow-inner text-emerald-800"
                              placeholder="0.00"
                           />

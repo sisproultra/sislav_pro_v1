@@ -203,6 +203,12 @@ export default function App() {
     useEffect(() => {
         if (authSession && !initialNavRef.current && currentView === 'view:dashboard') {
             const role = authSession.user.role;
+            // No redireccionar automáticamente a dueños o admins si tienen acceso al dashboard
+            if (role === UserRole.OWNER || role === UserRole.ADMIN) {
+                initialNavRef.current = true;
+                return;
+            }
+
             const timer = setTimeout(() => {
                 if (authSession) {
                     initialNavRef.current = true;

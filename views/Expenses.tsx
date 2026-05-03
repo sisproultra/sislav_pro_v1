@@ -163,7 +163,21 @@ const Expenses: React.FC<ExpensesProps> = ({ expenses, company, currentUser, pay
                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Monto del Egreso</label>
                          <div className="relative">
                             <span className="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-red-600 text-lg">{currency}</span>
-                            <input type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-3xl font-bold outline-none focus:bg-white focus:border-red-500 transition-all text-slate-900 shadow-inner" placeholder="0.00" />
+                            <input 
+                               type="number" 
+                               step="0.01" 
+                               min="0"
+                               required 
+                               value={amount} 
+                               onChange={e => {
+                                 const val = e.target.value;
+                                 if (val === '' || parseFloat(val) >= 0) {
+                                   setAmount(val);
+                                 }
+                               }} 
+                               className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-3xl font-bold outline-none focus:bg-white focus:border-red-500 transition-all text-slate-900 shadow-inner" 
+                               placeholder="0.00" 
+                            />
                          </div>
                      </div>
                      <div className="space-y-4">
