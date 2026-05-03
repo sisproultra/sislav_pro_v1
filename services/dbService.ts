@@ -3221,19 +3221,15 @@ export const dbGetActiveCashClosing = async () => {
     const branchId = getActiveBranchId();
     if (!branchId) return null;
     
-    let userId = getActiveUserId();
-    if (!userId) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        userId = sessionData.session?.user?.id || null;
-    }
-    if (!userId) return null;
-
+    // Eliminamos el filtro por usuario_id para que la caja sea compartida por la sucursal
+    // tal como solicita el usuario ("el indicador verde de caja abierta se le muestra a todos")
     const { data, error } = await supabase
         .from('cierres_caja')
         .select('*')
         .eq('sucursal_id', branchId)
-        .eq('usuario_id', userId)
         .eq('estado', 'ABIERTO')
+        .order('fecha_apertura', { ascending: false })
+        .limit(1)
         .maybeSingle();
     
     if (error || !data) return null;

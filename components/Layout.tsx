@@ -37,6 +37,7 @@ interface LayoutProps {
   isDarkMode?: boolean;
   toggleTheme?: () => void;
   currentUser?: AuthSession['user'];
+  isCashOpen?: boolean;
 }
 
 interface SidebarItemProps {
@@ -85,7 +86,8 @@ const Layout: React.FC<LayoutProps> = ({
   clients = [], helpVideos = [], isOwner = false, isSaaSMaster = false, 
   globalModules = {}, sucursalModules = {},
   isDarkMode: propIsDarkMode, toggleTheme: propToggleTheme,
-  currentUser
+  currentUser,
+  isCashOpen = false
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [internalIsDarkMode, setInternalIsDarkMode] = useState(() => localStorage.getItem('sislav_theme') === 'dark');
@@ -577,6 +579,13 @@ const Layout: React.FC<LayoutProps> = ({
                   </span>
                 )}
                 <div className={`flex items-center gap-1.5 rounded-md border text-[8px] font-bold uppercase transition-all overflow-hidden pr-2 ${waStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-bg3 text-text3 border-border'}`}><div className="relative w-5 h-5 flex items-center justify-center shrink-0"><img src="https://iili.io/fXXft0Q.png" className={`w-3.5 h-3.5 object-contain ${waStatus !== 'connected' ? 'grayscale opacity-40' : ''}`} alt="WA" />{waStatus === 'connected' && <div className="absolute top-1 right-1 w-1 h-1 bg-emerald-500 rounded-full animate-pulse" />}</div><span className="leading-none">{waStatus === 'connected' ? 'WA ON' : 'WA OFF'}</span></div>
+                
+                {isCashOpen && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-500 text-white text-[8px] font-black border border-emerald-400 uppercase shadow-sm">
+                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                    CAJA ABIERTA
+                  </div>
+                )}
              </div>
           </div>
           <div className="flex items-center gap-4">

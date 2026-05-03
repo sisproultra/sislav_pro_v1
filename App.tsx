@@ -162,7 +162,7 @@ export default function App() {
     
     // CASH SESSION LOCK
     const { data: activeCashSession, refetch: refetchCashSession, isLoading: isLoadingCashSession, isFetching: isFetchingCashSession, status: cashSessionStatus } = useQuery({
-        queryKey: ['activeCashSession', authSession?.user?.id, activeSucursal?.id],
+        queryKey: ['activeCashSession', activeSucursal?.id],
         queryFn: () => dbGetActiveCashClosing(),
         enabled: !isResolving && !!authSession?.user?.id && !!activeSucursal
     });
@@ -2012,6 +2012,7 @@ export default function App() {
             isDarkMode={darkMode}
             toggleTheme={toggleDarkMode}
             currentUser={authSession?.user}
+            isCashOpen={!!activeCashSession}
         >
             {isLoadingData && <div className="absolute top-2 right-6 z-[100] flex items-center gap-2 bg-indigo-600 text-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest shadow-lg animate-pulse"><RefreshCw size={10} className="animate-spin" /> Sincronizando</div>}
             
