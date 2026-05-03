@@ -684,7 +684,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
                    {canManage && (
                      <button 
                        onClick={handleCloseTurn}
-                       disabled={isClosing || pendingInvoices.length === 0}
+                       disabled={isClosing || actualCash === ''}
                        className="w-full py-5 rounded-2xl font-black text-lg text-white shadow-[0_20px_40px_-10px_rgba(0,0,0,0.1)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:grayscale disabled:opacity-50"
                        style={{ backgroundColor: company.primaryColor || '#0054A6', boxShadow: `0 20px 40px -10px ${company.primaryColor}40` }}
                      >

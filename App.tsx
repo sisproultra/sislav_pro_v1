@@ -56,7 +56,6 @@ import { EvolutionService } from './services/evolutionService';
 import { printInvoiceDirectly } from './utils/printService';
 import SaaSLogin from './views/SaaSLogin';
 import { applyDynamicManifest } from './utils/pwaUtils';
-import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { VersionGuard } from './components/VersionGuard';
 import OwnerLogin from './views/OwnerLogin';
 import OwnerDashboard from './views/OwnerDashboard';
@@ -129,17 +128,23 @@ export default function App() {
         return params.get('t');
     });
     
-    const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+    const [authSession, setAuthSession] = useState<AuthSession | null>(() => {
+        const saved = localStorage.getItem('sislav_auth_session');
+        if (saved) try { return JSON.parse(saved); } catch (e) {}
+        return null;
+    });
     const [activeSucursal, setActiveSucursal] = useState<any | null>(() => {
         const preloaded = (window as any).__SUCURSAL_BRANDING__;
         if (preloaded) return normalizeSucursal(preloaded);
+        const saved = localStorage.getItem('sislav_active_sucursal');
+        if (saved) try { return JSON.parse(saved); } catch (e) {}
         return null;
     });
     const [globalConfig, setGlobalConfig] = useState<SaasGlobalConfig | null>(null);
     const [isResolving, setIsResolving] = useState(true);
     
     // CASH SESSION LOCK
-    const { data: activeCashSession, refetch: refetchCashSession } = useQuery({
+    const { data: activeCashSession, refetch: refetchCashSession, isLoading: isLoadingCashSession } = useQuery({
         queryKey: ['activeCashSession', authSession?.user?.id],
         queryFn: () => dbGetActiveCashClosing(),
         enabled: !!authSession?.user?.id && !!activeSucursal
@@ -149,18 +154,14 @@ export default function App() {
     const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
     const checkCajaOpen = useCallback((action: () => void) => {
-        // Only exceptions are SAAS_MASTER. Even ADMIN and OWNER should open cash if they want to sell, 
-        // but strictly following "estricto" instruction, we check activeCashSession.
-        const role = authSession?.user?.role;
-        const isMaster = role === UserRole.SAAS_MASTER;
-        
-        if (isMaster || activeCashSession) {
+        if (isLoadingCashSession) return;
+        if (activeCashSession) {
             action();
         } else {
             setPendingAction(() => action);
             setIsCashOpeningModalOpen(true);
         }
-    }, [activeCashSession, authSession]);
+    }, [activeCashSession, isLoadingCashSession]);
 
     const navigateToPos = (initialPickup?: any) => {
         checkCajaOpen(() => {
@@ -176,14 +177,14 @@ export default function App() {
     useEffect(() => {
         if (authSession) {
             const role = authSession.user.role;
-            if (role === UserRole.OWNER || role === UserRole.SAAS_MASTER || role === UserRole.ADMIN || role === UserRole.CAJERO) {
-                // Todos los roles operativos y de gestión de sucursal van primero a NUEVA VENTA
-                navigateToPos();
-            } else {
-                // Roles de soporte o logística pueden ir a sus vistas específicas if needed,
-                // pero por defecto POS es el core de la operación
-                navigateToPos();
-            }
+            const timer = setTimeout(() => {
+                if (role === UserRole.OWNER || role === UserRole.SAAS_MASTER || role === UserRole.ADMIN || role === UserRole.CAJERO) {
+                    navigateToPos();
+                } else {
+                    navigateToPos();
+                }
+            }, 5000); // 5 segundos de cortesía solicitado por el usuario
+            return () => clearTimeout(timer);
         }
     }, [authSession]);
 
@@ -1961,7 +1962,6 @@ export default function App() {
     return (
         <div className={`min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300 font-sans selection:bg-indigo-100 selection:text-indigo-900`}>
             <VersionGuard />
-            <PWAInstallPrompt />
             <Layout 
             currentView={currentView} 
             setView={handleViewChange} 
