@@ -105,18 +105,34 @@ const CartItemDetailModal: React.FC<CartItemDetailModalProps> = ({
 
   const startRecording = async () => {
       try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+              throw new Error("Su navegador no soporta la grabación de audio o no está en un entorno seguro (HTTPS).");
+          }
+
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const mediaRecorder = new MediaRecorder(stream);
+          
+          // Detectar formato soportado (iOS prefiere audio/mp4 o audio/aac)
+          const mimeTypes = ['audio/webm', 'audio/mp4', 'audio/aac', 'audio/wav'];
+          const supportedMime = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
+          
+          const options = supportedMime ? { mimeType: supportedMime } : {};
+          const mediaRecorder = new MediaRecorder(stream, options);
+          
           mediaRecorderRef.current = mediaRecorder;
           audioChunksRef.current = [];
-          mediaRecorder.ondataavailable = (event) => audioChunksRef.current.push(event.data);
+          
+          mediaRecorder.ondataavailable = (event) => {
+              if (event.data.size > 0) audioChunksRef.current.push(event.data);
+          };
+          
           mediaRecorder.onstop = () => {
-              const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+              const blob = new Blob(audioChunksRef.current, { type: supportedMime || 'audio/wav' });
               const reader = new FileReader();
               reader.readAsDataURL(blob);
               reader.onloadend = () => setAudioBlob(reader.result as string);
               stream.getTracks().forEach(track => track.stop());
           };
+          
           mediaRecorder.start();
           setIsRecording(true);
           setRecordingTime(5);
@@ -126,7 +142,11 @@ const CartItemDetailModal: React.FC<CartItemDetailModalProps> = ({
                 return prev - 1; 
               });
           }, 1000);
-      } catch (err) { alert("Error al acceder al micrófono."); }
+      } catch (err) { 
+          console.error("Mic Error:", err);
+          const message = err instanceof Error ? err.message : "Error al acceder al micrófono.";
+          alert(message + "\n\nAsegúrese de otorgar permisos y usar HTTPS."); 
+      }
   };
 
   const stopAudioRecording = () => {

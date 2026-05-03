@@ -227,16 +227,30 @@ const MultiItemDetailModal: React.FC<MultiItemDetailModalProps> = ({ isOpen, onC
 
     const startRecording = async (idx: number) => { 
         try { 
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error("Su navegador no soporta la grabación de audio o no está en un entorno seguro (HTTPS).");
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); 
-            const mr = new MediaRecorder(stream); 
+            
+            // Detectar formato soportado (iOS prefiere audio/mp4 o audio/aac)
+            const mimeTypes = ['audio/webm', 'audio/mp4', 'audio/aac', 'audio/wav'];
+            const supportedMime = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
+            const extension = supportedMime.includes('mp4') ? 'mp4' : (supportedMime.includes('webm') ? 'webm' : 'wav');
+            
+            const options = supportedMime ? { mimeType: supportedMime } : {};
+            const mr = new MediaRecorder(stream, options); 
+            
             mediaRecorderRef.current = mr; 
             audioChunksRef.current = []; 
-            mr.ondataavailable = (e) => audioChunksRef.current.push(e.data); 
+            mr.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data);
+            }; 
             mr.onstop = async () => { 
-                const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' }); 
+                const blob = new Blob(audioChunksRef.current, { type: supportedMime || 'audio/wav' }); 
                 setIsUploading(idx);
                 try {
-                    const path = getStoragePath('audio_detalle', 'webm');
+                    const path = getStoragePath('audio_detalle', extension);
                     const url = await dbUploadImage('laundry-assets', blob, path);
                     setItemsData(prev => prev.map((it, i) => i === idx ? { ...it, audioNote: url } : it)); 
                 } catch (e) { alert("Error al subir audio."); }
@@ -257,7 +271,13 @@ const MultiItemDetailModal: React.FC<MultiItemDetailModalProps> = ({ isOpen, onC
                     return prev - 1;
                 }); 
             }, 1000); 
-        } catch (e) { alert("Error al acceder al micrófono."); } 
+        } catch (err) { 
+            console.error("Mic Error:", err);
+            const message = err instanceof Error ? err.message : "Error al acceder al micrófono.";
+            alert(message + "\n\nAsegúrese de otorgar permisos y usar HTTPS."); 
+            setIsRecording(false);
+            setAudioTarget(null);
+        } 
     };
 
     const handlePlayAudio = (audioUrl: string) => {
