@@ -236,16 +236,22 @@ const CashClosing: React.FC<CashClosingProps> = ({
       });
 
       const topCategories = Object.values(categoryMap).sort((a, b) => b.amount - a.amount);
+      
+      // SOLO descontar de caja si es EFECTIVO
+      const totalCashExpenses = pendingExpenses
+          .filter(exp => (exp.paymentMethod || 'EFECTIVO').toUpperCase().includes('EFECTIVO'))
+          .reduce((sum, exp) => sum + exp.amount, 0);
 
       const totalExpenses = pendingExpenses.reduce((sum, exp) => sum + exp.amount, 0);
       const open = parseFloat(openingBalance) || 0;
-      const expectedCash = open + totalCashSales - totalExpenses;
+      const expectedCash = open + totalCashSales - totalCashExpenses;
       
       return { 
           methods, 
           methodDetails,
           totalCashSales, 
           totalExpenses, 
+          totalCashExpenses,
           opening: open, 
           expectedCash,
           topCategories
@@ -281,6 +287,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
           cashSales: summary.totalCashSales, 
           otherSales: summary.methods, 
           expenses: summary.totalExpenses, 
+          cashExpenses: summary.totalCashExpenses,
           expectedCash: summary.expectedCash, 
           actualCash: cashCount, 
           difference: diff, 
@@ -348,7 +355,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
               <div class="section-title">1. RESUMEN DE EFECTIVO</div>
               <div class="row"><span>INICIO DE CAJA:</span> <span>${currency} ${report.openingBalance.toFixed(2)}</span></div>
               <div class="row"><span>COBRANZAS EFECTIVO:</span> <span>+ ${currency} ${report.cashSales.toFixed(2)}</span></div>
-              <div class="row"><span>EGRESOS:</span> <span>- ${currency} ${report.expenses.toFixed(2)}</span></div>
+              <div class="row"><span>EGRESOS EFECTIVO:</span> <span>- ${currency} ${(report.cashExpenses ?? report.expenses).toFixed(2)}</span></div>
               <div class="divider"></div>
               <div class="row bold"><span>TOTAL EFECTIVO:</span> <span>${currency} ${report.expectedCash.toFixed(2)}</span></div>
               <div class="row bold"><span>EFECTIVO REAL:</span> <span class="bold">${currency} ${report.actualCash.toFixed(2)}</span></div>
@@ -464,7 +471,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
                   </div>
                   <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
                     <InfoIcon size={14} />
-                    <span>Incluye saldo inicial + ventas efectivo - egresos</span>
+                    <span>Incluye saldo inicial + ventas efectivo - egresos efectivo</span>
                   </div>
                 </div>
 
@@ -544,22 +551,34 @@ const CashClosing: React.FC<CashClosingProps> = ({
                       <TrendingDown size={20} className="text-rose-500" />
                       Egresos Registrados
                     </h3>
-                    <span className="text-xs font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded-lg">-{currency} {summary.totalExpenses.toFixed(2)}</span>
+                    <span className="text-xs font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded-lg">-{currency} {summary.totalCashExpenses.toFixed(2)}</span>
                   </div>
 
                   <div className="space-y-2 max-h-[250px] overflow-y-auto">
-                    {pendingExpenses.map((exp, idx) => (
-                      <div key={idx} className="flex justify-between items-center bg-gray-50/50 p-3 rounded-xl border border-gray-100 transition-colors hover:bg-gray-50">
-                        <div className="flex items-center gap-3">
-                           <div className="text-[10px] bg-rose-100 text-rose-600 p-1 rounded font-bold uppercase tracking-tight">{exp.category.substring(0, 3)}</div>
-                           <div>
-                              <p className="font-bold text-xs text-gray-700">{exp.description}</p>
-                              <p className="text-[9px] text-gray-400 font-bold uppercase">Categoría: {exp.category} • {exp.paymentMethod || 'EFECTIVO'}</p>
-                           </div>
+                    {pendingExpenses.map((exp, idx) => {
+                      const isCash = (exp.paymentMethod || 'EFECTIVO').toUpperCase().includes('EFECTIVO');
+                      return (
+                        <div key={idx} className="flex justify-between items-center bg-gray-50/50 p-3 rounded-xl border border-gray-100 transition-colors hover:bg-gray-50">
+                          <div className="flex items-center gap-3">
+                             <div className={`text-[10px] p-1 rounded font-bold uppercase tracking-tight ${isCash ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                                {exp.category.substring(0, 3)}
+                             </div>
+                             <div>
+                                <p className="font-bold text-xs text-gray-700">{exp.description}</p>
+                                <div className="flex items-center gap-1.5">
+                                    <p className="text-[9px] text-gray-400 font-bold uppercase">Categoría: {exp.category} • {exp.paymentMethod || 'EFECTIVO'}</p>
+                                    {!isCash && (
+                                        <span className="text-[8px] bg-amber-100 text-amber-600 px-1 rounded font-bold uppercase">Informativo</span>
+                                    )}
+                                </div>
+                             </div>
+                          </div>
+                          <span className={`font-bold text-sm ${isCash ? 'text-rose-600' : 'text-slate-400'}`}>
+                            {isCash ? '-' : ''}{currency} {exp.amount.toFixed(2)}
+                          </span>
                         </div>
-                        <span className="font-bold text-rose-600 text-sm">-{currency} {exp.amount.toFixed(2)}</span>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {pendingExpenses.length === 0 && (
                       <div className="text-center py-6">
                         <p className="text-gray-400 text-xs italic font-medium">Sin egresos en este turno</p>

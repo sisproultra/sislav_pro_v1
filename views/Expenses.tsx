@@ -112,9 +112,17 @@ const Expenses: React.FC<ExpensesProps> = ({ expenses, company, currentUser, pay
                                     </div>
                                 </td>
                                 <td className="p-4 font-medium text-gray-800">
-                                    <div className="flex items-center gap-2">
-                                        {exp.evidencePhoto && <ImageIcon size={14} className="text-indigo-500 shrink-0" />}
-                                        {exp.description}
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center gap-2">
+                                            {exp.evidencePhoto && <ImageIcon size={14} className="text-indigo-500 shrink-0" />}
+                                            {exp.description}
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">{exp.paymentMethod || 'EFECTIVO'}</span>
+                                            {!(exp.paymentMethod || 'EFECTIVO').toUpperCase().includes('EFECTIVO') && (
+                                                <span className="text-[8px] bg-amber-100 text-amber-600 px-1.5 rounded font-black uppercase">Informativo</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </td>
                                 <td className="p-4"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs uppercase font-bold">{exp.category}</span></td>
@@ -177,15 +185,15 @@ const Expenses: React.FC<ExpensesProps> = ({ expenses, company, currentUser, pay
 
                      <div className="space-y-1">
                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Medio de Pago</label>
-                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                             {['EFECTIVO'].map(methodName => (
+                         <div className="flex flex-wrap gap-2">
+                             {paymentMethods.filter(m => m.isActive).map(method => (
                                  <button
-                                     key={methodName}
+                                     key={method.id}
                                      type="button"
-                                     onClick={() => setPaymentMethod(methodName)}
-                                     className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${paymentMethod === methodName ? 'border-red-600 bg-red-50 text-red-600' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}
+                                     onClick={() => setPaymentMethod(method.name.toUpperCase())}
+                                     className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 transition-all ${paymentMethod === method.name.toUpperCase() ? 'border-red-600 bg-red-50 text-red-600' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}
                                  >
-                                     <span className="text-[9px] font-bold uppercase truncate w-full text-center">{methodName}</span>
+                                     <span className="text-[10px] font-bold uppercase whitespace-nowrap">{method.name}</span>
                                  </button>
                              ))}
                          </div>

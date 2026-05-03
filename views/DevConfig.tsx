@@ -26,7 +26,7 @@ import {
     dbGetCorrelativos,
     dbGetInvoices
 } from '../services/dbService';
-import { Client, Product, Invoice, InvoiceType, IgvType, UnitCode, OrderStatus, Category, Company, TenantConfig, SYSTEM_PERMISSIONS, PermissionDefinition, SaasGlobalConfig } from '../types';
+import { Client, Product, Invoice, InvoiceType, IgvType, UnitCode, OrderStatus, Category, Company, TenantConfig, SYSTEM_MODULES, PermissionDefinition, SaasGlobalConfig } from '../types';
 import { calculateTotals } from '../utils/calculations';
 import { getSaasGlobalConfig, updateSaasGlobalConfig } from '../services/saasService';
 import SuccessModal from '../components/SuccessModal';
@@ -39,8 +39,8 @@ interface DevConfigProps {
     onUpdateTenantModules?: (modules: Record<string, boolean>) => void;
 }
 
-const DevConfig: React.FC<DevConfigProps> = ({ onRefreshData, company, onSaveCompany, currentTenant, onUpdateTenantModules }) => {
-    const [activeTab, setActiveTab] = useState<'IMPORT' | 'SERIES' | 'MODULES' | 'APIS'>('SERIES');
+const DevConfig: React.FC<DevConfigProps> = ({ onRefreshData, company, onSaveCompany, currentTenant }) => {
+    const [activeTab, setActiveTab] = useState<'IMPORT' | 'SERIES' | 'APIS'>('SERIES');
     const [isProcessing, setIsProcessing] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const isPausedRef = useRef(false);
@@ -65,14 +65,10 @@ const DevConfig: React.FC<DevConfigProps> = ({ onRefreshData, company, onSaveCom
     }, [company, activeTab]); 
 
     useEffect(() => {
-        if (activeTab === 'MODULES' && currentTenant?.modules) {
-            setLocalModules(currentTenant.modules);
-            loadGlobalConfig();
-        }
         if (activeTab === 'APIS') {
             loadGlobalConfig();
         }
-    }, [activeTab, currentTenant]);
+    }, [activeTab]);
 
     const loadGlobalConfig = async () => {
         const cfg = await getSaasGlobalConfig();
@@ -338,7 +334,6 @@ const DevConfig: React.FC<DevConfigProps> = ({ onRefreshData, company, onSaveCom
                         {[
                             { id: 'IMPORT', label: 'Migración', icon: ArrowRightLeft },
                             { id: 'SERIES', label: 'Series', icon: Hash },
-                            { id: 'MODULES', label: 'Módulos', icon: LayoutGrid },
                             { id: 'APIS', label: 'API Keys', icon: Link }
                         ].map(tab => (
                             <button 
@@ -632,38 +627,7 @@ const DevConfig: React.FC<DevConfigProps> = ({ onRefreshData, company, onSaveCom
                                 </div>
                             </div>
                         )}
-                        {activeTab === 'MODULES' && (
-                            <div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-white/10 shadow-sm flex flex-col flex-1 overflow-hidden animate-in duration-500">
-                                <div className="p-6 border-b border-slate-50 dark:border-white/5 flex justify-between items-center bg-slate-50 dark:bg-black/20">
-                                    <h3 className="font-black text-xs uppercase tracking-widest text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                                        <LayoutGrid size={16} style={{ color: primaryColor }} /> Permisos por Sucursal
-                                    </h3>
-                                    {onUpdateTenantModules && (
-                                        <button onClick={() => onUpdateTenantModules(localModules)} className="text-white px-6 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2" style={{ backgroundColor: primaryColor }}><Save size={14} /> Guardar</button>
-                                    )}
-                                </div>
-                                <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        {SYSTEM_PERMISSIONS.filter(p => p.id.startsWith('view:')).map(perm => (
-                                            <div key={perm.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-white/5 group hover:border-slate-200 transition-all">
-                                                <div className="flex-1 min-w-0 pr-2">
-                                                    <p className="font-black text-[9px] text-slate-800 dark:text-slate-200 uppercase truncate">{perm.label}</p>
-                                                    <p className="text-[7px] font-bold text-slate-400 uppercase truncate">{perm.description}</p>
-                                                </div>
-                                                <button 
-                                                    onClick={() => setLocalModules(prev => ({ ...prev, [perm.id]: !prev[perm.id] }))} 
-                                                    className={`relative w-9 h-5 rounded-full transition-all duration-300 flex items-center ${localModules[perm.id] !== false ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                                    style={localModules[perm.id] !== false ? { backgroundColor: primaryColor } : {}}
-                                                >
-                                                    <div className={`w-3.5 h-3.5 bg-white rounded-full shadow-md transform transition-transform duration-300 ${localModules[perm.id] !== false ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                         {activeTab === 'APIS' && (
+                        {activeTab === 'APIS' && (
                             <div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-white/10 shadow-sm p-6 flex flex-col flex-1 animate-in zoom-in-95">
                                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-6 flex items-center gap-2">
                                     <Link style={{ color: primaryColor }} size={20} /> Conexiones API

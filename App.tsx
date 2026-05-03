@@ -175,8 +175,16 @@ export default function App() {
 
     useEffect(() => {
         if (authSession) {
-            if (authSession.user.role === UserRole.OWNER) setCurrentView('view:owner_dashboard');
-            else if (authSession.user.role === UserRole.DELIVERY) navigateToPos();
+            if (authSession.user.role === UserRole.OWNER) {
+                setCurrentView('view:owner_dashboard');
+            } else if (authSession.user.role === UserRole.SAAS_MASTER) {
+                // El master suele ir al dashboard o puede elegir POS si lo desea, 
+                // pero por ahora lo dejamos en dashboard para gestión global
+                setCurrentView('view:dashboard');
+            } else {
+                // Otros roles (ADMIN, CAJERO, OPERARIO, DELIVERY) van directo a POS
+                navigateToPos();
+            }
         }
     }, [authSession]);
 
@@ -1769,7 +1777,7 @@ export default function App() {
             case 'view:yape': return <YapeMonitor company={activeSucursal} />;
             case 'view:settings': return <Settings company={activeSucursal} setCompany={setActiveSucursal} user={authSession?.user} />;
             case 'DEV_CONFIG': 
-                return (
+                return authSession?.user?.role === UserRole.SAAS_MASTER ? (
                     <DevConfig 
                         onRefreshData={() => refreshData(true)} 
                         company={activeSucursal} 
@@ -1781,7 +1789,7 @@ export default function App() {
                             setTimeout(() => refreshData(true), 500);
                         }} 
                     />
-                );
+                ) : null;
             default: return <div className="p-10 text-center text-slate-400 font-bold uppercase text-xs">Módulo en construcción</div>;
         }
     };

@@ -443,9 +443,6 @@ const Layout: React.FC<LayoutProps> = ({
             <SidebarItem id="view:reports" icon={FileBarChart} label="Reportes" isVisible={getModuleConfig('view:reports').isVisible} badge={getModuleConfig('view:reports').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:accounting" icon={Calculator} label="Contabilidad" isVisible={getModuleConfig('view:accounting').isVisible} badge={getModuleConfig('view:accounting').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:settings" icon={Settings} label="Ajustes" isVisible={getModuleConfig('view:settings').isVisible} badge={getModuleConfig('view:settings').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
-
-            <NavSection label="Sistema" isSidebarOpen={isSidebarOpen} />
-            <SidebarItem id="DEV_CONFIG" icon={Terminal} label="Config, Developer" isVisible={getModuleConfig('DEV_CONFIG').isVisible} badge={getModuleConfig('DEV_CONFIG').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
           </nav>
         </div>
 
@@ -460,6 +457,15 @@ const Layout: React.FC<LayoutProps> = ({
                   <p className={`text-[8px] truncate font-bold uppercase tracking-widest flex items-center gap-1 ${isDarkMode ? 'text-text3' : 'text-slate-500'}`}>
                     <Shield size={10} className="shrink-0 opacity-70" />
                     {currentUser?.role || 'Visitante'}
+                    {isSaaSMaster && (
+                      <button 
+                        onClick={() => setView('DEV_CONFIG')} 
+                        className={`ml-1 flex items-center gap-1 px-1.5 py-0.5 rounded border ${isDarkMode ? 'border-amber-500/30 text-amber-500 hover:bg-amber-500/10' : 'border-indigo-500/30 text-indigo-500 hover:bg-indigo-500/10'} font-black transition-all`}
+                      >
+                        <Terminal size={8} />
+                        <span className="text-[7px] uppercase tracking-tighter">DEV</span>
+                      </button>
+                    )}
                   </p>
                   <p className={`text-[7px] font-black opacity-30 tracking-tight uppercase mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                     v{APP_VERSION}

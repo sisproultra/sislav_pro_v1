@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Employee, UserRole, SYSTEM_PERMISSIONS, PermissionMap } from '../types';
+import { Employee, UserRole, SYSTEM_MODULES, PermissionMap } from '../types';
 import { dbUploadImage, getActiveBranchId } from '../services/dbService';
 import { User, Shield, Phone, Plus, Save, X, Camera, Lock, Upload, Trash2, Loader2, Check, AlertCircle, RotateCw, ShieldAlert, Copy, Edit2, Ban } from 'lucide-react';
 
@@ -16,20 +16,20 @@ interface EmployeesProps {
 }
 
 const ROLE_TEMPLATES: Record<string, PermissionMap> = {
-    [UserRole.ADMIN]: SYSTEM_PERMISSIONS.reduce((acc, p) => ({ ...acc, [p.id]: true }), {}),
-    [UserRole.CAJERO]: SYSTEM_PERMISSIONS.reduce((acc, p) => {
+    [UserRole.ADMIN]: SYSTEM_MODULES.reduce((acc, p) => ({ ...acc, [p.id]: true }), {}),
+    [UserRole.CAJERO]: SYSTEM_MODULES.reduce((acc, p) => {
         const enabled = ['view:dashboard', 'view:pos', 'view:orders', 'view:clients', 'view:history', 'view:yape'].includes(p.id);
         return { ...acc, [p.id]: enabled };
     }, {}),
-    [UserRole.OPERARIO]: SYSTEM_PERMISSIONS.reduce((acc, p) => {
+    [UserRole.OPERARIO]: SYSTEM_MODULES.reduce((acc, p) => {
         const enabled = ['view:dashboard', 'view:operations', 'view:machines', 'view:clients'].includes(p.id);
         return { ...acc, [p.id]: enabled };
     }, {}),
-    [UserRole.DELIVERY]: SYSTEM_PERMISSIONS.reduce((acc, p) => {
+    [UserRole.DELIVERY]: SYSTEM_MODULES.reduce((acc, p) => {
         const enabled = ['view:delivery', 'view:orders'].includes(p.id);
         return { ...acc, [p.id]: enabled };
     }, {}),
-    [UserRole.CONTABILIDAD]: SYSTEM_PERMISSIONS.reduce((acc, p) => {
+    [UserRole.CONTABILIDAD]: SYSTEM_MODULES.reduce((acc, p) => {
         const enabled = ['view:dashboard', 'view:history', 'view:reports'].includes(p.id);
         return { ...acc, [p.id]: enabled };
     }, {})
@@ -413,8 +413,20 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
                      </h4>
                      
                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-10">
-                         {['PRINCIPAL', 'GESTION', 'LOGISTICA', 'MARKETING', 'ADMIN'].map(group => {
-                             const perms = SYSTEM_PERMISSIONS.filter(p => p.group === group);
+                         {['PRINCIPAL', 'GESTIÓN', 'LOGÍSTICA', 'MARKETING', 'ADMINISTRACIÓN'].map(group => {
+                             const perms = SYSTEM_MODULES.filter(p => {
+                                 // Filtrar por grupo
+                                 if (p.category !== group) return false;
+                                 
+                                 // Filtrar por activación en sede (NIVEL 2)
+                                 const modConfig = company?.modulos_config || {};
+                                 const isModuleActiveInBranch = typeof modConfig[p.id] === 'object' 
+                                    ? modConfig[p.id].isActive 
+                                    : (modConfig[p.id] === undefined ? true : modConfig[p.id]);
+
+                                 return isModuleActiveInBranch;
+                             });
+
                              if (perms.length === 0) return null;
                              return (
                                  <div key={group} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
@@ -424,6 +436,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
                                              <div key={p.id} className="flex items-center justify-between group">
                                                  <div className="flex-1 pr-4">
                                                      <p className={`text-[11px] font-bold uppercase tracking-tight transition-colors ${customPermissions[p.id] ? 'text-slate-800' : 'text-slate-300'}`}>{p.label}</p>
+                                                     <p className="text-[8px] text-slate-400 font-medium uppercase">{p.description}</p>
                                                  </div>
                                                  <button 
                                                     type="button"

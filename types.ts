@@ -464,6 +464,7 @@ export interface CashClosing extends BaseEntity {
     cashSales: number;
     otherSales: Record<string, number>;
     expenses: number;
+    cashExpenses?: number;
     expectedCash: number;
     actualCash: number;
     difference: number;
@@ -517,43 +518,47 @@ export interface PermissionDefinition {
     id: string;
     label: string;
     description: string;
-    group: 'PRINCIPAL' | 'GESTION' | 'LOGISTICA' | 'MARKETING' | 'ADMIN';
+    category: 'PRINCIPAL' | 'GESTIÓN' | 'LOGÍSTICA' | 'MARKETING' | 'ADMINISTRACIÓN' | 'SISTEMA';
 }
 
-export const SYSTEM_PERMISSIONS: PermissionDefinition[] = [
-    { id: 'view:dashboard', label: 'Dashboard', description: 'Vista general de KPIs', group: 'PRINCIPAL' },
-    { id: 'view:agenda', label: 'Agenda', description: 'Control de entregas', group: 'PRINCIPAL' },
-    { id: 'view:pos', label: 'Punto de Venta', description: 'Realizar ventas', group: 'PRINCIPAL' },
-    { id: 'view:orders', label: 'Mis Órdenes', description: 'Gestión de tickets', group: 'PRINCIPAL' },
-    { id: 'view:operations', label: 'Operaciones', description: 'Lavado y Secado', group: 'PRINCIPAL' },
-    { id: 'view:cash_closing', label: 'Cierre de Caja', description: 'Arqueos de turno', group: 'PRINCIPAL' },
-    { id: 'view:history', label: 'Documentos Elec.', description: 'Historial SUNAT', group: 'PRINCIPAL' },
-    { id: 'view:yape', label: 'Mis Yapes', description: 'Monitor de pagos Yape', group: 'PRINCIPAL' },
+export const SYSTEM_MODULES: PermissionDefinition[] = [
+    { id: 'view:dashboard', label: 'Dashboard', description: 'Vista general de KPIs', category: 'PRINCIPAL' },
+    { id: 'view:agenda', label: 'Mi Tarea del Día', description: 'Control de entregas y tareas', category: 'PRINCIPAL' },
+    { id: 'view:pos', label: 'Nueva Venta', description: 'Realizar ventas y facturación', category: 'PRINCIPAL' },
+    { id: 'view:orders', label: 'Mis Órdenes', description: 'Gestión de tickets y pedidos', category: 'PRINCIPAL' },
+    { id: 'view:operations', label: 'Operación Lavado', description: 'Control de lavado y secado', category: 'PRINCIPAL' },
+    { id: 'view:cash_closing', label: 'Cierre de Caja', description: 'Arqueos de turno y caja chica', category: 'PRINCIPAL' },
+    { id: 'view:history', label: 'Documentos Elec.', description: 'Historial SUNAT y comprobantes', category: 'PRINCIPAL' },
+    { id: 'view:yape', label: 'Mis Yapes', description: 'Monitor de pagos Yape', category: 'PRINCIPAL' },
+    { id: 'view:my_reports', label: 'Mis Reportes', description: 'Reportes rápidos de ingresos', category: 'PRINCIPAL' },
     
-    { id: 'view:inventory', label: 'Servicios', description: 'Catálogo de precios', group: 'GESTION' },
-    { id: 'view:clients', label: 'Clientes', description: 'Cartera de clientes', group: 'GESTION' },
-    { id: 'view:employees', label: 'Empleados', description: 'Gestión de personal', group: 'GESTION' },
-    { id: 'view:expenses', label: 'Egresos', description: 'Salidas de caja y gastos', group: 'GESTION' },
+    { id: 'view:inventory', label: 'Servicios', description: 'Catálogo de precios y servicios', category: 'GESTIÓN' },
+    { id: 'view:clients', label: 'Clientes', description: 'Cartera de clientes y CRM', category: 'GESTIÓN' },
+    { id: 'view:employees', label: 'Empleados', description: 'Gestión de personal y roles', category: 'GESTIÓN' },
+    { id: 'view:expenses', label: 'Egresos', description: 'Salidas de caja y gastos', category: 'GESTIÓN' },
     
-    { id: 'view:machines', label: 'Máquinas', description: 'Control de equipos', group: 'LOGISTICA' },
-    { id: 'view:callcenter', label: 'Call Center', description: 'Gestión de pedidos telefónicos', group: 'LOGISTICA' },
-    { id: 'view:delivery', label: 'Delivery', description: 'Gestión de repartos', group: 'LOGISTICA' },
-    { id: 'view:supplies', label: 'Insumos', description: 'Stock de detergentes', group: 'LOGISTICA' },
-    { id: 'view:purchases', label: 'Compras', description: 'Ingresos de almacén', group: 'LOGISTICA' },
-    { id: 'view:package_inventory', label: 'Inv. Paquetes', description: 'Control de paquetes de ropa', group: 'LOGISTICA' },
-    { id: 'view:product_counting', label: 'Conteo Inventario', description: 'Registro de pallets y cajas', group: 'LOGISTICA' },
+    { id: 'view:machines', label: 'Máquinas', description: 'Control de equipos y mantenimiento', category: 'LOGÍSTICA' },
+    { id: 'view:logistics_hub', label: 'Logística Hub', description: 'Centro de distribución y guías', category: 'LOGÍSTICA' },
+    { id: 'view:callcenter', label: 'Call Center', description: 'Gestión de pedidos telefónicos', category: 'LOGÍSTICA' },
+    { id: 'view:delivery', label: 'Delivery', description: 'Gestión de repartos y motorizados', category: 'LOGÍSTICA' },
+    { id: 'view:supplies', label: 'Insumos', description: 'Stock de insumos y detergentes', category: 'LOGÍSTICA' },
+    { id: 'view:purchases', label: 'Compras', description: 'Ingresos de almacén y facturas compra', category: 'LOGÍSTICA' },
+    { id: 'view:package_inventory', label: 'Inv. Paquetes', description: 'Control de paquetes de ropa', category: 'LOGÍSTICA' },
+    { id: 'view:product_counting', label: 'Conteo Inventario', description: 'Registro de pallets y cajas', category: 'LOGÍSTICA' },
     
-    { id: 'view:loyalty', label: 'Fidelización', description: 'Cupones de descuento', group: 'MARKETING' },
-    { id: 'view:bonus_points', label: 'Puntos Bonus', description: 'Canjes de clientes', group: 'MARKETING' },
-    { id: 'view:promotions', label: 'Promociones', description: 'Ofertas y packs', group: 'MARKETING' },
-    { id: 'view:wa_campaign', label: 'Campaña WA', description: 'Marketing por WhatsApp', group: 'MARKETING' },
+    { id: 'view:loyalty', label: 'Fidelización', description: 'Cupones y programas de lealtad', category: 'MARKETING' },
+    { id: 'view:bonus_points', label: 'Puntos Bonus', description: 'Gestión de puntos y canjes', category: 'MARKETING' },
+    { id: 'view:promotions', label: 'Promociones', description: 'Ofertas, packs y descuentos', category: 'MARKETING' },
+    { id: 'view:wa_campaign', label: 'Campaña WA', description: 'Marketing masivo por WhatsApp', category: 'MARKETING' },
     
-    { id: 'view:categories', label: 'Categorías', description: 'Clasificación de servicios', group: 'ADMIN' },
-    { id: 'view:payment_methods', label: 'Pagos', description: 'Métodos de pago aceptados', group: 'ADMIN' },
-    { id: 'view:reports', label: 'Reportes', description: 'Análisis de ventas y egresos', group: 'ADMIN' },
-    { id: 'view:accounting', label: 'Contabilidad', description: 'Reportes para contador y SUNAT', group: 'ADMIN' },
-    { id: 'view:settings', label: 'Ajustes', description: 'Configuración local', group: 'ADMIN' },
-    { id: 'view:my_reports', label: 'Mis Reportes', description: 'Reportes de ingresos y ventas', group: 'PRINCIPAL' }
+    { id: 'view:modificaciones', label: 'Modificar', description: 'Edición de tickets y boletas', category: 'ADMINISTRACIÓN' },
+    { id: 'view:categories', label: 'Categorías', description: 'Clasificación de familias de servicios', category: 'ADMINISTRACIÓN' },
+    { id: 'view:payment_methods', label: 'Pagos', description: 'Configuración de medios de pago', category: 'ADMINISTRACIÓN' },
+    { id: 'view:reports', label: 'Reportes', description: 'Análisis detallado de ventas y egresos', category: 'ADMINISTRACIÓN' },
+    { id: 'view:accounting', label: 'Contabilidad', description: 'Exportación de datos contables', category: 'ADMINISTRACIÓN' },
+    { id: 'view:settings', label: 'Ajustes', description: 'Configuración técnica local', category: 'ADMINISTRACIÓN' },
+
+    { id: 'DEV_CONFIG', label: 'Config, Developer', description: 'Herramientas de desarrollo', category: 'SISTEMA' }
 ];
 
 export const SUNAT_PAYMENT_CODES = [

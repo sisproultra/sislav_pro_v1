@@ -29,7 +29,8 @@ import {
     UserRole,
     InvoiceType,
     SucursalType,
-    CashManagementType
+    CashManagementType,
+    SYSTEM_MODULES
 } from '../types';
 import { 
     Building, Globe, Loader2, X, Save, Palette, 
@@ -911,56 +912,15 @@ export const SuperAdmin: React.FC<{
     const [currentCatalogModule, setCurrentCatalogModule] = useState<string>('');
     const [companySearch, setCompanySearch] = useState('');
 
-    const AVAILABLE_MODULES = [
-        { id: 'view:dashboard', label: 'Dashboard', category: 'PRINCIPAL' },
-        { id: 'view:agenda', label: 'Mi Tarea del Día', category: 'PRINCIPAL' },
-        { id: 'view:pos', label: 'Nueva Venta', category: 'PRINCIPAL' },
-        { id: 'view:orders', label: 'Mis Órdenes', category: 'PRINCIPAL' },
-        { id: 'view:operations', label: 'Operación Lavado', category: 'PRINCIPAL' },
-        { id: 'view:cash_closing', label: 'Cierre de Caja', category: 'PRINCIPAL' },
-        { id: 'view:history', label: 'Documentos Elec.', category: 'PRINCIPAL' },
-        { id: 'view:yape', label: 'Mis Yapes', category: 'PRINCIPAL' },
-        { id: 'view:my_reports', label: 'Mis Reportes', category: 'PRINCIPAL' },
-
-        { id: 'view:inventory', label: 'Servicios', category: 'GESTIÓN' },
-        { id: 'view:clients', label: 'Clientes', category: 'GESTIÓN' },
-        { id: 'view:employees', label: 'Empleados', category: 'GESTIÓN' },
-        { id: 'view:expenses', label: 'Egresos', category: 'GESTIÓN' },
-
-        { id: 'view:machines', label: 'Máquinas', category: 'LOGÍSTICA' },
-        { id: 'view:logistics_hub', label: 'Logística Hub', category: 'LOGÍSTICA' },
-        { id: 'view:callcenter', label: 'Call Center', category: 'LOGÍSTICA' },
-        { id: 'view:delivery', label: 'Delivery', category: 'LOGÍSTICA' },
-        { id: 'view:supplies', label: 'Insumos', category: 'LOGÍSTICA' },
-        { id: 'view:purchases', label: 'Compras', category: 'LOGÍSTICA' },
-        { id: 'view:package_inventory', label: 'Inv. Paquetes', category: 'LOGÍSTICA' },
-        { id: 'view:product_counting', label: 'Conteo Inventario', category: 'LOGÍSTICA' },
-
-        { id: 'view:loyalty', label: 'Fidelización', category: 'MARKETING' },
-        { id: 'view:bonus_points', label: 'Puntos Bonus', category: 'MARKETING' },
-        { id: 'view:promotions', label: 'Promociones', category: 'MARKETING' },
-        { id: 'view:wa_campaign', label: 'Campaña WA', category: 'MARKETING' },
-
-        { id: 'view:modificaciones', label: 'Modificar', category: 'ADMINISTRACIÓN' },
-        { id: 'view:categories', label: 'Categorías', category: 'ADMINISTRACIÓN' },
-        { id: 'view:payment_methods', label: 'Pagos', category: 'ADMINISTRACIÓN' },
-        { id: 'view:reports', label: 'Reportes', category: 'ADMINISTRACIÓN' },
-        { id: 'view:accounting', label: 'Contabilidad', category: 'ADMINISTRACIÓN' },
-        { id: 'view:settings', label: 'Ajustes', category: 'ADMINISTRACIÓN' },
-        
-        { id: 'DEV_CONFIG', label: 'Config, Developer', category: 'SISTEMA' }
-    ];
-
-    const DEFAULT_MODULES_CONFIG = {
-        'view:dashboard': true,
-        'view:agenda': true,
-        'view:pos': true,
-        'view:orders': true,
-        'view:operations': true,
-        'view:cash_closing': true,
-        'view:history': true,
-        'view:yape': true
-    };
+    const DEFAULT_MODULES_CONFIG = SYSTEM_MODULES.reduce((acc, current) => {
+        const dashboardOnly = ['view:dashboard', 'view:pos', 'view:orders', 'view:cash_closing'];
+        acc[current.id] = {
+            isActive: dashboardOnly.includes(current.id),
+            isNew: false,
+            allowedRoles: ['OWNER', 'ADMIN', 'CAJERO']
+        };
+        return acc;
+    }, {} as Record<string, any>);
 
     const [showDiagnostics, setShowDiagnostics] = useState(false);
     const [sessionInfo, setSessionInfo] = useState<any>(null);
@@ -1963,7 +1923,7 @@ export const SuperAdmin: React.FC<{
                                                 <h5 className="text-[11px] font-black text-white uppercase tracking-[0.2em]">{category}</h5>
                                             </div>
                                             <div className="space-y-3">
-                                                {AVAILABLE_MODULES.filter(m => m.category === category).map(module => (
+                                                {SYSTEM_MODULES.filter(m => m.category === category).map(module => (
                                                     <div key={module.id} className="flex flex-col gap-3 p-5 bg-white/5 rounded-3xl border border-white/5 hover:bg-white/10 transition-all group">
                                                         <div className="flex items-center justify-between gap-4">
                                                             <div className="flex flex-col min-w-0">
@@ -2944,7 +2904,7 @@ export const SuperAdmin: React.FC<{
                                                             <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{category}</h5>
                                                         </div>
                                                         <div className="space-y-3">
-                                                            {AVAILABLE_MODULES.filter(m => m.category === category).map(module => {
+                                                            {SYSTEM_MODULES.filter(m => m.category === category && m.id !== 'DEV_CONFIG').map(module => {
                                                                 const config = brModulosConfig[module.id];
                                                                 const isObject = typeof config === 'object';
                                                                 const isActive = isObject ? config.isActive : !!config;
