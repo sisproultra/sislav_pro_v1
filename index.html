@@ -266,40 +266,75 @@
     <script type="module" src="/index.tsx"></script>
 
     <script>
-      // Mostrar el banner cuando el evento esté listo
+      // ── SISTEMA DE INSTALACIÓN PWA CON VIGILANTE DE BRANDING ──
       (function () {
         const banner = document.getElementById('pwa-install-banner');
         const btnInstall = document.getElementById('pwa-btn-install');
         const btnClose = document.getElementById('pwa-btn-close');
         const bannerIcon = document.getElementById('pwa-banner-icon');
         const bannerName = document.getElementById('pwa-banner-name');
+        
+        const GENERIC_LOGO = "https://i.ibb.co/39yGzdbn/Chat-GPT-Image-1-may-2026-21-46-28-1.png";
+        const GENERIC_NAME = "SISLAV";
+        let brandingCheckInterval = null;
 
-        function showBanner() {
-          // Actualizar nombre e ícono con el branding de la sucursal
+        function updateBannerContent() {
           const nombre = window.__SUCURSAL_NOMBRE__;
           const logo = window.__SUCURSAL_LOGO__;
-          if (nombre) bannerName.textContent = nombre;
-          if (logo) bannerIcon.src = logo;
-          // Actualizar color del botón con el color primario de la sucursal
           const primary = getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim();
-          if (primary) btnInstall.style.background = primary;
+
+          // Priorizar branding de lavandería, de lo contrario usar genérico
+          bannerName.textContent = nombre || GENERIC_NAME;
+          bannerIcon.src = logo || GENERIC_LOGO;
+          
+          if (primary) {
+            btnInstall.style.background = primary;
+          }
+
+          // Si ya tenemos el branding real, podemos dejar de vigilar
+          if (nombre && logo) {
+            if (brandingCheckInterval) clearInterval(brandingCheckInterval);
+            console.log('[PWA] Branding aplicado al banner ✅');
+          }
+        }
+
+        function showBanner() {
+          // Si ya fue descartado en esta sesión, no hacer nada
+          if (sessionStorage.getItem('pwa-banner-dismissed')) return;
+
+          // Primero intentamos cargar lo que haya (genérico o real si ya cargó)
+          updateBannerContent();
+
+          // Mostrar el banner físicamente
           banner.classList.add('visible');
+
+          // Si aún no tenemos branding real, iniciamos el vigilante cada 500ms
+          if (!window.__SUCURSAL_NOMBRE__ || !window.__SUCURSAL_LOGO__) {
+            console.log('[PWA] Vigilante de branding iniciado... 👀');
+            brandingCheckInterval = setInterval(updateBannerContent, 500);
+          }
         }
 
-        // Si el evento ya llegó antes de que este script cargara
+        function triggerDelayedShow() {
+          // Tiempo prudente (3 segundos) sugerido para que cargue Supabase
+          setTimeout(showBanner, 3000);
+        }
+
+        // 1. Si el prompt ya está listo (carga inmediata)
         if (window.__pwaInstallPrompt__) {
-          setTimeout(showBanner, 1500);
+          triggerDelayedShow();
         }
 
-        // Escuchar el evento custom disparado desde el head
-        window.addEventListener('pwa-install-ready', function () {
-          setTimeout(showBanner, 1500); // pequeño delay para que cargue el branding
-        });
+        // 2. Escuchar cuando el prompt esté listo (carga normal)
+        window.addEventListener('pwa-install-ready', triggerDelayedShow);
 
+        // ── Eventos de interacción ──
         btnInstall.addEventListener('click', async function () {
           const prompt = window.__pwaInstallPrompt__;
           if (!prompt) return;
           banner.classList.remove('visible');
+          if (brandingCheckInterval) clearInterval(brandingCheckInterval);
+
           await prompt.prompt();
           const { outcome } = await prompt.userChoice;
           console.log('[PWA] User choice:', outcome);
@@ -308,18 +343,13 @@
 
         btnClose.addEventListener('click', function () {
           banner.classList.remove('visible');
-          // No volver a mostrar en esta sesión
+          if (brandingCheckInterval) clearInterval(brandingCheckInterval);
           sessionStorage.setItem('pwa-banner-dismissed', '1');
         });
 
-        // No mostrar si ya fue descartado en esta sesión
-        if (sessionStorage.getItem('pwa-banner-dismissed')) {
-          window.removeEventListener('pwa-install-ready', showBanner);
-        }
-
-        // Ocultar banner si ya está instalada
         window.addEventListener('pwa-installed', function () {
           banner.classList.remove('visible');
+          if (brandingCheckInterval) clearInterval(brandingCheckInterval);
         });
       })();
     </script>
