@@ -40,7 +40,7 @@ const CashOpeningModal: React.FC<CashOpeningModalProps> = ({ isOpen, onClose, on
       };
       fetchLastBalance();
     } else if (isOpen) {
-        setAmount('0.00'); // Reset para modo diario si se desea, o dejar vacío
+        setAmount(''); 
     }
   }, [isOpen, company.id, (company as any).cash_management_type]);
 
@@ -140,6 +140,7 @@ const CashOpeningModal: React.FC<CashOpeningModalProps> = ({ isOpen, onClose, on
                     <input 
                       type="number" 
                       step="0.01"
+                      required
                       value={amount}
                       onChange={e => setAmount(e.target.value)}
                       autoFocus
