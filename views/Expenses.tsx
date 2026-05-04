@@ -200,7 +200,7 @@ const Expenses: React.FC<ExpensesProps> = ({ expenses, company, currentUser, pay
                      <div className="space-y-1">
                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Medio de Pago</label>
                          <div className="flex flex-wrap gap-2">
-                             {paymentMethods.filter(m => m.isActive).map(method => (
+                             {paymentMethods.filter(m => m.isActive && !m.isSuspended).map(method => (
                                  <button
                                      key={method.id}
                                      type="button"

@@ -262,7 +262,7 @@ const PreCheckoutModal: React.FC<PreCheckoutModalProps> = ({ isOpen, onClose, on
                     <div>
                         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 md:mb-3 ml-1 text-center sm:text-left">Medios de Pago</label>
                         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-4 gap-2">
-                            {paymentMethods.filter(pm => pm.isActive).map(pm => (
+                            {paymentMethods.filter(pm => pm.isActive && !pm.isSuspended).map(pm => (
                                 <button 
                                     key={pm.id} 
                                     onClick={() => handleAddPayment(pm)} 

@@ -289,6 +289,7 @@ export interface PaymentMethodConfig {
     id: string;
     name: string;
     isActive: boolean;
+    isSuspended?: boolean;
     icon: string;
     sunatCode: string;
     imagen_id?: string;
@@ -560,6 +561,96 @@ export const SYSTEM_MODULES: PermissionDefinition[] = [
 
     { id: 'DEV_CONFIG', label: 'Config, Developer', description: 'Herramientas de desarrollo', category: 'SISTEMA' }
 ];
+
+// Módulos activos por defecto cuando se crea una sucursal nueva
+export const DEFAULT_BRANCH_MODULES: Record<string, boolean> = {
+  'view:dashboard':       true,
+  'view:agenda':          true,
+  'view:pos':             true,
+  'view:orders':          true,
+  'view:operations':      true,
+  'view:cash_closing':    true,
+  'view:history':         true,   // Documentos Elec.
+  'view:my_reports':      true,
+  'view:modificaciones':  true,
+  'view:categories':      true,
+  'view:payment_methods': true,
+  'view:reports':         true,
+  'view:accounting':      true,
+  'view:settings':        true,
+  // Todo lo demás nace en false
+  'view:yape':            false,
+  'view:inventory':       false,
+  'view:clients':         false,
+  'view:employees':       false,
+  'view:expenses':        false,
+  'view:machines':        false,
+  'view:logistics_hub':   false,
+  'view:callcenter':      false,
+  'view:delivery':        false,
+  'view:supplies':        false,
+  'view:purchases':       false,
+  'view:package_inventory': false,
+  'view:product_counting':  false,
+  'view:loyalty':         false,
+  'view:bonus_points':    false,
+  'view:promotions':      false,
+  'view:wa_campaign':     false,
+  'DEV_CONFIG':           false,
+};
+
+// Permisos por defecto según rol, filtrados por módulos de sucursal
+export const getRoleDefaultPermissions = (
+  role: UserRole,
+  branchModules: Record<string, boolean>
+): Record<string, boolean> => {
+
+  // Módulos que cada rol puede tener activos
+  const roleAllowedModules: Record<string, string[]> = {
+    [UserRole.OWNER]: SYSTEM_MODULES.map(m => m.id), // OWNER: todo
+    [UserRole.ADMIN]: SYSTEM_MODULES.map(m => m.id), // ADMIN: todo
+    [UserRole.CAJERO]: [
+      'view:dashboard',
+      'view:agenda',
+      'view:pos',
+      'view:orders',
+      'view:operations',
+      'view:cash_closing',
+      'view:my_reports',
+    ],
+    [UserRole.OPERARIO]: [
+      'view:operations',
+    ],
+    [UserRole.DELIVERY]: [
+      'view:dashboard',
+      'view:delivery',
+      'view:orders',
+    ],
+    [UserRole.CONTABILIDAD]: [
+      'view:dashboard',
+      'view:reports',
+      'view:accounting',
+      'view:my_reports',
+    ],
+  };
+
+  const allowed = roleAllowedModules[role] || [];
+
+  // Si branchModules está vacío {}, usar DEFAULT_BRANCH_MODULES
+  const effectiveBranch = Object.keys(branchModules).length > 0
+    ? branchModules
+    : DEFAULT_BRANCH_MODULES;
+
+  // Usuario obtiene módulo solo si:
+  // 1. Su rol lo permite
+  // 2. La sucursal lo tiene activo
+  return Object.fromEntries(
+    SYSTEM_MODULES.map(m => [
+      m.id,
+      allowed.includes(m.id) && effectiveBranch[m.id] !== false
+    ])
+  );
+};
 
 export const SUNAT_PAYMENT_CODES = [
     { code: '001', label: 'DEPÓSITO EN CUENTA' },

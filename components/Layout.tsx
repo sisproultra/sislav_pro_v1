@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Company, Client, GlobalHelpVideo, PickupRequest, GlobalModuleConfig, Invoice, AuthSession, UserRole } from '../types';
+import { Company, Client, GlobalHelpVideo, PickupRequest, GlobalModuleConfig, Invoice, AuthSession, UserRole, DEFAULT_BRANCH_MODULES } from '../types';
 import CalculatorModal from './CalculatorModal';
 import HelpModal from './HelpModal';
 import BirthdayModal from './BirthdayModal';
@@ -120,84 +120,41 @@ const Layout: React.FC<LayoutProps> = ({
   });
 
   const getModuleConfig = (permId: string) => {
-      // 0. EXCLUSIVIDAD: Config Developer solo es para SAAS_MASTER
-      if (permId === 'DEV_CONFIG' && !isSaaSMaster) return { isVisible: false, isNew: false };
+    // Config Developer: solo SAAS_MASTER
+    if (permId === 'DEV_CONFIG' && !isSaaSMaster)
+      return { isVisible: false, isNew: false };
 
-      // 1. Verificar si el módulo está activo globalmente (SaaS Master Control Global)
-      const globalCfg = globalModules[permId];
-      if (globalCfg && globalCfg.isActive === false) return { isVisible: false, isNew: false };
+    // Nivel global: SAAS_MASTER desactivó globalmente
+    const globalCfg = globalModules[permId];
+    if (globalCfg?.isActive === false)
+      return { isVisible: false, isNew: false };
+    const isNew = !!globalCfg?.isNew;
 
-      // 1.1 Verificar si el rol actual está permitido globalmente para este módulo
-      if (!isSaaSMaster && globalCfg?.allowedRoles && Array.isArray(globalCfg.allowedRoles)) {
-          const currentRole = currentUser?.role;
-          if (currentRole && !globalCfg.allowedRoles.includes(currentRole as UserRole)) {
-              return { isVisible: false, isNew: false };
-          }
-      }
+    // SAAS_MASTER: acceso total siempre
+    if (isSaaSMaster) return { isVisible: true, isNew };
 
-      // 2. Verificar si el módulo está activo para esta sucursal específica
-      const branchCfg = sucursalModules[permId];
-      // Soporte para legacy (boolean) y nuevo formato (objeto)
-      const isSucursalActive = typeof branchCfg === 'object' ? branchCfg.isActive : branchCfg;
-      
-      // REGLA ABSOLUTA: Si el SaaS Master desactivó el switch para esta sucursal, NADIE lo ve en la sucursal
-      if (isSucursalActive === false) return { isVisible: false, isNew: false };
+    // Nivel sucursal: verificar modulos_config
+    // Si está vacío {}, usar DEFAULT_BRANCH_MODULES
+    const branchMods = Object.keys(sucursalModules || {}).length > 0
+      ? sucursalModules
+      : DEFAULT_BRANCH_MODULES;
+    
+    const branchCfg = branchMods[permId];
+    // Soporte para boolean o objeto {isActive: boolean}
+    const isBranchActive = typeof branchCfg === 'object' ? branchCfg.isActive : branchCfg;
+    
+    if (isBranchActive === false) return { isVisible: false, isNew: false };
 
-      // 3. Si es SaaS Master, tiene acceso total a todo lo que no esté desactivado globalmente o por sede
-      // Preferir el badge "NUEVO" de la sucursal si existe, sino el global
-      const isNew = typeof branchCfg === 'object' ? (branchCfg.isNew ?? !!globalCfg?.isNew) : !!globalCfg?.isNew;
-      if (isSaaSMaster) return { isVisible: true, isNew };
+    // OWNER: ve todo lo que la sucursal permite
+    if (isOwner) return { isVisible: true, isNew };
 
-      // 4. Verificar permisos específicos del usuario (Matriz de Permisos)
-      if (!isSaaSMaster && !isOwner && currentUser?.permissions) {
-          // Si el permiso está explícitamente en FALSE, no se ve
-          if (currentUser.permissions[permId] === false) {
-              return { isVisible: false, isNew: false };
-          }
-          
-          // Por petición del usuario: El ADMIN solo ve lo que tiene asignado (TRUE)
-          // a diferencia de otros roles que tienen módulos básicos permitidos por defecto
-          if (currentUser.role === UserRole.ADMIN) {
-              if (currentUser.permissions[permId] === true) {
-                  return { isVisible: true, isNew };
-              }
-              // Si el permiso no está definido, el Dashboard y POS son visibles por defecto para ADMIN
-              if (currentUser.permissions[permId] === undefined && ['view:dashboard', 'view:pos'].includes(permId)) {
-                  return { isVisible: true, isNew };
-              }
-              // Si está en false o no está definido para otros módulos, no se ve
-              return { isVisible: false, isNew: false };
-          }
+    // Dashboard: siempre visible para todos
+    if (permId === 'view:dashboard') return { isVisible: true, isNew };
 
-          // Otros roles restringidos (CAJERO, etc.)
-          const restrictedRoles = [UserRole.CAJERO, UserRole.OPERARIO, UserRole.DELIVERY, UserRole.CONTABILIDAD];
-          if (restrictedRoles.includes(currentUser.role as UserRole) && currentUser.permissions[permId] !== true) {
-              // Módulos que siempre deben ser visibles si están activos en la sucursal por petición del usuario
-              const alwaysAllowed = [
-                  'view:dashboard', 'view:pos', 'view:promotions', 'view:inventory', 
-                  'view:orders', 'view:clients', 'view:expenses', 'view:supplies', 
-                  'view:categories', 'view:agenda'
-              ];
-              if (!alwaysAllowed.includes(permId)) {
-                  return { isVisible: false, isNew: false };
-              }
-          }
-      }
-
-      // 5. Lógica por Defecto por Categoría
-      const basicModules = ['view:dashboard', 'view:pos', 'view:orders', 'view:inventory', 'view:clients', 'view:expenses', 'view:reports', 'view:settings', 'view:product_counting', 'view:modificaciones'];
-      
-      // Si es un módulo básico, es visible a menos que se apague explícitamente (manejado arriba en el paso 2)
-      if (basicModules.includes(permId)) {
-          return { isVisible: true, isNew };
-      }
-
-      // Para módulos premium/extra, solo son visibles si están activos en sucursalModules
-      // Si no hay configuración específica (objeto vacío), los mostramos por defecto para evitar confusión inicial
-      if (Object.keys(sucursalModules).length === 0) {
-          return { isVisible: true, isNew };
-      }
-      return { isVisible: !!isSucursalActive, isNew };
+    // Otros roles: verificar permisos_json del usuario
+    const userPerms = currentUser?.permissions || {};
+    const userAllows = userPerms[permId] === true;
+    return { isVisible: userAllows, isNew: userAllows ? isNew : false };
   };
 
   const isSectionVisible = (items: { id: string, label: string }[]) => {

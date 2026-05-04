@@ -2607,6 +2607,7 @@ export const dbGetPaymentMethods = async (): Promise<PaymentMethodConfig[]> => {
             id: pm.id, 
             name: pm.nombre, 
             isActive: pm.activo, 
+            isSuspended: pm.suspendido || false,
             icon: resolvedIcon, 
             fontColor: pm.color, 
             imagen_id: pm.imagen_id,
@@ -2620,7 +2621,16 @@ export const dbGetPaymentMethods = async (): Promise<PaymentMethodConfig[]> => {
 export const dbSavePaymentMethod = async (pm: Omit<PaymentMethodConfig, 'id'>) => {
     const branchId = getActiveBranchId();
     const holdingId = getActiveHoldingId();
-    const { error = null } = await supabase.from('metodos_pago').insert({ sucursal_id: branchId, empresa_holding_id: holdingId, nombre: pm.name.toUpperCase(), activo: pm.isActive, icono: pm.icon, codigo_sunat: pm.sunatCode, imagen_id: pm.imagen_id });
+    const { error = null } = await supabase.from('metodos_pago').insert({ 
+        sucursal_id: branchId, 
+        empresa_holding_id: holdingId, 
+        nombre: pm.name.toUpperCase(), 
+        activo: pm.isActive, 
+        suspendido: pm.isSuspended || false,
+        icono: pm.icon, 
+        codigo_sunat: pm.sunatCode, 
+        imagen_id: pm.imagen_id 
+    });
     if (error) throw error;
     invalidateCache('payment_methods');
 };
@@ -2629,6 +2639,7 @@ export const dbUpdatePaymentMethod = async (id: string, pm: Partial<PaymentMetho
     const payload: any = {};
     if (pm.name) payload.nombre = pm.name.toUpperCase();
     if (pm.isActive !== undefined) payload.activo = pm.isActive;
+    if (pm.isSuspended !== undefined) payload.suspendido = pm.isSuspended;
     if (pm.icon !== undefined) payload.icono = pm.icon;
     if (pm.sunatCode) payload.codigo_sunat = pm.sunatCode;
     if (pm.imagen_id !== undefined) payload.imagen_id = pm.imagen_id;

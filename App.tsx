@@ -853,6 +853,26 @@ export default function App() {
                     queryClient.invalidateQueries({ queryKey: ['expenses', branchId] });
                 }
             )
+            .on('postgres_changes', 
+                { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'sucursales', 
+                    filter: `id=eq.${branchId}` 
+                }, 
+                (payload) => {
+                    console.log('🏢 Cambio detectado en CONFIGURACIÓN DE SEDE:', payload.eventType);
+                    const newData = payload.new;
+                    if (newData && activeSucursal && newData.id === activeSucursal.id) {
+                        const updatedSucursal = normalizeSucursal(newData);
+                        setActiveSucursal(updatedSucursal);
+                        localStorage.setItem('sislav_active_sucursal', JSON.stringify(updatedSucursal));
+                        // No es necesario refrescar todo, setActiveSucursal disparará el re-render de Layout
+                        // pero refrescamos queries que puedan depender de la sucursal
+                        queryClient.invalidateQueries({ queryKey: ['ticketConfig', branchId] });
+                    }
+                }
+            )
             .subscribe((status) => {
                 console.log(`🔌 Estado de suscripción Realtime: ${status}`);
             });

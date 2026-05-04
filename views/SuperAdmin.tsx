@@ -30,7 +30,8 @@ import {
     InvoiceType,
     SucursalType,
     CashManagementType,
-    SYSTEM_MODULES
+    SYSTEM_MODULES,
+    DEFAULT_BRANCH_MODULES
 } from '../types';
 import { 
     Building, Globe, Loader2, X, Save, Palette, 
@@ -913,9 +914,8 @@ export const SuperAdmin: React.FC<{
     const [companySearch, setCompanySearch] = useState('');
 
     const DEFAULT_MODULES_CONFIG = SYSTEM_MODULES.reduce((acc, current) => {
-        const dashboardOnly = ['view:dashboard', 'view:pos', 'view:orders', 'view:cash_closing'];
         acc[current.id] = {
-            isActive: dashboardOnly.includes(current.id),
+            isActive: !!DEFAULT_BRANCH_MODULES[current.id],
             isNew: false,
             allowedRoles: ['OWNER', 'ADMIN', 'CAJERO']
         };

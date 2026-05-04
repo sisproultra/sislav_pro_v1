@@ -809,7 +809,7 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
                             className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-bold uppercase outline-none focus:ring-2 transition-all cursor-pointer grow sm:grow-0"
                             style={{ '--tw-ring-color': `${primaryColor}40` } as React.CSSProperties}
                           >
-                            {paymentMethods.map(m => (
+                            {paymentMethods.filter(m => !m.isSuspended).map(m => (
                               <option key={m.id} value={m.id}>{m.name}</option>
                             ))}
                           </select>
@@ -1099,7 +1099,7 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
                                           <p className="text-[9px] font-bold text-amber-700 leading-tight uppercase tracking-tight">El cliente debe abonar la diferencia. Seleccione método de pago si aplica el cobro en este momento.</p>
                                       </div>
                                       <div className="grid grid-cols-2 gap-2">
-                                          {paymentMethods.filter(m => m.isActive).map(m => (
+                                          {paymentMethods.filter(m => m.isActive && !m.isSuspended).map(m => (
                                               <button
                                                   key={m.id}
                                                   onClick={() => setRefundPaymentMethod(refundPaymentMethod === m.id ? '' : m.id)}
@@ -1116,7 +1116,7 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
                                  <div className="space-y-3 animate-in fade-in zoom-in-95 duration-300">
                                       <p className="text-[10px] text-red-500 uppercase font-black px-1 tracking-widest">¿Cómo devuelve el dinero?</p>
                                       <div className="grid grid-cols-2 gap-2">
-                                          {paymentMethods.filter(m => m.isActive).map(m => (
+                                          {paymentMethods.filter(m => m.isActive && !m.isSuspended).map(m => (
                                               <button
                                                   key={m.id}
                                                   onClick={() => setRefundPaymentMethod(m.id)}

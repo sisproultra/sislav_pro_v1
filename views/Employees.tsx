@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Employee, UserRole, SYSTEM_MODULES, PermissionMap } from '../types';
+import { Employee, UserRole, SYSTEM_MODULES, PermissionMap, getRoleDefaultPermissions, DEFAULT_BRANCH_MODULES } from '../types';
 import { dbUploadImage, getActiveBranchId } from '../services/dbService';
 import { User, Shield, Phone, Plus, Save, X, Camera, Lock, Upload, Trash2, Loader2, Check, AlertCircle, RotateCw, ShieldAlert, Copy, Edit2, Ban } from 'lucide-react';
 
@@ -14,26 +14,6 @@ interface EmployeesProps {
   company?: any;
   canManage?: boolean;
 }
-
-const ROLE_TEMPLATES: Record<string, PermissionMap> = {
-    [UserRole.ADMIN]: SYSTEM_MODULES.reduce((acc, p) => ({ ...acc, [p.id]: true }), {}),
-    [UserRole.CAJERO]: SYSTEM_MODULES.reduce((acc, p) => {
-        const enabled = ['view:dashboard', 'view:pos', 'view:orders', 'view:clients', 'view:history', 'view:yape'].includes(p.id);
-        return { ...acc, [p.id]: enabled };
-    }, {}),
-    [UserRole.OPERARIO]: SYSTEM_MODULES.reduce((acc, p) => {
-        const enabled = ['view:dashboard', 'view:operations', 'view:machines', 'view:clients'].includes(p.id);
-        return { ...acc, [p.id]: enabled };
-    }, {}),
-    [UserRole.DELIVERY]: SYSTEM_MODULES.reduce((acc, p) => {
-        const enabled = ['view:delivery', 'view:orders'].includes(p.id);
-        return { ...acc, [p.id]: enabled };
-    }, {}),
-    [UserRole.CONTABILIDAD]: SYSTEM_MODULES.reduce((acc, p) => {
-        const enabled = ['view:dashboard', 'view:history', 'view:reports'].includes(p.id);
-        return { ...acc, [p.id]: enabled };
-    }, {})
-};
 
 const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHardDelete, onReactivate, currentUserRole, company, canManage = true }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,9 +38,10 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-      if (isModalOpen && !name) { 
-          setCustomPermissions(ROLE_TEMPLATES[role] || {});
-      }
+    if (isModalOpen && !editingEmployee) {
+      const branchModules = company?.modulos_config || {};
+      setCustomPermissions(getRoleDefaultPermissions(role, branchModules));
+    }
   }, [role, isModalOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,7 +94,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
     setRole(emp.role as UserRole);
     setPhone(emp.phone || '');
     setPhotoUrl(emp.photoUrl || '');
-    setCustomPermissions(emp.permissions || ROLE_TEMPLATES[emp.role] || {});
+    setCustomPermissions(emp.permissions || getRoleDefaultPermissions(emp.role as UserRole, company?.modulos_config || {}));
     setIsModalOpen(true);
   };
 
@@ -141,8 +122,11 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
   };
 
   const handleRoleChange = (newRole: UserRole) => {
-      setRole(newRole);
-      setCustomPermissions(ROLE_TEMPLATES[newRole] || {});
+    setRole(newRole);
+    if (!editingEmployee) {
+      const branchModules = company?.modulos_config || {};
+      setCustomPermissions(getRoleDefaultPermissions(newRole, branchModules));
+    }
   };
 
   const startCamera = async () => {
@@ -420,9 +404,10 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
                                  
                                  // Filtrar por activación en sede (NIVEL 2)
                                  const modConfig = company?.modulos_config || {};
-                                 const isModuleActiveInBranch = typeof modConfig[p.id] === 'object' 
-                                    ? modConfig[p.id].isActive 
-                                    : (modConfig[p.id] === undefined ? true : modConfig[p.id]);
+                                 const effectiveBranch = Object.keys(modConfig).length > 0
+                                   ? modConfig
+                                   : DEFAULT_BRANCH_MODULES;
+                                 const isModuleActiveInBranch = effectiveBranch[p.id] !== false;
 
                                  return isModuleActiveInBranch;
                              });

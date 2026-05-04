@@ -1161,7 +1161,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                         />
                                     </div>
                                     <div className="flex md:grid md:grid-cols-5 gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
-                                        {paymentMethods.filter(pm => pm.isActive).map(pm => (
+                                        {paymentMethods.filter(pm => pm.isActive && !pm.isSuspended).map(pm => (
                                             <button
                                                 key={pm.id}
                                                 onClick={() => handleAddPaymentEntry(pm)}

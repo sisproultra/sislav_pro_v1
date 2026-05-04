@@ -101,7 +101,7 @@ const DriverPOS: React.FC<DriverPOSProps> = ({
                       <div>
                           <label className="block text-sm font-bold text-gray-700 mb-2">Forma de Pago</label>
                           <div className="grid grid-cols-2 gap-2">
-                              {paymentMethods.filter(pm => pm.isActive).map(pm => (
+                              {paymentMethods.filter(pm => pm.isActive && !pm.isSuspended).map(pm => (
                                   <button 
                                     key={pm.id}
                                     onClick={() => setPaymentMethodId(pm.id)}

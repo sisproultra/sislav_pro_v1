@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { PaymentMethodConfig, SUNAT_PAYMENT_CODES, GlobalPaymentImage } from '../types';
 import { dbUploadImage, dbRegisterCatalogImage } from '../services/dbService';
 import { 
-    Plus, X, Upload, Image as ImageIcon, Trash2, Landmark, Check, Ban, Edit, Eye, EyeOff, LayoutGrid, Save, Loader2, RotateCcw, AlertTriangle
+    Plus, X, Upload, Image as ImageIcon, Trash2, Landmark, Check, Ban, Edit, Eye, EyeOff, LayoutGrid, Save, Loader2, RotateCcw, AlertTriangle, Pause, Play
 } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -20,8 +20,9 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
   const [isUploading, setIsUploading] = useState(false);
   const [isCatalogSelectorOpen, setIsCatalogSelectorOpen] = useState(false);
   
-  // State para anulación
+  // State para anulación y suspensión
   const [methodToToggle, setMethodToToggle] = useState<PaymentMethodConfig | null>(null);
+  const [methodToSuspend, setMethodToSuspend] = useState<PaymentMethodConfig | null>(null);
 
   // Form State
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -108,8 +109,20 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
           await onUpdate(methodToToggle.id, { isActive: !methodToToggle.isActive });
           setMethodToToggle(null);
       } catch (e) {
-          alert("Error al cambiar estado.");
+          console.error("Error al cambiar estado:", e);
+          alert("Error al cambiar estado de activación.");
       }
+  };
+
+  const handleConfirmSuspend = async () => {
+    if (!methodToSuspend) return;
+    try {
+        await onUpdate(methodToSuspend.id, { isSuspended: !methodToSuspend.isSuspended });
+        setMethodToSuspend(null);
+    } catch (e) {
+        console.error("Error al suspender/reanudar método:", e);
+        alert("Error al cambiar suspensión. Verifique que la columna 'suspendido' exista en la tabla 'metodos_pago'.");
+    }
   };
 
   return (
@@ -130,52 +143,73 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-             {methods.filter(pm => pm.isActive).map(pm => (
-                 <div key={pm.id} className={`bg-white rounded-[2rem] border-2 transition-all flex flex-col relative group overflow-hidden ${pm.isActive ? 'border-slate-100 shadow-sm hover:shadow-xl' : 'border-red-100 bg-red-50/30 grayscale'}`}>
-                     
-                     {!pm.isActive && (
-                         <div className="absolute top-4 right-4 z-10 bg-red-600 text-white px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-widest shadow-lg border border-red-500">
-                             Anulado
-                         </div>
-                     )}
+             {methods.map(pm => {
+                 const isAnulado = !pm.isActive;
+                 const isSuspended = pm.isSuspended;
+                 
+                 return (
+                  <div key={pm.id} className={`bg-white rounded-[2rem] border-2 transition-all flex flex-col relative group overflow-hidden ${isAnulado ? 'border-red-100 bg-red-50/10 grayscale opacity-70' : isSuspended ? 'border-amber-100 bg-amber-50/10' : 'border-slate-100 shadow-sm hover:shadow-xl'}`}>
+                      
+                      {isAnulado && (
+                          <div className="absolute top-4 right-4 z-10 bg-red-600 text-white px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-widest shadow-lg border border-red-500">
+                              Anulado
+                          </div>
+                      )}
 
-                     <div className="p-6 flex items-center gap-5 flex-1">
-                         <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden shadow-inner border ${pm.isActive ? 'bg-slate-50 border-slate-100' : 'bg-red-50 border-red-100'}`}>
-                             {pm.icon ? <img src={pm.icon} alt={pm.name} className="w-full h-full object-contain p-2" /> : <Landmark size={32} className="text-slate-300" />}
-                         </div>
-                         <div className="min-w-0 flex-1">
-                             <h3 className={`font-bold text-base uppercase leading-tight truncate ${pm.isActive ? 'text-slate-800' : 'text-red-900 line-through'}`}>{pm.name}</h3>
-                             <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">SUNAT: {pm.sunatCode}</p>
-                         </div>
-                     </div>
+                      {isSuspended && !isAnulado && (
+                          <div className="absolute top-4 right-4 z-10 bg-amber-500 text-white px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-widest shadow-lg border border-amber-400">
+                              Suspendido
+                          </div>
+                      )}
 
-                     <div className="p-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between gap-2">
-                         <div className="flex gap-2">
-                             {canManage && (
-                               <button 
-                                  onClick={() => openEditModal(pm)} 
-                                  className="p-2.5 bg-white border border-slate-200 text-indigo-600 rounded-xl hover:bg-indigo-50 transition-all shadow-sm active:scale-90"
-                                  title="Editar"
-                               >
-                                  <Edit size={16} />
-                               </button>
-                             )}
-                             {canManage && (
-                               <button 
-                                  onClick={() => setMethodToToggle(pm)} 
-                                  className={`p-2.5 border rounded-xl transition-all shadow-sm active:scale-90 flex items-center gap-2 ${pm.isActive ? 'bg-white border-red-200 text-red-600 hover:bg-red-50' : 'bg-green-600 border-green-700 text-white shadow-green-100'}`}
-                                  title={pm.isActive ? "Anular" : "Reactivar"}
-                               >
-                                  {pm.isActive ? <Ban size={16} /> : <RotateCcw size={16} />}
-                                  <span className="text-[10px] font-bold uppercase tracking-tight">{pm.isActive ? 'ANULAR' : 'RECOBRAR'}</span>
-                               </button>
-                             )}
-                         </div>
-                         
-                         <div className={`w-2 h-2 rounded-full ${pm.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-red-400'}`} />
-                     </div>
-                 </div>
-             ))}
+                      <div className="p-6 flex items-center gap-5 flex-1">
+                          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden shadow-inner border ${isAnulado ? 'bg-red-50 border-red-100' : isSuspended ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100'}`}>
+                              {pm.icon ? <img src={pm.icon} alt={pm.name} className="w-full h-full object-contain p-2" /> : <Landmark size={32} className="text-slate-300" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                              <h3 className={`font-bold text-base uppercase leading-tight truncate ${isAnulado ? 'text-red-900 line-through' : isSuspended ? 'text-amber-900' : 'text-slate-800'}`}>{pm.name}</h3>
+                              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">SUNAT: {pm.sunatCode}</p>
+                          </div>
+                      </div>
+
+                      <div className="p-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between gap-2">
+                          <div className="flex gap-2">
+                              {canManage && (
+                                <button 
+                                   onClick={() => openEditModal(pm)} 
+                                   className="p-2 bg-white border border-slate-200 text-indigo-600 rounded-xl hover:bg-indigo-50 transition-all shadow-sm active:scale-90"
+                                   title="Editar"
+                                >
+                                   <Edit size={14} />
+                                </button>
+                              )}
+                              {canManage && !isAnulado && (
+                                <button 
+                                   onClick={() => setMethodToSuspend(pm)} 
+                                   className={`p-2 border rounded-xl transition-all shadow-sm active:scale-90 flex items-center gap-1.5 ${isSuspended ? 'bg-amber-500 border-amber-600 text-white' : 'bg-white border-amber-200 text-amber-600 hover:bg-amber-50'}`}
+                                   title={isSuspended ? "Reanudar" : "Suspender"}
+                                >
+                                   {isSuspended ? <Play size={14} /> : <Pause size={14} />}
+                                   <span className="text-[9px] font-bold uppercase tracking-tight">{isSuspended ? 'REANUDAR' : 'SUSPENDER'}</span>
+                                </button>
+                              )}
+                              {canManage && (
+                                <button 
+                                   onClick={() => setMethodToToggle(pm)} 
+                                   className={`p-2 border rounded-xl transition-all shadow-sm active:scale-90 flex items-center gap-1.5 ${!isAnulado ? 'bg-white border-red-200 text-red-600 hover:bg-red-50' : 'bg-green-600 border-green-700 text-white shadow-green-100'}`}
+                                   title={!isAnulado ? "Anular" : "Recuperar"}
+                                >
+                                   {!isAnulado ? <Ban size={14} /> : <RotateCcw size={14} />}
+                                   <span className="text-[9px] font-bold uppercase tracking-tight">{!isAnulado ? 'ANULAR' : 'RECOBRAR'}</span>
+                                </button>
+                              )}
+                          </div>
+                          
+                          <div className={`w-2 h-2 rounded-full ${isAnulado ? 'bg-red-400' : isSuspended ? 'bg-amber-400' : 'bg-emerald-500 animate-pulse'}`} />
+                      </div>
+                  </div>
+                 );
+             })}
         </div>
       </div>
 
@@ -248,6 +282,27 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
               </div>
           </div>
       )}
+
+      <ConfirmationModal 
+          isOpen={!!methodToSuspend}
+          onClose={() => setMethodToSuspend(null)}
+          onConfirm={handleConfirmSuspend}
+          title={methodToSuspend?.isSuspended ? "Reanudar Método de Pago" : "Suspender Método de Pago"}
+          isDangerous={false}
+          confirmText={methodToSuspend?.isSuspended ? "SÍ, REANUDAR" : "SÍ, SUSPENDER"}
+          message={
+              <div className="space-y-3">
+                  <p className="font-bold text-slate-800">
+                      ¿Desea {methodToSuspend?.isSuspended ? 'REANUDAR' : 'SUSPENDER'} el método <strong>{methodToSuspend?.name}</strong>?
+                  </p>
+                  <p className="text-xs text-slate-500 uppercase font-medium leading-relaxed">
+                      {methodToSuspend?.isSuspended 
+                        ? 'Al reanudarlo, volverá a estar disponible de inmediato en el terminal.' 
+                        : 'Al suspenderlo, no aparecerá en el terminal momentáneamente. Podrá reanudarlo después.'}
+                  </p>
+              </div>
+          }
+      />
 
       <ConfirmationModal 
           isOpen={!!methodToToggle}
