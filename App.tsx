@@ -1248,37 +1248,62 @@ export default function App() {
         }
     };
 
-    const handleConvertInvoice = async (invoice: Invoice, targetType: InvoiceType, finalClient: Client) => {
+    const handleConvertInvoice = async (
+        invoice: Invoice, 
+        targetType: InvoiceType, 
+        finalClient: Client
+    ) => {
         if (!activeSucursal) return;
         
         try {
-            const serie = targetType === InvoiceType.FACTURA ? activeSucursal.serieFactura : activeSucursal.serieBoleta;
+            const serie = targetType === InvoiceType.FACTURA 
+                ? activeSucursal.serieFactura 
+                : activeSucursal.serieBoleta;
             
-            // 1. Convertir en DB
-            await dbConvertInvoice(invoice.id, targetType, serie, finalClient);
-            
-            // 2. Intentar envío a SUNAT
+            // 1. Convertir en DB y obtener el correlativo nuevo asignado
+            const updatedVenta = await dbConvertInvoice(
+                invoice.id, 
+                targetType, 
+                serie, 
+                finalClient
+            );
+
+            // 2. Construir la invoice completa con el correlativo NUEVO de la BD
+            //    (NO usar el correlativo viejo de la nota de venta)
             const now = new Date().toISOString();
             const fullInvoice: Invoice = { 
                 ...invoice, 
                 type: targetType, 
-                serie, 
+                serie: updatedVenta.serie || serie,
+                correlativo: updatedVenta.correlativo, // ← correlativo NUEVO asignado por BD
                 client: finalClient, 
-                date: invoice.date, // Keep original sale date
-                fecha_emision: now  // Set new emission date
+                date: invoice.date,
+                fecha_emision: updatedVenta.fecha_emision || now
             };
+
+            // 3. Enviar a SUNAT con los datos correctos
             const sunatRes = await sendBillToSunat(fullInvoice, activeSucursal);
             
-            // 3. Actualizar respuesta de SUNAT en DB
+            // 4. Actualizar respuesta de SUNAT en DB
             await dbUpdateSunatResponse(invoice.id, sunatRes);
 
-            // 4. Alerta de rechazo
-            checkAndSendRejectedAlert(fullInvoice, sunatRes);
+            // 5. Alerta si fue rechazado
+            if (!sunatRes.success && !sunatRes.isPending) {
+                checkAndSendRejectedAlert(fullInvoice, sunatRes);
+            }
             
-            // 5. Refrescar datos
-            await refreshData();
+            // 6. Refrescar datos
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
             
-            alert(`Documento convertido exitosamente a ${targetType === InvoiceType.FACTURA ? 'FACTURA' : 'BOLETA'}`);
+            // 7. Mostrar resultado al usuario
+            if (sunatRes.success) {
+                alert(`✅ ${targetType === InvoiceType.FACTURA ? 'FACTURA' : 'BOLETA'} ${serie}-${String(updatedVenta.correlativo).padStart(8,'0')} emitida y enviada a SUNAT correctamente.`);
+            } else if (sunatRes.isPending) {
+                alert(`⏳ Documento convertido. No se pudo conectar con SUNAT ahora. Quedó en estado PENDIENTE para re-intentar.`);
+            } else {
+                alert(`⚠️ Documento convertido pero SUNAT lo rechazó: ${sunatRes.description}`);
+            }
+
         } catch (error: any) {
             console.error("Error al convertir factura:", error);
             alert("Error al convertir el documento: " + error.message);
