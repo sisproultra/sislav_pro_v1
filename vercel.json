@@ -21,12 +21,12 @@
       "destination": "/api/manifest"
     },
     {
-      "source": "/api-proxy/decolecta/:path*",
-      "destination": "https://api.decolecta.com/v1/:path*"
+      "source": "/api-proxy/sunat-vps/:path*",
+      "destination": "https://:path*"
     },
     {
-      "source": "/api-proxy/sunat",
-      "destination": "https://apisu.sysventa.com/API_SUNAT/post.php"
+      "source": "/api-proxy/decolecta/:path*",
+      "destination": "https://api.decolecta.com/v1/:path*"
     },
     {
       "source": "/owner-login",

@@ -13,18 +13,15 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
   // LOGICA DE PROXY: 
   // Si la URL apunta a 'apisu.sysventa.com', usamos el proxy interno '/api-proxy/sunat'
   // para evitar problemas de CORS.
-  let finalUrl = '/api-proxy/sunat';
-  let isProxy = true;
-  
-  if (dbUrl && dbUrl.startsWith('http')) {
-      if (dbUrl.includes('apisu.sysventa.com')) {
-          finalUrl = '/api-proxy/sunat';
-          isProxy = true;
-      } else {
-          finalUrl = dbUrl;
-          isProxy = false;
-      }
-  }
+    let finalUrl = '/api-proxy/sunat';
+    let isProxy = true;
+
+    if (dbUrl && dbUrl.startsWith('http')) {
+        // Proxy universal: funciona con cualquier dominio, sin importar el proveedor
+        const urlWithoutProtocol = dbUrl.replace('https://', '').replace('http://', '');
+        finalUrl = `/api-proxy/sunat-vps/${urlWithoutProtocol}`;
+        isProxy = true;
+    }
 
   console.log(`🚀 Preparando envío a SUNAT. URL Final: ${finalUrl} (Proxy: ${isProxy})`);
   
