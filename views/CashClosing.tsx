@@ -38,11 +38,21 @@ const CashClosing: React.FC<CashClosingProps> = ({
   }, []);
 
   const [openingBalance, setOpeningBalance] = useState(() => 
-    activeCashSession ? activeCashSession.openingBalance.toFixed(2) : '0.00'
+    activeCashSession ? (activeCashSession.saldo_apertura || activeCashSession.openingBalance || 0).toString() : '0.00'
   );
+
+  useEffect(() => {
+    if (activeCashSession) {
+      const balance = activeCashSession.saldo_apertura || activeCashSession.openingBalance || 0;
+      setOpeningBalance(String(balance));
+    }
+  }, [activeCashSession]);
   const [actualCash, setActualCash] = useState('');
   const [liquidation, setLiquidation] = useState('');
   const [isClosing, setIsClosing] = useState(false);
+  const [isLoadingSessionData, setIsLoadingSessionData] = useState(false);
+  const [sessionPayments, setSessionPayments] = useState<any[]>([]);
+  const [sessionExpenses, setSessionExpenses] = useState<Expense[]>([]);
   const [activeView, setActiveView] = useState<'CURRENT' | 'HISTORY' | 'PROJECTIONS'>('CURRENT');
   const [closingHistory, setClosingHistory] = useState<CashClosingType[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -54,6 +64,29 @@ const CashClosing: React.FC<CashClosingProps> = ({
 
   const currency = company.currencySymbol || 'S/';
   const currentUserName = (currentUser?.name || localStorage.getItem('sislav_current_user_name') || 'SISTEMA').trim().toUpperCase();
+
+  useEffect(() => {
+    if (activeCashSession?.id && activeView === 'CURRENT') {
+      loadSessionData();
+    }
+  }, [activeCashSession?.id, activeView]);
+
+  const loadSessionData = async () => {
+    if (!activeCashSession?.id) return;
+    setIsLoadingSessionData(true);
+    try {
+      const [payments, exps] = await Promise.all([
+        import('../services/dbService').then(m => m.dbGetPaymentsForSession(activeCashSession.id, company.id)),
+        import('../services/dbService').then(m => m.dbGetExpensesForSession(activeCashSession.id, company.id))
+      ]);
+      setSessionPayments(payments);
+      setSessionExpenses(exps);
+    } catch (err) {
+      console.error("Error loading session data:", err);
+    } finally {
+      setIsLoadingSessionData(false);
+    }
+  };
 
   useEffect(() => {
       loadHistory();
@@ -102,40 +135,78 @@ const CashClosing: React.FC<CashClosingProps> = ({
         userName: string; 
         totalCash: number; 
         expenses: number; 
+        opening: number;
         otherMethods: Record<string, number>;
     }> = {};
 
-    invoices.forEach(inv => {
-        (inv.payments || []).forEach(p => {
-            const pDate = new Date(p.date || inv.date);
-            if (pDate >= lastClosingDate) {
-                const userName = (p as any).registrado_por?.trim().toUpperCase() || 'SISTEMA';
-                if (!projections[userName]) {
-                    projections[userName] = { userName, totalCash: 0, expenses: 0, otherMethods: {} };
-                }
-                const method = (p.metodo_pago_name || 'EFECTIVO').toUpperCase();
-                if (method.includes('EFECTIVO')) {
-                    projections[userName].totalCash += p.monto || 0;
-                } else {
-                    projections[userName].otherMethods[method] = (projections[userName].otherMethods[method] || 0) + (p.monto || 0);
-                }
+    // SI TENEMOS DATOS DE SESIÓN CARGADOS DIRECTAMENTE, USAMOS ESOS (Evita límite de 100 ventas)
+    if (activeCashSession?.id && sessionPayments.length > 0) {
+        // Atribuir monto de apertura al usuario que inició la sesión
+        const sessionOwner = (activeCashSession.registrado_por || activeCashSession.cajero || 'SISTEMA').trim().toUpperCase();
+        if (!projections[sessionOwner]) {
+            projections[sessionOwner] = { userName: sessionOwner, totalCash: 0, expenses: 0, opening: 0, otherMethods: {} };
+        }
+        projections[sessionOwner].opening = Number(activeCashSession.saldo_apertura || activeCashSession.openingBalance || 0);
+
+        sessionPayments.forEach(p => {
+            const userName = (p.registrado_por || 'SISTEMA').trim().toUpperCase();
+            if (!projections[userName]) {
+                projections[userName] = { userName, totalCash: 0, expenses: 0, opening: 0, otherMethods: {} };
+            }
+            const method = (p.metodo_pago_name || 'EFECTIVO').toUpperCase();
+            const amount = Number(p.monto) || 0;
+
+            if (method.includes('EFECTIVO')) {
+                projections[userName].totalCash += amount;
+            } else {
+                projections[userName].otherMethods[method] = (projections[userName].otherMethods[method] || 0) + amount;
             }
         });
-    });
 
-    expenses.filter(exp => new Date(exp.date) >= lastClosingDate).forEach(exp => {
-        const userName = (exp.usuarioRegistro || '').trim().toUpperCase() || 'SISTEMA';
-        const method = (exp.paymentMethod || 'EFECTIVO').toUpperCase();
-        if (!projections[userName]) {
-            projections[userName] = { userName, totalCash: 0, expenses: 0, otherMethods: {} };
-        }
-        if (method.includes('EFECTIVO')) {
-            projections[userName].expenses += exp.amount || 0;
-        }
-    });
+        sessionExpenses.forEach(exp => {
+            const userName = (exp.usuarioRegistro || '').trim().toUpperCase() || 'SISTEMA';
+            const method = (exp.paymentMethod || 'EFECTIVO').toUpperCase();
+            if (!projections[userName]) {
+                projections[userName] = { userName, totalCash: 0, expenses: 0, opening: 0, otherMethods: {} };
+            }
+            if (method.includes('EFECTIVO')) {
+                projections[userName].expenses += Number(exp.amount) || 0;
+            }
+        });
+    } else {
+        // FALLBACK USANDO PROP INVOICES
+        invoices.forEach(inv => {
+            (inv.payments || []).forEach(p => {
+                const pDate = new Date(p.date || inv.date);
+                if (pDate >= lastClosingDate) {
+                    const userName = (p as any).registrado_por?.trim().toUpperCase() || 'SISTEMA';
+                    if (!projections[userName]) {
+                        projections[userName] = { userName, totalCash: 0, expenses: 0, opening: 0, otherMethods: {} };
+                    }
+                    const method = (p.metodo_pago_name || 'EFECTIVO').toUpperCase();
+                    if (method.includes('EFECTIVO')) {
+                        projections[userName].totalCash += p.monto || 0;
+                    } else {
+                        projections[userName].otherMethods[method] = (projections[userName].otherMethods[method] || 0) + (p.monto || 0);
+                    }
+                }
+            });
+        });
 
-    return Object.values(projections).sort((a, b) => b.totalCash - a.totalCash);
-  }, [invoices, expenses, lastClosingDate, isHighRole]);
+        expenses.filter(exp => new Date(exp.date) >= lastClosingDate).forEach(exp => {
+            const userName = (exp.usuarioRegistro || '').trim().toUpperCase() || 'SISTEMA';
+            const method = (exp.paymentMethod || 'EFECTIVO').toUpperCase();
+            if (!projections[userName]) {
+                projections[userName] = { userName, totalCash: 0, expenses: 0, opening: 0, otherMethods: {} };
+            }
+            if (method.includes('EFECTIVO')) {
+                projections[userName].expenses += exp.amount || 0;
+            }
+        });
+    }
+
+    return Object.values(projections).sort((a, b) => (b.totalCash + b.opening) - (a.totalCash + a.opening));
+  }, [invoices, expenses, lastClosingDate, isHighRole, sessionPayments, sessionExpenses, activeCashSession]);
 
   useEffect(() => {
     if (!isHighRole && activeView !== 'CURRENT') {
@@ -181,6 +252,52 @@ const CashClosing: React.FC<CashClosingProps> = ({
       const categoryMap: Record<string, { name: string; quantity: number; amount: number }> = {};
       const activeUserId = activeCashSession?.usuario_id;
 
+      // SI TENEMOS DATOS DE SESIÓN CARGADOS DIRECTAMENTE DE DB, USAMOS ESOS (PREFERIDO PARA TIEMPO REAL Y CIERRE)
+      if (activeCashSession?.id) {
+          sessionPayments.forEach(p => {
+              const method = (p.metodo_pago_name || 'EFECTIVO').toUpperCase();
+              const amount = Number(p.monto) || 0;
+              const v = p.ventas || {};
+              
+              const item = {
+                  ticket: v.serie ? `${v.serie}-${String(v.correlativo).padStart(8, '0')}` : 'TICKET',
+                  client: v.clientes ? `${v.clientes.nombres} ${v.clientes.apellidos || ''}` : 'CLIENTE VARIOS',
+                  date: p.fecha_pago || p.date,
+                  amount: amount
+              };
+
+              if (method.includes('EFECTIVO')) {
+                  totalCashSales += amount;
+                  if (!methodDetails['EFECTIVO']) methodDetails['EFECTIVO'] = [];
+                  methodDetails['EFECTIVO'].push(item);
+              } else {
+                  methods[method] = (methods[method] || 0) + amount;
+                  if (!methodDetails[method]) methodDetails[method] = [];
+                  methodDetails[method].push(item);
+              }
+          });
+
+          const totalCashExpensesFromSession = sessionExpenses
+              .filter(exp => (exp.paymentMethod || 'EFECTIVO').toUpperCase().includes('EFECTIVO'))
+              .reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+
+          const totalExpensesFromSession = sessionExpenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+          const open = parseFloat(openingBalance) || 0;
+          const expectedCash = open + totalCashSales - totalCashExpensesFromSession;
+
+          return { 
+              methods, 
+              methodDetails,
+              totalCashSales, 
+              totalExpenses: totalExpensesFromSession, 
+              totalCashExpenses: totalCashExpensesFromSession,
+              opening: open, 
+              expectedCash,
+              topCategories: [] // Categorías requerirían un join más pesado, se pueden cargar bajo demanda si es crítico
+          };
+      }
+
+      // FALLBACK POR SI NO HAY SESIÓN ACTIVA O NO HA CARGADO (Mantiene compatibilidad con reporte histórico/proyecciones)
       // Iteramos directamente sobre las facturas pero filtramos PAGOS
       invoices.forEach(inv => {
           const userPaymentsAtTurn = (inv.payments || []).filter(p => {
@@ -470,7 +587,31 @@ const CashClosing: React.FC<CashClosingProps> = ({
                         </h2>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col gap-2">
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2 bg-slate-50/50 -mx-6 px-6 pb-4">
+                        <div className="flex items-center justify-between text-slate-500">
+                             <div className="flex items-center gap-2">
+                                <Banknote size={14} className="text-slate-400" />
+                                <span className="text-[10px] font-bold uppercase tracking-tight">Saldo Inicial en Caja</span>
+                             </div>
+                             <span className="text-sm font-black text-slate-700">{currency} {summary.opening.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-500">
+                             <div className="flex items-center gap-2">
+                                <TrendingUp size={14} className="text-emerald-500" />
+                                <span className="text-[10px] font-bold uppercase tracking-tight">Ventas Efectivo (+)</span>
+                             </div>
+                             <span className="text-sm font-black text-emerald-600">+{currency} {summary.totalCashSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-500">
+                             <div className="flex items-center gap-2">
+                                <TrendingDown size={14} className="text-rose-500" />
+                                <span className="text-[10px] font-bold uppercase tracking-tight">Egresos Efectivo (-)</span>
+                             </div>
+                             <span className="text-sm font-black text-rose-600">-{currency} {summary.totalCashExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+
+                    <div className="mt-2 pt-3 border-t border-slate-100 flex flex-col gap-2">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Clock size={12} className="text-indigo-500" />
@@ -761,7 +902,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {userProjections.map(proj => {
-                        const expected = proj.totalCash - proj.expenses;
+                        const expected = proj.opening + proj.totalCash - proj.expenses;
                         return (
                             <div key={proj.userName} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4 hover:border-blue-200 transition-all">
                                 <div className="flex items-center gap-3 border-b border-gray-50 pb-3">
@@ -780,14 +921,20 @@ const CashClosing: React.FC<CashClosingProps> = ({
                                         <span className="font-black text-emerald-600 text-lg">{currency} {expected.toFixed(2)}</span>
                                     </div>
                                     
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="bg-gray-50 p-2 rounded-xl border border-gray-100">
-                                            <p className="text-[8px] font-bold text-gray-400 uppercase mb-0.5">Ventas Efec.</p>
-                                            <p className="font-bold text-xs text-slate-700">{currency} {proj.totalCash.toFixed(2)}</p>
+                                    <div className="grid grid-cols-1 gap-1 flex flex-col pt-1">
+                                        {proj.opening > 0 && (
+                                            <div className="flex justify-between text-[10px] px-1">
+                                                <span className="text-gray-400 font-bold uppercase">Saldo Inicial (+)</span>
+                                                <span className="font-black text-slate-600">{currency} {proj.opening.toFixed(2)}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between text-[10px] px-1">
+                                            <span className="text-gray-400 font-bold uppercase">Ventas Efectivo (+)</span>
+                                            <span className="font-black text-slate-600">{currency} {proj.totalCash.toFixed(2)}</span>
                                         </div>
-                                        <div className="bg-gray-50 p-2 rounded-xl border border-gray-100">
-                                            <p className="text-[8px] font-bold text-gray-400 uppercase mb-0.5">Gasto Efec.</p>
-                                            <p className="font-bold text-xs text-rose-600">-{currency} {proj.expenses.toFixed(2)}</p>
+                                        <div className="flex justify-between text-[10px] px-1">
+                                            <span className="text-gray-400 font-bold uppercase">Egresos Efectivo (-)</span>
+                                            <span className="font-black text-rose-500">-{currency} {proj.expenses.toFixed(2)}</span>
                                         </div>
                                     </div>
 

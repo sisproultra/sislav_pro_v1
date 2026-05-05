@@ -410,6 +410,7 @@ export enum PaymentMethod {
 export interface SunatResponse {
     success: boolean;
     description: string;
+    isPending?: boolean;
     hash?: string;
     pdfUrl?: string;
     xmlUrl?: string;

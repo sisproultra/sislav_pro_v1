@@ -1777,11 +1777,11 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
 
             if (rangePattern.test(intelligentSearch)) {
                 const [, start, end] = intelligentSearch.match(rangePattern)!;
-                query = query.gte('fecha_recepcion', `${start}T00:00:00`)
-                             .lte('fecha_recepcion', `${end}T23:59:59`);
+                query = query.gte('fecha_recepcion', `${start}T00:00:00-05:00`)
+                             .lte('fecha_recepcion', `${end}T23:59:59-05:00`);
             } else if (datePattern.test(intelligentSearch)) {
-                query = query.gte('fecha_recepcion', `${intelligentSearch}T00:00:00`)
-                             .lte('fecha_recepcion', `${intelligentSearch}T23:59:59`);
+                query = query.gte('fecha_recepcion', `${intelligentSearch}T00:00:00-05:00`)
+                             .lte('fecha_recepcion', `${intelligentSearch}T23:59:59-05:00`);
             } else {
                 const ticketPattern = /^([A-Z]+)[-]?([0-9]+)$/i;
                 const match = intelligentSearch.match(ticketPattern);
@@ -3289,6 +3289,51 @@ export const dbRestoreOrderToReady = async (ventaId: string) => {
         entregado_at: null 
     }).eq('id', ventaId);
     if (error) throw error;
+};
+
+export const dbGetPaymentsForSession = async (sessionId: string, branchId: string): Promise<any[]> => {
+    try {
+        const { data, error } = await supabase
+            .from('pagos_venta')
+            .select(`
+                *,
+                metodos_pago (nombre),
+                ventas!inner (
+                    id,
+                    sucursal_id,
+                    serie,
+                    correlativo,
+                    clientes (nombres, apellidos)
+                )
+            `)
+            .eq('cash_session_id', sessionId)
+            .eq('ventas.sucursal_id', branchId);
+
+        if (error) throw error;
+        return (data || []).map(p => ({
+            ...p,
+            metodo_pago_name: (p.metodos_pago as any)?.nombre || 'EFECTIVO'
+        }));
+    } catch (e) {
+        console.error("Error fetching session payments:", e);
+        return [];
+    }
+};
+
+export const dbGetExpensesForSession = async (sessionId: string, branchId: string): Promise<Expense[]> => {
+    try {
+        const { data, error } = await supabase
+            .from('gastos')
+            .select('*')
+            .eq('cash_session_id', sessionId)
+            .eq('sucursal_id', branchId);
+
+        if (error) throw error;
+        return data || [];
+    } catch (e) {
+        console.error("Error fetching session expenses:", e);
+        return [];
+    }
 };
 
 export const dbGetActiveCashClosingDate = async (): Promise<Date> => {
