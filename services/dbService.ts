@@ -2502,7 +2502,8 @@ export const dbGetExpenses = async (page: number = 1, pageSize: number = 50): Pr
             paymentMethod: e.metodo_pago,
             evidencePhoto: e.url_evidencia,
             usuarioRegistro: e.registrado_por,
-            usuarioId: e.usuario_id
+            usuarioId: e.usuario_id,
+            cash_session_id: e.cash_session_id
         }));
 
         return { expenses: mappedExpenses, total: count || 0 };
@@ -2521,7 +2522,7 @@ export const dbSaveExpense = async (exp: Omit<Expense, 'id'>) => {
         userId = sessionData.session?.user?.id || null;
     }
 
-    const { error } = await supabase.from('egresos').insert({
+    const { data, error } = await supabase.from('egresos').insert({
         sucursal_id: exp.sucursal_id,
         empresa_holding_id: holdingId,
         descripcion: exp.description.toUpperCase(),
@@ -2533,8 +2534,23 @@ export const dbSaveExpense = async (exp: Omit<Expense, 'id'>) => {
         usuario_id: userId,
         fecha_gasto: exp.date,
         cash_session_id: exp.cash_session_id || null
-    });
+    }).select().single();
+
     if (error) throw error;
+
+    return {
+        id: data.id,
+        sucursal_id: data.sucursal_id,
+        description: data.descripcion,
+        amount: Number(data.monto),
+        date: data.fecha_gasto,
+        category: data.categoria,
+        paymentMethod: data.metodo_pago,
+        evidencePhoto: data.url_evidencia,
+        usuarioRegistro: data.registrado_por,
+        usuarioId: data.usuario_id,
+        cash_session_id: data.cash_session_id
+    } as Expense;
 };
 
 // --- INSUMOS ---
@@ -3323,13 +3339,25 @@ export const dbGetPaymentsForSession = async (sessionId: string, branchId: strin
 export const dbGetExpensesForSession = async (sessionId: string, branchId: string): Promise<Expense[]> => {
     try {
         const { data, error } = await supabase
-            .from('gastos')
+            .from('egresos')
             .select('*')
             .eq('cash_session_id', sessionId)
             .eq('sucursal_id', branchId);
 
         if (error) throw error;
-        return data || [];
+        return (data || []).map(e => ({
+            id: e.id,
+            sucursal_id: e.sucursal_id,
+            description: e.descripcion,
+            amount: Number(e.monto),
+            date: e.fecha_gasto,
+            category: e.categoria,
+            paymentMethod: e.metodo_pago,
+            evidencePhoto: e.url_evidencia,
+            usuarioRegistro: e.registrado_por,
+            usuarioId: e.usuario_id,
+            cash_session_id: e.cash_session_id
+        })) as Expense[];
     } catch (e) {
         console.error("Error fetching session expenses:", e);
         return [];

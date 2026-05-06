@@ -477,7 +477,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                   <td width="15%">${item.quantity.toFixed(2)}</td>
                   <td style="text-transform: uppercase">
                     <div class="bold" style="font-size: 8.5pt;">${item.name}</div>
-                    ${(item.details || item.color || item.defectos) ? `<div style="font-size: 7.5pt; font-style: italic; color: #444; margin-top: 1px;">${formatItemDetails(item, true, 'none')}</div>` : ''}
+                    ${(item.details || item.color || item.defectos) ? `<div style="font-size: 7.5pt; font-style: italic; color: #444; margin-top: 2px; font-weight: 700;">${formatItemDetails(item, true, 'none')}</div>` : ''}
                   </td>
                   <td align="right" width="25%">${(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
@@ -580,7 +580,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                     return [item];
                 }).map(item => `
                   <tr style="border-bottom: 1px solid #000">
-                    <td width="15%" class="black" style="font-size: 22pt; padding: 10px 0; font-weight: normal !important;">${item.quantity.toFixed(0)}</td>
+                    <td width="15%" class="black" style="font-size: 22pt; padding: 10px 0; font-weight: normal !important;">${item.quantity.toFixed(2)}</td>
                     <td style="padding: 10px 0;">
                       <div class="black" style="font-size: 12pt; font-weight: normal !important; display: flex; justify-content: space-between;">
                         <span>${item.name.toUpperCase()}</span>

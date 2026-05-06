@@ -123,29 +123,44 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
     },
     "items": invoice.items.map((item, idx) => {
         const itemIgvType = item.igvType || '10';
-        let valorUnitario = Number(item.price) || 0;
+        const cantidad = Number(item.quantity) || 0;
+        
+        // IMPORTANTE: El total de la línea debe coincidir con el redondeo usado en calculations.ts
+        // para que la suma de ítems sea exactamente igual al total del comprobante.
+        const totalLine = Math.round(Number(item.price) * cantidad * 10) / 10;
+        
+        // Calculamos valores con alta precisión para SUNAT para que la multiplicación sea consistente
+        const precioUnitarioVirtual = cantidad > 0 ? totalLine / cantidad : Number(item.price);
+        
+        let valorUnitario;
+        let subtotal;
+        let igv;
+
         if (itemIgvType === '10') {
-            valorUnitario = Number((valorUnitario / igvFactor).toFixed(6)); // Más precisión
+            // Gravado: Desglosamos el IGV del total de la línea redondeado
+            subtotal = Number((totalLine / igvFactor).toFixed(2));
+            igv = Number((totalLine - subtotal).toFixed(2));
+            valorUnitario = cantidad > 0 ? subtotal / cantidad : (precioUnitarioVirtual / igvFactor);
+        } else {
+            // Exonerado / Inafecto
+            subtotal = totalLine;
+            igv = 0;
+            valorUnitario = precioUnitarioVirtual;
         }
         
-        const cantidad = Number(item.quantity) || 0;
-        const total = Number((Number(item.price) * cantidad).toFixed(2));
-        const subtotal = Number((valorUnitario * cantidad).toFixed(2));
-        const igv = Number((total - subtotal).toFixed(2));
-
         return {
             "producto": cleanText(item.name || "PRODUCTO"),
             "cantidad": cantidad.toString(),
-            "valor_unitario": valorUnitario.toFixed(2),
-            "precio_unitario": safeNumber(item.price),
-            "precio_base": valorUnitario.toFixed(2), // Compatibilidad
+            "valor_unitario": valorUnitario.toFixed(6), // Usamos 6 decimales para evitar errores de redondeo en SUNAT
+            "precio_unitario": precioUnitarioVirtual.toFixed(6),
+            "precio_base": valorUnitario.toFixed(6), 
             "codigo_sunat": "",
             "codigo_producto": item.id ? item.id.substring(0, 15) : `p-${idx}`,
             "codigo_unidad": item.unitCode || 'NIU', 
             "tipo_igv_codigo": itemIgvType,
             "igv": igv.toFixed(2),
             "subtotal": subtotal.toFixed(2),
-            "total": total.toFixed(2)
+            "total": totalLine.toFixed(2)
         };
     })
   };

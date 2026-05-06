@@ -253,6 +253,7 @@ export default function App() {
         queryClient.invalidateQueries({ queryKey: ['machines'] });
         queryClient.invalidateQueries({ queryKey: ['activeItems'] });
         queryClient.invalidateQueries({ queryKey: ['activeCashSession'] });
+        queryClient.invalidateQueries({ queryKey: ['expenses'] });
         
         // Solo refrescar sucursal si es refresh manual explícito del usuario
         if (manual && activeSucursal?.id) {
@@ -1810,10 +1811,15 @@ export default function App() {
             />;
             case 'view:expenses': return <Expenses expenses={expenses} company={activeSucursal} paymentMethods={paymentMethods} onSave={async (exp) => { 
                 checkCajaOpen(async () => {
-                    await dbSaveExpense({ ...exp, cash_session_id: activeCashSession?.id }); 
+                    const newExpense = await dbSaveExpense({ ...exp, cash_session_id: activeCashSession?.id }); 
+                    setExpenses(prev => [newExpense, ...prev]);
                     refreshData(false); 
                 });
-            }} onDelete={async (id) => { await dbDeleteExpense(id); refreshData(false); }} canManage={canManageApp} />;
+            }} onDelete={async (id) => { 
+                await dbDeleteExpense(id); 
+                setExpenses(prev => prev.filter(e => e.id !== id));
+                refreshData(false); 
+            }} canManage={canManageApp} />;
             case 'view:machines': return <Machines machines={machines} invoices={invoices} activeItems={activeItems} globalMachineImages={globalConfig?.defaultMachineImages} onAddMachine={async (m) => { await dbSaveMachine(m); refreshData(true); }} onUpdateMachineStatus={async (id, u) => { await dbUpdateMachine(id, u); refreshData(true); }} onSyncMachines={async () => { await dbSyncMachines(); refreshData(true); }} canManage={canManageApp} />;
             case 'view:callcenter': return <CallCenter apiToken={globalConfig?.apiToken || ''} onRefreshData={() => refreshData(true)} clients={clients} company={activeSucursal} invoices={invoices} />;
             case 'view:delivery': return <Delivery onConvertToOrder={(p) => { if (window.innerWidth >= 768) { navigateToPos(p); } else { setActivePickupForFastOrder(p); setIsFastOrderOpen(true); } }} company={activeSucursal} />;

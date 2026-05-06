@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Machine, MachineImage, Invoice } from '../types';
-import { WashingMachine, Plus, Timer, Wrench, Ticket, History, Scale, Wind, X, CheckCircle2, BarChart3, Activity, User, Layers, Upload, Trash2, Image as ImageIcon, ArrowRight, Shirt, Unlock, Edit2, AlertCircle, Loader2, RotateCcw, Settings2, ShieldAlert, Trash, Calendar, ImagePlus, Check } from 'lucide-react';
+import { WashingMachine, Plus, Timer, Wrench, Ticket, History, Scale, Wind, X, CheckCircle2, BarChart3, Activity, User, Layers, Upload, Trash2, Image as ImageIcon, ArrowRight, Shirt, Unlock, Edit2, AlertCircle, Loader2, RotateCcw, Settings2, ShieldAlert, Trash, Calendar, ImagePlus, Check, Camera } from 'lucide-react';
 import { dbGetMachineImages, dbAddMachineImage, dbDeleteMachineImage, dbUpdateMachineImage, dbGetMachines, dbUploadImage, getActiveBranchId } from '../services/dbService';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -135,7 +135,7 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
           setIsUploading(true);
           try {
               const fileName = `machine_${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-              const publicUrl = await dbUploadImage('maquinas', file, fileName);
+              const publicUrl = await dbUploadImage('laundry-assets', file, fileName);
               setNewCatalogImageUrl(publicUrl);
           } catch (err) {
               alert("Error al subir imagen al storage.");
@@ -148,6 +148,22 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
   const handleSelectFromCatalog = (img: MachineImage) => {
       setSelectedImage(img.url);
       setIsCatalogModalOpen(false);
+  };
+
+  const handleDirectImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setIsUploading(true);
+          try {
+              const fileName = `machine_custom_${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+              const publicUrl = await dbUploadImage('laundry-assets', file, fileName);
+              setSelectedImage(publicUrl);
+          } catch (err) {
+              alert("Error al subir imagen al storage.");
+          } finally {
+              setIsUploading(false);
+          }
+      }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -585,25 +601,50 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
                   </div>
                   
                   <form onSubmit={handleSubmit} className="p-10 space-y-6 flex-1">
-                      <div className="flex justify-center mb-8">
-                          <div 
-                            onClick={() => setIsCatalogModalOpen(true)}
-                            className="w-32 h-32 bg-black/40 rounded-[2.5rem] border-2 border-dashed border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 transition-all group overflow-hidden relative shadow-inner"
-                          >
-                              {selectedImage ? (
-                                  <>
-                                    <img src={selectedImage} className="w-full h-full object-contain p-4 transition-transform group-hover:scale-110" />
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <ImageIcon size={24} className="text-white" />
-                                    </div>
-                                  </>
-                              ) : (
-                                  <>
-                                    <ImagePlus size={32} className="text-slate-600 mb-2 group-hover:text-indigo-400" />
-                                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Elegir Modelo</span>
-                                  </>
-                              )}
-                          </div>
+                      <div className="flex justify-center gap-6 mb-8">
+                          {selectedImage ? (
+                              <div className="relative group w-32 h-32">
+                                  <div className="w-full h-full bg-black/40 rounded-[2.5rem] border-2 border-indigo-500/30 flex items-center justify-center overflow-hidden shadow-inner">
+                                      <img src={selectedImage} className="w-full h-full object-contain p-4 transition-transform group-hover:scale-110" />
+                                  </div>
+                                  <button 
+                                      type="button" 
+                                      onClick={() => setSelectedImage('')}
+                                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full shadow-lg hover:scale-110 transition-all z-10"
+                                  >
+                                      <X size={14} />
+                                  </button>
+                              </div>
+                          ) : (
+                              <>
+                                  <div 
+                                      onClick={() => setIsCatalogModalOpen(true)}
+                                      className="w-32 h-32 bg-black/40 rounded-[2.5rem] border-2 border-dashed border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 transition-all group overflow-hidden relative shadow-inner"
+                                  >
+                                      <Layers size={32} className="text-slate-600 mb-2 group-hover:text-indigo-400" />
+                                      <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Catálogo</span>
+                                  </div>
+
+                                  <label className="w-32 h-32 bg-black/40 rounded-[2.5rem] border-2 border-dashed border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500 transition-all group overflow-hidden relative shadow-inner">
+                                      {isUploading ? (
+                                          <Loader2 size={32} className="text-emerald-400 animate-spin" />
+                                      ) : (
+                                          <Camera size={32} className="text-slate-600 mb-2 group-hover:text-emerald-400" />
+                                      )}
+                                      <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">
+                                          {isUploading ? 'Subiendo' : 'Tomar Foto'}
+                                      </span>
+                                      <input 
+                                          type="file" 
+                                          accept="image/*" 
+                                          className="hidden" 
+                                          onChange={handleDirectImageUpload}
+                                          disabled={isUploading}
+                                          capture="environment"
+                                      />
+                                  </label>
+                              </>
+                          )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">

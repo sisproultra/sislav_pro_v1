@@ -69,7 +69,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
     if (activeCashSession?.id && activeView === 'CURRENT') {
       loadSessionData();
     }
-  }, [activeCashSession?.id, activeView]);
+  }, [activeCashSession?.id, activeView, expenses.length, invoices.length]);
 
   const loadSessionData = async () => {
     if (!activeCashSession?.id) return;
@@ -252,7 +252,14 @@ const CashClosing: React.FC<CashClosingProps> = ({
       const categoryMap: Record<string, { name: string; quantity: number; amount: number }> = {};
       const activeUserId = activeCashSession?.usuario_id;
 
-      // SI TENEMOS DATOS DE SESIÓN CARGADOS DIRECTAMENTE DE DB, USAMOS ESOS (PREFERIDO PARA TIEMPO REAL Y CIERRE)
+      // USAMOS pendingExpenses PARA EL TOTAL (Sincronizado con la lista visual y reactivo a App.tsx)
+      const totalCashExpenses = pendingExpenses
+          .filter(exp => (exp.paymentMethod || 'EFECTIVO').toUpperCase().includes('EFECTIVO'))
+          .reduce((sum, exp) => sum + exp.amount, 0);
+
+      const totalExpenses = pendingExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+      // SI TENEMOS DATOS DE SESIÓN CARGADOS DIRECTAMENTE DE DB, USAMOS ESOS PARA LAS VENTAS
       if (activeCashSession?.id) {
           sessionPayments.forEach(p => {
               const method = (p.metodo_pago_name || 'EFECTIVO').toUpperCase();
@@ -277,23 +284,18 @@ const CashClosing: React.FC<CashClosingProps> = ({
               }
           });
 
-          const totalCashExpensesFromSession = sessionExpenses
-              .filter(exp => (exp.paymentMethod || 'EFECTIVO').toUpperCase().includes('EFECTIVO'))
-              .reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
-
-          const totalExpensesFromSession = sessionExpenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
           const open = parseFloat(openingBalance) || 0;
-          const expectedCash = open + totalCashSales - totalCashExpensesFromSession;
+          const expectedCash = open + totalCashSales - totalCashExpenses;
 
           return { 
               methods, 
               methodDetails,
               totalCashSales, 
-              totalExpenses: totalExpensesFromSession, 
-              totalCashExpenses: totalCashExpensesFromSession,
+              totalExpenses, 
+              totalCashExpenses,
               opening: open, 
               expectedCash,
-              topCategories: [] // Categorías requerirían un join más pesado, se pueden cargar bajo demanda si es crítico
+              topCategories: [] 
           };
       }
 
@@ -354,16 +356,9 @@ const CashClosing: React.FC<CashClosingProps> = ({
       });
 
       const topCategories = Object.values(categoryMap).sort((a, b) => b.amount - a.amount);
-      
-      // SOLO descontar de caja si es EFECTIVO
-      const totalCashExpenses = pendingExpenses
-          .filter(exp => (exp.paymentMethod || 'EFECTIVO').toUpperCase().includes('EFECTIVO'))
-          .reduce((sum, exp) => sum + exp.amount, 0);
-
-      const totalExpenses = pendingExpenses.reduce((sum, exp) => sum + exp.amount, 0);
       const open = parseFloat(openingBalance) || 0;
       const expectedCash = open + totalCashSales - totalCashExpenses;
-      
+
       return { 
           methods, 
           methodDetails,
@@ -374,7 +369,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
           expectedCash,
           topCategories
       };
-  }, [pendingInvoices, pendingExpenses, openingBalance]);
+  }, [sessionPayments, pendingExpenses, openingBalance, activeCashSession, invoices, lastClosingDate, currentUserName]);
 
   const handleCloseTurn = async () => {
       const cashCount = parseFloat(actualCash);

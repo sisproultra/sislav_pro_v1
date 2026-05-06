@@ -308,7 +308,10 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
               ${invoice.items.filter(item => !((item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO')).map(item => `
                 <tr>
                   <td width="15%">${item.quantity.toFixed(2)}</td>
-                  <td style="text-transform: uppercase">${item.name}</td>
+                  <td style="text-transform: uppercase">
+                    ${item.name}
+                    ${(item.details || item.color || item.defectos) ? `<div style="font-size: 7.5pt; font-style: italic; color: #444; margin-top: 2px; font-weight: 700;">${formatItemDetails(item, true, 'none')}</div>` : ''}
+                  </td>
                   <td align="right" width="25%">${(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
                 <tr>
@@ -392,7 +395,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
               <tbody>
                 ${invoice.items.filter(item => !((item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO')).map(item => `
                   <tr style="border-bottom: 1px solid #000">
-                    <td width="15%" class="black" style="font-size: 22pt; padding: 10px 0; font-weight: normal !important;">${item.quantity.toFixed(0)}</td>
+                    <td width="15%" class="black" style="font-size: 22pt; padding: 10px 0; font-weight: normal !important;">${item.quantity.toFixed(2)}</td>
                     <td style="padding: 10px 0;">
                       <div class="black" style="font-size: 12pt; font-weight: normal !important; display: flex; justify-content: space-between;">
                         <span>${item.name.toUpperCase()}</span>
