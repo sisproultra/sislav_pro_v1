@@ -32,6 +32,25 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
   const [capacity, setCapacity] = useState('');
   const [selectedImage, setSelectedImage] = useState('');
 
+  const handleUpdateThresholds = async () => {
+    if (!selectedMachine) return;
+    setIsSaving(true);
+    try {
+        const updates = {
+            maintenanceIntervalHours: parseFloat(maintHours) || 1000,
+            maintenanceIntervalKg: parseFloat(maintKg) || 5000,
+            maintenanceIntervalCycles: parseFloat(maintCycles) || 500
+        };
+        await onUpdateMachineStatus(selectedMachine.id, updates);
+        setLocalMachines(prev => prev.map(m => m.id === selectedMachine.id ? { ...m, ...updates } : m));
+        setIsConfigOpen(false);
+    } catch (e) {
+        alert("Error al guardar cambios");
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
   const handleSync = async () => {
       setIsSyncing(true);
       try {
@@ -54,6 +73,14 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
   const [editingCatalogImage, setEditingCatalogImage] = useState<MachineImage | null>(null);
 
   const [localMachines, setLocalMachines] = useState<Machine[]>(propMachines);
+
+  useEffect(() => {
+    if (isConfigOpen && selectedMachine) {
+        setMaintHours((selectedMachine.maintenanceIntervalHours ?? 1000).toString());
+        setMaintKg((selectedMachine.maintenanceIntervalKg ?? 5000).toString());
+        setMaintCycles((selectedMachine.maintenanceIntervalCycles ?? 500).toString());
+    }
+  }, [isConfigOpen, selectedMachine]);
 
   useEffect(() => {
       setLocalMachines(propMachines);
@@ -119,6 +146,7 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
       setIsSaving(true);
       try {
           await onUpdateMachineStatus(machineToAnul.id, { activo: false });
+          setLocalMachines(prev => prev.filter(m => m.id !== machineToAnul.id));
           setSelectedMachine(null);
           setIsConfigOpen(false);
           setMachineToAnul(null);
@@ -145,19 +173,36 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
       }
   };
 
-  const handleSelectFromCatalog = (img: MachineImage) => {
-      setSelectedImage(img.url);
+  const handleSelectFromCatalog = async (img: MachineImage) => {
+      if (isConfigOpen && selectedMachine) {
+          try {
+              await onUpdateMachineStatus(selectedMachine.id, { imageUrl: img.url });
+              setSelectedMachine({ ...selectedMachine, imageUrl: img.url });
+              setLocalMachines(prev => prev.map(m => m.id === selectedMachine.id ? { ...m, imageUrl: img.url } : m));
+          } catch (e) {
+              alert("Error al actualizar imagen");
+          }
+      } else {
+          setSelectedImage(img.url);
+      }
       setIsCatalogModalOpen(false);
   };
 
-  const handleDirectImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDirectImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEditing = false) => {
       const file = e.target.files?.[0];
       if (file) {
           setIsUploading(true);
           try {
               const fileName = `machine_custom_${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
               const publicUrl = await dbUploadImage('laundry-assets', file, fileName);
-              setSelectedImage(publicUrl);
+              
+              if (isEditing && selectedMachine) {
+                  await onUpdateMachineStatus(selectedMachine.id, { imageUrl: publicUrl });
+                  setSelectedMachine({ ...selectedMachine, imageUrl: publicUrl });
+                  setLocalMachines(prev => prev.map(m => m.id === selectedMachine.id ? { ...m, imageUrl: publicUrl } : m));
+              } else {
+                  setSelectedImage(publicUrl);
+              }
           } catch (err) {
               alert("Error al subir imagen al storage.");
           } finally {
@@ -216,13 +261,14 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
       
       setIsSaving(true);
       try {
-          // Se actualiza utilizando las claves que dbUpdateMachine mapea a las columnas reales
-          await onUpdateMachineStatus(selectedMachine.id, {
-              estado_operativo: 'DISPONIBLE',
+          const updates = {
+              estado_operativo: 'DISPONIBLE' as const,
               currentOrderId: null,
               startTime: null,
               estimatedDuration: null
-          });
+          };
+          await onUpdateMachineStatus(selectedMachine.id, updates);
+          setLocalMachines(prev => prev.map(m => m.id === selectedMachine.id ? { ...m, ...updates } : m));
           
           setIsReleaseConfirmOpen(false);
           setSelectedMachine(null);
@@ -430,7 +476,7 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
       </div>
 
       {isCatalogModalOpen && (
-          <div className="fixed inset-0 bg-black/80 z-[160] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="fixed inset-0 bg-black/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
               <div className="bg-white rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                   <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
                       <div className="flex items-center gap-3">
@@ -590,8 +636,8 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
       />
 
       {isAddModalOpen && (
-          <div className="fixed inset-0 bg-black/90 z-[150] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in">
-              <div className="bg-slate-900 rounded-[3rem] w-full max-w-xl shadow-2xl overflow-hidden border border-white/10 flex flex-col animate-in zoom-in-95">
+          <div className="fixed inset-0 bg-black/90 z-[150] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+              <div className="bg-slate-900 rounded-[3rem] w-full max-w-xl shadow-2xl overflow-hidden border border-white/10 flex flex-col max-h-[90vh] animate-in zoom-in-95">
                   <div className="p-8 border-b border-white/5 flex justify-between items-center shrink-0">
                       <div className="flex items-center gap-3">
                           <Plus className="text-indigo-500" size={24} />
@@ -600,7 +646,7 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
                       <button onClick={() => setIsAddModalOpen(false)} className="text-white/40 hover:text-white p-2 rounded-full transition-colors"><X size={28}/></button>
                   </div>
                   
-                  <form onSubmit={handleSubmit} className="p-10 space-y-6 flex-1">
+                  <form onSubmit={handleSubmit} className="p-10 space-y-6 overflow-y-auto flex-1 no-scrollbar">
                       <div className="flex justify-center gap-6 mb-8">
                           {selectedImage ? (
                               <div className="relative group w-32 h-32">
@@ -638,7 +684,7 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
                                           type="file" 
                                           accept="image/*" 
                                           className="hidden" 
-                                          onChange={handleDirectImageUpload}
+                                          onChange={(e) => handleDirectImageUpload(e, false)}
                                           disabled={isUploading}
                                           capture="environment"
                                       />
@@ -678,8 +724,8 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
 
       {selectedMachine && !isConfigOpen && (
           <div className="fixed inset-0 bg-black/90 z-[150] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-300">
-              <div className="bg-slate-900 rounded-[3rem] w-full max-w-lg shadow-[0_0_100px_rgba(0,0,0,0.5)] border border-white/5 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-                  <div className="p-8 border-b border-white/5 bg-slate-900/50 flex justify-between items-center">
+              <div className="bg-slate-900 rounded-[3rem] w-full max-w-lg shadow-[0_0_100px_rgba(0,0,0,0.5)] border border-white/5 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+                  <div className="p-8 border-b border-white/5 bg-slate-900/50 flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-4">
                         <div className="bg-slate-800 p-2.5 rounded-xl border border-white/5 shadow-inner">
                             {selectedMachine.type === 'LAVADORA' ? <WashingMachine size={20} className="text-blue-400" /> : <Wind size={20} className="text-orange-400" />}
@@ -689,7 +735,7 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
                     <button onClick={() => setSelectedMachine(null)} className="text-slate-500 hover:text-white transition-colors"><X size={24}/></button>
                   </div>
 
-                  <div className="p-10 space-y-8">
+                  <div className="p-10 space-y-8 overflow-y-auto flex-1 no-scrollbar">
                     <div className="grid grid-cols-3 gap-4">
                         <div className="bg-white/5 p-4 rounded-3xl text-center border border-white/5">
                             <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">TOTAL KILOS</p>
@@ -757,15 +803,44 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
 
       {selectedMachine && isConfigOpen && (
           <div className="fixed inset-0 bg-black/90 z-[160] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-300">
-            <div className="bg-slate-900 border border-white/10 rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-                <div className="p-8 border-b border-white/5 bg-slate-900/50 flex justify-between items-center">
+            <div className="bg-slate-900 border border-white/10 rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+                <div className="p-8 border-b border-white/5 bg-slate-900/50 flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-4">
                         <div className="bg-indigo-600 p-2.5 rounded-xl"><Settings2 size={20} className="text-white" /></div>
                         <h3 className="font-bold text-xl text-white uppercase tracking-tight">Ajustes Técnicos</h3>
                     </div>
                     <button onClick={() => setIsConfigOpen(false)} className="text-slate-500 hover:text-white transition-colors"><X size={24}/></button>
                 </div>
-                <div className="p-10 space-y-8">
+                <div className="p-10 space-y-8 overflow-y-auto flex-1 no-scrollbar">
+                    <div className="flex flex-col items-center gap-4 bg-slate-800/50 p-6 rounded-3xl border border-white/5">
+                        <div className="relative group w-24 h-24">
+                            <div className="w-full h-full bg-black/40 rounded-2xl border border-white/10 flex items-center justify-center overflow-hidden">
+                                <img src={selectedMachine.imageUrl} className="w-full h-full object-contain p-2" />
+                            </div>
+                        </div>
+                        <div className="flex gap-2 w-full">
+                            <button 
+                                type="button"
+                                onClick={() => setIsCatalogModalOpen(true)}
+                                className="flex-1 py-3 bg-slate-900 hover:bg-slate-700 text-white rounded-xl font-bold text-[9px] uppercase tracking-widest border border-white/5 flex items-center justify-center gap-2 transition-all"
+                            >
+                                <Layers size={14} /> CATÁLOGO
+                            </button>
+                            <label className="flex-1 py-3 bg-slate-900 hover:bg-slate-700 text-white rounded-xl font-bold text-[9px] uppercase tracking-widest border border-white/5 flex items-center justify-center gap-2 cursor-pointer transition-all">
+                                {isUploading ? <Loader2 size={14} className="animate-spin text-emerald-400" /> : <Camera size={14} className="text-emerald-400" />}
+                                <span className="truncate">{isUploading ? 'SUBIENDO...' : 'TOMAR FOTO'}</span>
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    className="hidden" 
+                                    onChange={(e) => handleDirectImageUpload(e, true)}
+                                    disabled={isUploading}
+                                    capture="environment"
+                                />
+                            </label>
+                        </div>
+                    </div>
+
                     <div className="bg-slate-800/50 p-6 rounded-3xl border border-white/5 space-y-4">
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Umbrales de Mantenimiento</h4>
                         <div className="grid grid-cols-1 gap-6">
@@ -782,10 +857,11 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
                     </button>
 
                     <button 
-                        onClick={() => setIsConfigOpen(false)}
-                        className="w-full py-5 bg-indigo-600 text-white rounded-3xl font-bold text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex justify-center items-center gap-3"
+                        onClick={handleUpdateThresholds}
+                        disabled={isSaving}
+                        className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-3xl font-bold text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex justify-center items-center gap-3"
                     >
-                        <Check size={20} strokeWidth={3} /> GUARDAR CAMBIOS
+                        {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Check size={20} strokeWidth={3} />} GUARDAR CAMBIOS
                     </button>
                 </div>
             </div>
