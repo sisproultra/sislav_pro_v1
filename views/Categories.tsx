@@ -27,6 +27,21 @@ const Categories: React.FC<CategoriesProps> = ({ categories, globalCatalog = [],
   const [previewUrl, setPreviewUrl] = useState(''); 
   const [isActive, setIsActive] = useState(true);
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+  const [isSubmittingDelete, setIsSubmittingDelete] = useState(false);
+
+  const handleDeleteConfirm = async () => {
+    if (!categoryToDelete || isSubmittingDelete) return;
+    
+    setIsSubmittingDelete(true);
+    try {
+        await onUpdate(categoryToDelete.id, { isActive: false });
+        setCategoryToDelete(null);
+    } catch (error) {
+        console.error("Error al eliminar categoría:", error);
+    } finally {
+        setIsSubmittingDelete(false);
+    }
+  };
 
   const filteredCatalog = useMemo(() => {
     if (!globalCatalog) return [];
@@ -252,11 +267,12 @@ const Categories: React.FC<CategoriesProps> = ({ categories, globalCatalog = [],
       <ConfirmationModal 
           isOpen={!!categoryToDelete} 
           onClose={() => setCategoryToDelete(null)} 
-          onConfirm={() => { if(categoryToDelete) onUpdate(categoryToDelete.id, { isActive: false }); setCategoryToDelete(null); }} 
+          onConfirm={handleDeleteConfirm} 
           title="¿Eliminar Categoría?" 
           message={`¿Desea ocultar la categoría "${categoryToDelete?.name}"?`} 
           confirmText="Sí, Eliminar" 
           isDangerous={true} 
+          isLoading={isSubmittingDelete}
       />
     </div>
   );

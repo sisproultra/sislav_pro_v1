@@ -1330,12 +1330,16 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
                     itemDeliveryDate: audit.fecha_entrega_especifica || it.itemDeliveryDate,
                     images: audit.unit_images || it.images || [],
                     audioNote: audit.unit_audio || it.audioNote,
+                    peso: it.peso_estimado || 0.400,
                     splitOrder: idx + 1 // Marcador opcional para identificar que es parte de un grupo
                 });
             });
         } else {
             // Comportamiento normal: Una sola fila para la cantidad total
-            itemsPayload.push(it);
+            itemsPayload.push({
+                ...it,
+                peso: (it.peso_estimado || 0.400) * it.quantity
+            });
         }
     });
 
@@ -1537,6 +1541,7 @@ export const dbUpdateOrderItems = async (orderId: string, items: any[], totals: 
             defectos: it.defectos || '',
             observaciones: it.details || it.observaciones || '',
             url_audio: it.url_audio || it.audioNote,
+            peso: (it.peso_estimado || 0.400) * Number(it.cantidad || it.quantity),
             fecha_entrega_item: it.fecha_entrega_item || it.itemDeliveryDate
         };
 
@@ -1580,6 +1585,7 @@ export const dbUpdateOrderItems = async (orderId: string, items: any[], totals: 
                 defectos: it.defectos || '',
                 observaciones: obs,
                 url_audio: it.url_audio || it.audioNote,
+                peso: (it.peso_estimado || 0.400) * Number(it.cantidad || it.quantity),
                 fecha_entrega_item: it.fecha_entrega_item || it.itemDeliveryDate,
                 es_ajuste: true, 
                 registrado_por: userAudit
@@ -2835,6 +2841,16 @@ export const dbUpdateItemStatus = async (orderId: string, itemIds: string[], sta
         const user = localStorage.getItem('sislav_current_user_name') || 'SISTEMA';
         console.log(`🔄 [dbUpdateItemStatus] Cambiando items a ${status}:`, itemIds);
         
+        // 0. SI NO VIENE totalKg, lo calculamos sumando los pesos de los items seleccionados
+        let calculatedKg = totalKg;
+        if (!calculatedKg && (status === 'EN_LAVADO' || status === 'EN_SECADO')) {
+            const { data: itemWeights } = await supabase.from('items_venta').select('peso, cantidad').in('id', itemIds);
+            if (itemWeights) {
+                // Si ya tienen peso guardado usamos ese, sino 0.4 por cantidad
+                calculatedKg = itemWeights.reduce((sum, it) => sum + (Number(it.peso) || (Number(it.cantidad) * 0.4)), 0);
+            }
+        }
+
         const { error } = await supabase.from('items_venta').update({ estado: status, estado_id: ORDER_STATUS_MAP[status] }).in('id', itemIds);
         if (error) {
             console.error("❌ Error de Supabase al actualizar items_venta:", error);
@@ -2887,7 +2903,7 @@ export const dbUpdateItemStatus = async (orderId: string, itemIds: string[], sta
                     fecha_inicio_proceso: new Date().toISOString(), 
                     duracion_estimada_minutos: duration || 30, 
                     total_ciclos: (machine.total_ciclos || 0) + 1, 
-                    total_kg: (machine.total_kg || 0) + (totalKg || 0), 
+                    total_kg: (machine.total_kg || 0) + (calculatedKg || 0), 
                     total_minutos: (machine.total_minutos || 0) + (duration || 30) 
                 }).eq('id', machineId);
             }

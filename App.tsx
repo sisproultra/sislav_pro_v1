@@ -1861,7 +1861,31 @@ export default function App() {
                     canManageBanners={canManageApp}
                 />;
             }
-            case 'view:categories': return <Categories categories={categories} globalCatalog={globalConfig?.defaultCategoryImages} primaryColor={activeSucursal?.primaryColor} onSave={async (c) => { await dbSaveCategory(c); refreshData(true); }} onUpdate={async (id, c) => { await dbUpdateCategory(id, c); refreshData(true); }} canManage={canManageApp} />;
+            case 'view:categories': return <Categories 
+                categories={categories} 
+                globalCatalog={globalConfig?.defaultCategoryImages} 
+                primaryColor={activeSucursal?.primaryColor} 
+                onSave={async (c) => { 
+                    const saved = await dbSaveCategory(c); 
+                    const newCat: Category = { 
+                        id: saved.id, 
+                        sucursal_id: saved.sucursal_id,
+                        name: saved.nombre, 
+                        isActive: saved.activo, 
+                        imagen_id: saved.imagen_id,
+                        imageUrl: categories.find(x => x.imagen_id === saved.imagen_id)?.imageUrl || undefined
+                    };
+                    setCategories(prev => [newCat, ...prev]);
+                    refreshData(false); 
+                }} 
+                onUpdate={async (id, c) => { 
+                    // Optimistic Update
+                    setCategories(prev => prev.map(cat => cat.id === id ? { ...cat, ...c } as Category : cat));
+                    await dbUpdateCategory(id, c); 
+                    refreshData(false); 
+                }} 
+                canManage={canManageApp} 
+            />;
             case 'view:payment_methods': return <PaymentMethods methods={paymentMethods} globalPaymentCatalog={globalConfig?.defaultPaymentImages} onSave={async (pm) => { await dbSavePaymentMethod(pm); refreshData(true); }} onUpdate={async (id, pm) => { await dbUpdatePaymentMethod(id, pm); refreshData(true); }} canManage={canManageApp} />;
             case 'view:wa_campaign': return <WaCampaign clients={clients} company={activeSucursal} globalContacts={waContacts} setGlobalContacts={setWaContacts} globalStatus={waStatus} setGlobalStatus={setWaStatus} globalTemplates={waTemplates} setGlobalTemplates={setWaTemplates} globalDelay={waDelay} setGlobalDelay={setWaDelay} globalImage={waGlobalImage} setGlobalImage={setWaGlobalImage} globalReminderMsg={waReminderMessageState} setGlobalReminderMsg={setWaReminderMessageState} globalReminderTemplates={waReminderTemplates} setGlobalReminderTemplates={setWaReminderTemplates} globalActiveTab={waActiveTab} setGlobalActiveTab={setWaActiveTab} />;
             case 'view:reports': return <Reports expenses={expenses} invoices={invoices} clients={clients} company={activeSucursal} />;

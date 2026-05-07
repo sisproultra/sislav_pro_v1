@@ -187,6 +187,7 @@ export interface Product extends BaseEntity {
     showInCatalog?: boolean;
     imageUrl?: string;
     imagen_id?: string;
+    peso_estimado?: number;
     recipe?: RecipeItem[];
     trackStock?: boolean;
     processingTime?: string;

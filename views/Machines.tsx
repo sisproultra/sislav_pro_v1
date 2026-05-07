@@ -404,7 +404,7 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
                                         </div>
                                         <div className="text-center w-1/3 border-r border-slate-800 px-1">
                                             <div className="text-[14px] font-bold text-cyan-400 leading-none">
-                                                {machine.totalKg.toFixed(0)}
+                                                {machine.totalKg.toFixed(1)}
                                             </div>
                                             <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Kilos</div>
                                         </div>
@@ -845,7 +845,7 @@ const Machines: React.FC<MachinesProps> = ({ machines: propMachines, invoices, a
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Umbrales de Mantenimiento</h4>
                         <div className="grid grid-cols-1 gap-6">
                             <div className="space-y-1"><label className="text-[9px] font-bold text-slate-500 uppercase ml-2">Horas Máximas de Vida</label><input type="number" value={maintHours} onChange={e => setMaintHours(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-2xl py-3 px-4 text-white font-bold outline-none focus:border-indigo-500" /></div>
-                            <div className="space-y-1"><label className="text-[9px] font-bold text-slate-500 uppercase ml-2">Kilos Máximos</label><input type="number" value={maintKg} onChange={e => setMaintKg(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-2xl py-3 px-4 text-white font-bold outline-none focus:border-indigo-500" /></div>
+                            <div className="space-y-1"><label className="text-[9px] font-bold text-slate-500 uppercase ml-2">Kilos Máximos</label><input type="number" step="0.1" value={maintKg} onChange={e => setMaintKg(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-2xl py-3 px-4 text-white font-bold outline-none focus:border-indigo-500" /></div>
                         </div>
                     </div>
                     

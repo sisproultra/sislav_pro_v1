@@ -32,6 +32,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
   const [showInCatalog, setShowInCatalog] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [requiresAreaCalc, setRequiresAreaCalc] = useState(false);
+  const [pesoEstimado, setPesoEstimado] = useState('0.400');
   const [isSunatLocked, setIsSunatLocked] = useState(true);
   
   // Recipe State
@@ -59,6 +60,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
               setShowInCatalog(initialData.showInCatalog ?? false);
               setImageUrl(initialData.imageUrl || '');
               setRequiresAreaCalc(initialData.requiresAreaCalc ?? false);
+              setPesoEstimado((initialData.peso_estimado ?? 0.400).toString());
               setRecipe(initialData.recipe || []);
           } else {
               resetFormState();
@@ -77,6 +79,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
     setShowInCatalog(false);
     setImageUrl('');
     setRequiresAreaCalc(false);
+    setPesoEstimado('0.400');
     setRecipe([]);
     setActiveTab('DETAILS');
   };
@@ -148,6 +151,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
       unitCode: unitCode, 
       um_saas: umSaas,
       requiresAreaCalc,
+      peso_estimado: parseFloat(pesoEstimado) || 0,
       cost: calculateTotalCost(), 
       recipe: recipe, 
       showInCatalog,
@@ -225,6 +229,21 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
                             <option value={UmSaas.LITRO}>LITRO (Permite decimales)</option>
                           </select>
                           <p className="text-[8px] text-slate-400 font-bold uppercase mt-2 ml-1 italic opacity-60">Define si el producto permite cantidades decimales en el carrito.</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 flex items-center gap-1 font-mono"><Clock size={12}/> Peso Estimado por Unidad ({umSaas === UmSaas.KILO ? 'KGM' : 'KG'})</label>
+                          <input 
+                            type="number" 
+                            step="0.001" 
+                            required 
+                            value={pesoEstimado} 
+                            onChange={(e) => setPesoEstimado(e.target.value)} 
+                            className="w-full bg-white border-2 border-slate-200 rounded-2xl px-4 py-4 font-black text-sm text-slate-800 outline-none focus:bg-white"
+                          />
+                          <p className="text-[8px] text-slate-400 font-bold uppercase mt-2 ml-1 italic opacity-60">
+                            {umSaas === UmSaas.KILO ? 'Para productos al peso, este valor suele ser 1.000 para que se sume el peso real marcado en la balanza.' : 'Para productos por unidad, el promedio estándar es 0.400 KG (400g).'}
+                          </p>
                         </div>
 
                         <div className="flex items-center gap-4 bg-white/50 p-4 rounded-2xl border border-slate-200/50">

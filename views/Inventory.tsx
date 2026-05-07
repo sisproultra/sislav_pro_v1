@@ -81,6 +81,7 @@ const Inventory: React.FC<InventoryProps> = ({
                 <tr>
                   <th className="px-6 py-4">Producto / Servicio</th>
                   <th className="px-6 py-4">Categoría</th>
+                  <th className="px-6 py-4 text-center">Peso Est.</th>
                   <th className="px-6 py-4 text-center">Stock</th>
                   <th className="px-6 py-4 text-right">Costo</th>
                   <th className="px-6 py-4 text-right">Precio Venta</th>
@@ -114,6 +115,11 @@ const Inventory: React.FC<InventoryProps> = ({
                         <td className="px-6 py-4">
                             <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg text-[10px] font-bold uppercase border border-indigo-100">
                                 {p.category || 'SIN CATEGORÍA'}
+                            </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                            <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-lg text-[10px] font-bold">
+                                {(p.peso_estimado || 0.4).toFixed(3)} KG
                             </span>
                         </td>
                         <td className="px-6 py-4 text-center">
