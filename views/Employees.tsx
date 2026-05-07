@@ -29,6 +29,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
   const [customPermissions, setCustomPermissions] = useState<PermissionMap>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [employeeToAnul, setEmployeeToAnul] = useState<Employee | null>(null);
 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState(false);
@@ -59,7 +60,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
           role,
           phone,
           photoUrl,
-          isActive: true,
+          isActive: editingEmployee ? editingEmployee.isActive : true,
           permissions: customPermissions
         }, editingEmployee?.id);
         
@@ -258,11 +259,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
                         <Edit2 size={18} />
                       </button>
                       <button 
-                        onClick={() => {
-                          if(confirm(`¿Estás seguro de anular a ${emp.name}? Perderá el acceso al sistema.`)) {
-                            onDelete(emp.id);
-                          }
-                        }}
+                        onClick={() => setEmployeeToAnul(emp)}
                         className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
                         title="Anular Empleado"
                       >
@@ -458,6 +455,41 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
                 </button>
              </div>
           </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN DE ANULACIÓN */}
+      {employeeToAnul && (
+        <div className="fixed inset-0 bg-slate-950/80 z-[300] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in">
+           <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95">
+              <div className="p-8 text-center space-y-4">
+                 <div className="w-20 h-20 bg-rose-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                    <ShieldAlert size={40} className="text-rose-500" />
+                 </div>
+                 <h3 className="text-xl font-bold text-white uppercase tracking-tight">Anular Empleado</h3>
+                 <p className="text-slate-400 text-sm leading-relaxed">
+                    ¿Estás seguro de anular a <span className="text-white font-bold">{employeeToAnul.name}</span>? 
+                    Esta acción desactivará su acceso al sistema de forma inmediata.
+                 </p>
+                 <div className="flex gap-3 pt-6">
+                    <button 
+                        onClick={() => setEmployeeToAnul(null)}
+                        className="flex-1 py-4 rounded-2xl font-bold text-[10px] uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            await onDelete(employeeToAnul.id);
+                            setEmployeeToAnul(null);
+                        }}
+                        className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-4 rounded-2xl shadow-xl shadow-rose-900/40 transition-all active:scale-95 text-[10px] uppercase tracking-widest"
+                    >
+                        Confirmar Anulación
+                    </button>
+                 </div>
+              </div>
+           </div>
         </div>
       )}
 

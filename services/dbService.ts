@@ -212,7 +212,7 @@ export const dbGlobalLogin = async (username: string, pass: string, expectedSucu
         return session;
     } catch (e) {
         console.error("Login exception:", e);
-        return null;
+        throw e;
     }
 };
 
@@ -3092,7 +3092,8 @@ export const dbUpdateEmployee = async (id: string, emp: Partial<Employee>) => {
             rol: emp.role,
             telefono: emp.phone,
             url_foto: emp.photoUrl,
-            permisos_json: emp.permissions
+            permisos_json: emp.permissions,
+            activo: emp.isActive
         })
         .eq('id', id);
     if (error) throw error;
@@ -3107,6 +3108,7 @@ export const dbDeleteEmployee = async (id: string) => {
         .eq('id', id);
     
     if (dbError) throw dbError;
+    invalidateCache('employees');
 };
 
 export const dbHardDeleteEmployee = async (id: string) => {
@@ -3115,6 +3117,7 @@ export const dbHardDeleteEmployee = async (id: string) => {
         .delete()
         .eq('id', id);
     if (error) throw error;
+    invalidateCache('employees');
 };
 
 export const dbReactivateEmployee = async (id: string) => {
@@ -3123,6 +3126,7 @@ export const dbReactivateEmployee = async (id: string) => {
         .update({ activo: true })
         .eq('id', id);
     if (error) throw error;
+    invalidateCache('employees');
 };
 
 export const dbGetCorrelativos = async () => {

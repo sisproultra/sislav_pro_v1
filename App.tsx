@@ -254,6 +254,7 @@ export default function App() {
         queryClient.invalidateQueries({ queryKey: ['activeItems'] });
         queryClient.invalidateQueries({ queryKey: ['activeCashSession'] });
         queryClient.invalidateQueries({ queryKey: ['expenses'] });
+        queryClient.invalidateQueries({ queryKey: ['employees'] });
         
         // Solo refrescar sucursal si es refresh manual explícito del usuario
         if (manual && activeSucursal?.id) {
@@ -541,6 +542,14 @@ export default function App() {
                     }
 
                     if (profile) {
+                        if (!profile.activo && profile.rol !== UserRole.SAAS_MASTER) {
+                            console.error("⛔ Usuario desactivado detectado.");
+                            await supabase.auth.signOut();
+                            setAuthSession(null);
+                            localStorage.removeItem('sislav_auth_session');
+                            return;
+                        }
+
                         console.log("✅ Perfil obtenido:", profile.username);
                         const newSession: AuthSession = {
                             user: {
