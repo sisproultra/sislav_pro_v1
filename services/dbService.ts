@@ -687,6 +687,7 @@ export const dbSaveTicketConfig = async (branchId: string, holdingId: string, co
             horario_atencion: config.horario_atencion,
             url_logo_ticket: config.url_logo_ticket,
             logo_ticket_size: config.logo_ticket_size,
+            politicas_font_size: config.politicas_font_size || 7,
             mostrar_codigo_barras: config.mostrar_codigo_barras ?? true,
             fecha_actualizacion: new Date().toISOString()
         }, { onConflict: 'sucursal_id' });

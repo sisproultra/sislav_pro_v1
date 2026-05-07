@@ -42,6 +42,7 @@ const Settings: React.FC<SettingsProps> = ({ company, setCompany, user }) => {
       horario_atencion: '',
       url_logo_ticket: '',
       logo_ticket_size: 100,
+      politicas_font_size: 7,
       mostrar_codigo_barras: true
   });
 
@@ -65,6 +66,7 @@ const Settings: React.FC<SettingsProps> = ({ company, setCompany, user }) => {
                       horario_atencion: data.horario_atencion || '',
                       url_logo_ticket: data.url_logo_ticket || '',
                       logo_ticket_size: data.logo_ticket_size || 100,
+                      politicas_font_size: data.politicas_font_size || 7,
                       mostrar_codigo_barras: data.mostrar_codigo_barras !== false
                   });
               }
@@ -242,6 +244,26 @@ const Settings: React.FC<SettingsProps> = ({ company, setCompany, user }) => {
                                           </div>
                                       </div>
                                   </div>
+
+                                  <div className="space-y-4">
+                                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tamaño letra políticas (pt)</label>
+                                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                          <input 
+                                              type="range" 
+                                              min="5" 
+                                              max="14" 
+                                              step="0.5"
+                                              value={ticketConfig.politicas_font_size} 
+                                              onChange={e => setTicketConfig({...ticketConfig, politicas_font_size: parseFloat(e.target.value)})}
+                                              className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" 
+                                          />
+                                          <div className="flex justify-between mt-2 text-[10px] font-bold text-slate-400 uppercase">
+                                              <span>Pequeño</span>
+                                              <span className="text-indigo-600">{ticketConfig.politicas_font_size} pt</span>
+                                              <span>Grande</span>
+                                          </div>
+                                      </div>
+                                  </div>
                               </div>
 
                               <div className="space-y-2">
@@ -359,7 +381,10 @@ const Settings: React.FC<SettingsProps> = ({ company, setCompany, user }) => {
                               {/* Footer Preview */}
                               <div className="mt-4 flex flex-col items-center text-center gap-3">
                                   <p className="w-full border-t border-dashed border-slate-300 pt-2"></p>
-                                  <div className="whitespace-pre-line leading-tight text-slate-700 italic text-[8px] text-left text-justify w-full px-1">
+                                  <div 
+                                      className="whitespace-pre-line leading-tight text-slate-700 italic text-left text-justify w-full px-1"
+                                      style={{ fontSize: `${ticketConfig.politicas_font_size || 7}pt` }}
+                                  >
                                       {ticketConfig.politicas || 'SUS POLÍTICAS CONFIGURADAS APARECERÁN AQUÍ.'}
                                   </div>
                                   

@@ -93,6 +93,7 @@ export interface Company extends BaseEntity {
     msgPickup?: string;
     orderCurrentNumber?: number;
     ticketPolicies?: string;
+    politicas_font_size?: number;
     serieNcFactura?: string;
     serieNcBoleta?: string;
     holding_name?: string;

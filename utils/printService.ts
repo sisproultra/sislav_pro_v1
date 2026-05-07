@@ -314,7 +314,11 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
     };
     const docTitle = getDocTitle();
     const formattedDate = new Date(invoice.date).toLocaleString('sv-SE').replace('T', ' ');
-    const deliveryDate = invoice.deliveryDate ? new Date(invoice.deliveryDate).toLocaleDateString('es-PE') : 'POR DEFINIR';
+    const deliveryDateObj = invoice.deliveryDate ? new Date(invoice.deliveryDate) : null;
+    const deliveryDate = deliveryDateObj ? deliveryDateObj.toLocaleDateString('es-PE') : 'POR DEFINIR';
+    const deliveryTime = deliveryDateObj ? deliveryDateObj.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+    const fullDeliveryInfo = deliveryDateObj ? `${deliveryDate} ${deliveryTime}` : 'POR DEFINIR';
+    
     const montoLetras = numeroALetras(invoice.totals.total);
     const igvRate = company.porcentajeIgv || 18.00;
 
@@ -366,7 +370,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
             .logo-ticket { max-width: ${logoSize}%; height: auto; margin: 0 auto 3mm auto; display: block; }
             
             .politicas-container {
-                font-size: 7.5pt;
+                font-size: ${config?.politicas_font_size || 7}pt;
                 text-align: justify;
                 margin-top: 6px;
                 white-space: pre-line;
@@ -378,7 +382,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             }
             .order-number-giant { 
-                font-size: 38pt; 
+                font-size: 32pt; 
                 font-weight: 900; 
                 margin: 5px 0; 
                 display: block; 
@@ -393,7 +397,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                 padding: 2px 20px; 
                 display: inline-block; 
                 margin-bottom: 10px; 
-                font-size: 13pt; 
+                font-size: 11pt; 
                 font-weight: normal;
                 letter-spacing: 1px;
             }
@@ -444,7 +448,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
           <div class="divider"></div>
           <table>
             <thead>
-              <tr>
+              <tr style="font-size: 8pt;">
                 <th align="left">CANT.</th>
                 <th align="left">DESCRIPCIÓN</th>
                 <th align="right">TOTAL</th>
@@ -463,7 +467,9 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                       if (Array.isArray(parsed) && parsed.length > 0) detailsArray = parsed;
                   } catch(e) {}
 
-                  if (item.quantity > 1 && detailsArray.length > 0) {
+                  // Solo desglosamos si la cantidad es mayor a 1 y hay múltiples detalles y NO es producto por peso
+                  const isWeight = item.unitCode === 'KGM' || item.um_saas === 'KILO' || item.um_saas === 'METROS' || item.um_saas === 'LITRO' || item.unitCode === 'MTK' || item.unitCode === 'LTR';
+                  if (item.quantity > 1 && detailsArray.length > 0 && !isWeight) {
                       return detailsArray.map(det => ({
                           ...item,
                           quantity: 1,
@@ -473,17 +479,17 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                   }
                   return [item];
               }).map(item => `
-                <tr style="border-bottom: 0.5px solid #eee">
+                <tr style="border-bottom: 0.5px solid #eee; font-size: 8.5pt;">
                   <td width="15%">${item.quantity.toFixed(2)}</td>
                   <td style="text-transform: uppercase">
-                    <div class="bold" style="font-size: 8.5pt;">${item.name}</div>
-                    ${(item.details || item.color || item.defectos) ? `<div style="font-size: 7.5pt; font-style: italic; color: #444; margin-top: 2px; font-weight: 700;">${formatItemDetails(item, true, 'none')}</div>` : ''}
+                    <div class="bold" style="font-size: 8pt;">${item.name}</div>
+                    ${(item.details || item.color || item.defectos) ? `<div style="font-size: 7pt; font-style: italic; color: #444; margin-top: 2px; font-weight: 700;">${formatItemDetails(item, true, 'none')}</div>` : ''}
                   </td>
                   <td align="right" width="25%">${(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
                 <tr>
                   <td></td>
-                  <td colspan="2" class="pu-row">P.U: ${item.price.toFixed(2)}</td>
+                  <td colspan="2" class="pu-row" style="font-size: 7.5pt;">P.U: ${item.price.toFixed(2)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -520,7 +526,8 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
 
           <div class="divider"></div>
           <div class="politicas-container">
-            <div style="font-weight: 900; font-size: 11pt; margin-bottom: 2mm; text-align: center;">ORDEN: ${invoice.ordenNumber || '---'}</div>
+            <div style="font-weight: 900; font-size: 11pt; margin-bottom: 1mm; text-align: center;">ORDEN: ${invoice.ordenNumber || '---'}</div>
+            <div style="font-weight: 700; font-size: 9.5pt; margin-bottom: 2mm; text-align: center; border: 1px solid #000; padding: 2px;">ENTREGA ESTIMADA: ${fullDeliveryInfo}</div>
             ${politicas}
           </div>
 
@@ -544,7 +551,8 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
             </div>
 
             <div style="margin: 10px 0; font-size: 10.5pt;">
-              <div class="black">ENTREGA: ${deliveryDate}</div>
+              <div class="black">FECHA ENTREGA: ${deliveryDate}</div>
+              <div class="black" style="font-size: 13pt; margin-top: 2px;">HORA ENTREGA: ${deliveryTime}</div>
               <div class="black" style="font-size: 12pt; margin-top: 5px;">CLIENTE: ${invoice.client.name.toUpperCase()}</div>
               <div class="atendido-por">
                 <span class="black" style="font-size: 9pt;">ATENDIDO POR:</span>
@@ -569,8 +577,9 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                         if (Array.isArray(parsed) && parsed.length > 0) detailsArray = parsed;
                     } catch(e) {}
 
-                    // Solo desglosamos si la cantidad es mayor a 1 y hay múltiples detalles
-                    if (item.quantity > 1 && detailsArray.length > 0) {
+                    // Solo desglosamos si la cantidad es mayor a 1 y hay múltiples detalles y NO es un producto por peso
+                    const isWeightOrder = item.unitCode === 'KGM' || item.um_saas === 'KILO' || item.um_saas === 'METROS' || item.um_saas === 'LITRO' || item.unitCode === 'MTK' || item.unitCode === 'LTR';
+                    if (item.quantity > 1 && detailsArray.length > 0 && !isWeightOrder) {
                         return detailsArray.map(det => ({
                             ...item,
                             quantity: 1,
@@ -580,13 +589,13 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                     return [item];
                 }).map(item => `
                   <tr style="border-bottom: 1px solid #000">
-                    <td width="15%" class="black" style="font-size: 22pt; padding: 10px 0; font-weight: normal !important;">${item.quantity.toFixed(2)}</td>
+                    <td width="20%" class="black" style="font-size: 17pt; padding: 10px 0; font-weight: normal !important;">${item.quantity.toFixed(2)}</td>
                     <td style="padding: 10px 0;">
-                      <div class="black" style="font-size: 12pt; font-weight: normal !important; display: flex; justify-content: space-between;">
+                      <div class="black" style="font-size: 11pt; font-weight: normal !important; display: flex; justify-content: space-between;">
                         <span>${item.name.toUpperCase()}</span>
                         <span>S/ ${(item.price * item.quantity).toFixed(2)}</span>
                       </div>
-                      ${(item.details || item.color || item.defectos || (item.images && item.images.length > 0) || (item as any).url_foto_1 || item.audioNote) ? `<div style="font-size: 8.5pt; font-weight: normal; font-style: italic; background: #f0f0f0; padding: 5px; margin-top: 5px; border-left: 5px solid #000;">${formatItemDetails(item, true, 'icons')}</div>` : ''}
+                      ${(item.details || item.color || item.defectos || (item.images && item.images.length > 0) || (item as any).url_foto_1 || item.audioNote) ? `<div style="font-size: 8pt; font-weight: normal; font-style: italic; background: #f0f0f0; padding: 5px; margin-top: 5px; border-left: 5px solid #000;">${formatItemDetails(item, true, 'icons')}</div>` : ''}
                     </td>
                   </tr>
                 `).join('')}
@@ -601,6 +610,10 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                 <div style="display: flex; justify-content: space-between; font-size: 10pt; margin-top: 2px;">
                     <span>PAGADO (ADELANTO):</span>
                     <span>S/ ${(invoice.prePaymentAmount || 0).toFixed(2)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 9pt; margin-top: 2px; color: #444; font-style: italic;">
+                    <span>MÉTODO DE PAGO:</span>
+                    <span>${((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'EFECTIVO')}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 12pt; font-weight: 900; margin-top: 4px; border-top: 2px solid #000; padding-top: 4px;">
                     <span>SALDO PENDIENTE:</span>

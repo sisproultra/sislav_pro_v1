@@ -179,7 +179,10 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
         const docTitle = getDocTitle();
         const formattedDate = new Date(invoice.date).toLocaleString('sv-SE').replace('T', ' ');
         const formattedEmissionDate = invoice.fecha_emision ? new Date(invoice.fecha_emision).toLocaleString('sv-SE').replace('T', ' ') : null;
-        const deliveryDate = invoice.deliveryDate ? new Date(invoice.deliveryDate).toLocaleDateString('es-PE') : 'POR DEFINIR';
+        const deliveryDateObj = invoice.deliveryDate ? new Date(invoice.deliveryDate) : null;
+        const deliveryDate = deliveryDateObj ? deliveryDateObj.toLocaleDateString('es-PE') : 'POR DEFINIR';
+        const deliveryTime = deliveryDateObj ? deliveryDateObj.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+        const fullDeliveryInfo = deliveryDateObj ? `${deliveryDate} ${deliveryTime}` : 'POR DEFINIR';
         const montoLetras = numeroALetras(invoice.totals.total);
         const igvRate = company.porcentajeIgv || 18.00;
         const activeBarcodeUrl = overrideBarcodeUrl || barcodeUrl;
@@ -219,7 +222,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
             .logo-ticket { max-width: ${logoSize}%; height: auto; margin: 0 auto 4mm auto; display: block; }
             
             .politicas-container {
-                font-size: 8pt;
+                font-size: ${config?.politicas_font_size || 7}pt;
                 text-align: justify;
                 margin-top: 8px;
                 white-space: pre-line;
@@ -231,7 +234,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             }
             .order-number-giant { 
-                font-size: 42pt; 
+                font-size: 32pt; 
                 font-weight: 900; 
                 margin: 5px 0; 
                 display: block; 
@@ -246,7 +249,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                 padding: 2px 20px; 
                 display: inline-block; 
                 margin-bottom: 12px; 
-                font-size: 14pt; 
+                font-size: 11pt; 
                 font-weight: bold;
                 letter-spacing: 1px;
             }
@@ -298,7 +301,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
           <div class="divider"></div>
           <table>
             <thead>
-              <tr>
+              <tr style="font-size: 8pt;">
                 <th align="left">CANT.</th>
                 <th align="left">DESCRIPCIÓN</th>
                 <th align="right">TOTAL</th>
@@ -306,17 +309,17 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
             </thead>
             <tbody>
               ${invoice.items.filter(item => !((item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO')).map(item => `
-                <tr>
+                <tr style="font-size: 8.5pt;">
                   <td width="15%">${item.quantity.toFixed(2)}</td>
                   <td style="text-transform: uppercase">
                     ${item.name}
-                    ${(item.details || item.color || item.defectos) ? `<div style="font-size: 7.5pt; font-style: italic; color: #444; margin-top: 2px; font-weight: 700;">${formatItemDetails(item, true, 'none')}</div>` : ''}
+                    ${(item.details || item.color || item.defectos) ? `<div style="font-size: 7pt; font-style: italic; color: #444; margin-top: 2px; font-weight: 700;">${formatItemDetails(item, true, 'none')}</div>` : ''}
                   </td>
                   <td align="right" width="25%">${(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
                 <tr>
                   <td></td>
-                  <td colspan="2" class="pu-row">P.U: ${item.price.toFixed(2)}</td>
+                  <td colspan="2" class="pu-row" style="font-size: 7.5pt;">P.U: ${item.price.toFixed(2)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -353,7 +356,8 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
 
           <div class="divider"></div>
           <div class="politicas-container">
-            <div style="font-weight: 900; font-size: 11pt; margin-bottom: 2mm; text-align: center;">ORDEN: ${invoice.ordenNumber || '---'}</div>
+            <div style="font-weight: 900; font-size: 11pt; margin-bottom: 1mm; text-align: center;">ORDEN: ${invoice.ordenNumber || '---'}</div>
+            <div style="font-weight: 700; font-size: 9.5pt; margin-bottom: 2mm; text-align: center; border: 1px solid #000; padding: 2px;">ENTREGA ESTIMADA: ${fullDeliveryInfo}</div>
             ${politicas}
           </div>
 
@@ -380,7 +384,8 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
             </div>
 
             <div style="margin: 10px 0; font-size: 10.5pt;">
-              <div class="black">ENTREGA: ${deliveryDate}</div>
+              <div class="black">FECHA ENTREGA: ${deliveryDate}</div>
+              <div class="black" style="font-size: 13pt; margin-top: 2px;">HORA ENTREGA: ${deliveryTime}</div>
               <div class="black" style="font-size: 12pt; margin-top: 5px;">CLIENTE: ${invoice.client.name.toUpperCase()}</div>
               <div class="atendido-por">
                   <span class="black" style="font-size: 9pt;">ATENDIDO POR:</span>
@@ -395,13 +400,13 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
               <tbody>
                 ${invoice.items.filter(item => !((item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO')).map(item => `
                   <tr style="border-bottom: 1px solid #000">
-                    <td width="15%" class="black" style="font-size: 22pt; padding: 10px 0; font-weight: normal !important;">${item.quantity.toFixed(2)}</td>
+                    <td width="20%" class="black" style="font-size: 17pt; padding: 10px 0; font-weight: normal !important;">${item.quantity.toFixed(2)}</td>
                     <td style="padding: 10px 0;">
-                      <div class="black" style="font-size: 12pt; font-weight: normal !important; display: flex; justify-content: space-between;">
+                      <div class="black" style="font-size: 11pt; font-weight: normal !important; display: flex; justify-content: space-between;">
                         <span>${item.name.toUpperCase()}</span>
                         <span>S/ ${(item.price * item.quantity).toFixed(2)}</span>
                       </div>
-                      ${(item.details || item.color || item.defectos || (item.images && item.images.length > 0) || (item as any).url_foto_1 || item.audioNote) ? `<div style="font-size: 8.5pt; font-weight: normal; font-style: italic; background: #f0f0f0; padding: 5px; margin-top: 5px; border-left: 5px solid #000;">${formatItemDetails(item, true, 'icons')}</div>` : ''}
+                      ${(item.details || item.color || item.defectos || (item.images && item.images.length > 0) || (item as any).url_foto_1 || item.audioNote) ? `<div style="font-size: 8pt; font-weight: normal; font-style: italic; background: #f0f0f0; padding: 5px; margin-top: 5px; border-left: 5px solid #000;">${formatItemDetails(item, true, 'icons')}</div>` : ''}
                     </td>
                   </tr>
                 `).join('')}
@@ -416,6 +421,10 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                 <div style="display: flex; justify-content: space-between; font-size: 10pt; margin-top: 2px;">
                     <span>PAGADO / ADELANTO:</span>
                     <span>S/ ${(invoice.prePaymentAmount || 0).toFixed(2)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 9pt; margin-top: 2px; color: #444; font-style: italic;">
+                    <span>MÉTODO DE PAGO:</span>
+                    <span>${((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'EFECTIVO')}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 11pt; font-weight: 900; margin-top: 4px; border-top: 1px solid #000; padding-top: 4px;">
                     <span>SALDO PENDIENTE:</span>
@@ -497,6 +506,11 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
     const igvRate = company.porcentajeIgv || 18.00;
     const docTitle = getDocTitle();
     const formattedDate = new Date(invoice.date).toLocaleString('sv-SE').replace('T', ' ');
+    const deliveryDateObj = invoice.deliveryDate ? new Date(invoice.deliveryDate) : null;
+    const fullDeliveryInfo = deliveryDateObj 
+        ? `${deliveryDateObj.toLocaleDateString('es-PE')} ${deliveryDateObj.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true })}` 
+        : 'POR DEFINIR';
+        
     const montoLetras = numeroALetras(invoice.totals.total);
 
     if (isLoading) {
@@ -588,6 +602,12 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                             <div className="mt-6 font-bold text-[10px] leading-tight text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">{montoLetras}</div>
                             
                             <div className="border-t-2 border-black border-dashed my-6"></div>
+                            
+                            <div className="text-center mb-4 border-2 border-black p-2 rounded-lg bg-slate-50">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Entrega Estimada</div>
+                                <div className="text-sm font-black text-slate-900">{fullDeliveryInfo}</div>
+                            </div>
+
                             <div className="text-left text-justify text-[10px] italic leading-relaxed text-slate-600 whitespace-pre-line px-1" style={{ textAlign: 'justify' }}>
                                 {ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.'}
                             </div>
@@ -683,6 +703,12 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                         <div className="mt-6 font-bold text-[10px] leading-tight text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">{montoLetras}</div>
                         
                         <div className="border-t-2 border-black border-dashed my-6"></div>
+                        
+                        <div className="text-center mb-4 border-2 border-black p-2 rounded-lg bg-slate-50">
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Entrega Estimada</div>
+                            <div className="text-sm font-black text-slate-900">{fullDeliveryInfo}</div>
+                        </div>
+
                         <div className="text-left text-justify text-[10px] italic leading-relaxed text-slate-600 whitespace-pre-line px-1" style={{ textAlign: 'justify' }}>
                             {ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.'}
                         </div>

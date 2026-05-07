@@ -132,8 +132,9 @@ const OrderPrintModal: React.FC<OrderPrintModalProps> = ({ isOpen, onClose, invo
     let totalPiecesInOrder = 0;
     invoice.items.forEach(item => {
       const isCanceled = (item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO';
+      const isWeight = item.unitCode === 'KGM' || item.um_saas === 'KILO' || item.um_saas === 'METROS' || item.um_saas === 'LITRO' || item.unitCode === 'MTK' || item.unitCode === 'LTR';
       if (!isCanceled) {
-        totalPiecesInOrder += (item.unitCode === 'KGM') ? 1 : Math.ceil(item.quantity);
+        totalPiecesInOrder += (isWeight) ? 1 : Math.ceil(item.quantity);
       }
     });
 
@@ -145,7 +146,7 @@ const OrderPrintModal: React.FC<OrderPrintModalProps> = ({ isOpen, onClose, invo
       const isCanceled = (item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO';
       if (isCanceled) return;
 
-      const isWeight = item.unitCode === 'KGM';
+      const isWeight = item.unitCode === 'KGM' || item.um_saas === 'KILO' || item.um_saas === 'METROS' || item.um_saas === 'LITRO' || item.unitCode === 'MTK' || item.unitCode === 'LTR';
       const piecesToPrint = isWeight ? 1 : Math.ceil(item.quantity);
 
       for (let i = 0; i < piecesToPrint; i++) {
@@ -161,7 +162,7 @@ const OrderPrintModal: React.FC<OrderPrintModalProps> = ({ isOpen, onClose, invo
               <div class="client-name">${invoice.client.name.toUpperCase()}</div>
               <div class="line-thick"></div>
               <div class="item-name">
-                <div>${item.name.toUpperCase()} ${isWeight ? `(${item.quantity}kg)` : ''}</div>
+                <div>${item.name.toUpperCase()} ${isWeight ? `(${item.quantity}${item.um_saas === 'METROS' ? 'm' : item.um_saas === 'LITRO' ? 'L' : 'kg'})` : ''}</div>
                 ${(item.details || item.color || item.defectos || (item.images && item.images.length > 0) || (item as any).url_foto_1 || item.audioNote) ? `<div class="item-details-tag">${formatItemDetailsHelper(item, true, 'icons')}</div>` : ''}
               </div>
               <div class="line-dashed"></div>

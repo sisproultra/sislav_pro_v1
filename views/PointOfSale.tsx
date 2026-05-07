@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, ShoppingBasket, ShoppingCart, Trash2, Plus, Minus, User, X, Save, Loader2, CheckCircle2, Ticket, Layers, PlusCircle, ClipboardEdit, Camera, Mic, AlertTriangle, ShieldAlert, Pause, Play, Clock, History, Crown, RefreshCcw, Image as ImageIcon, Bell, Shirt, Edit2, Check, DollarSign, WashingMachine, FileText } from 'lucide-react';
+import { Search, ShoppingBasket, ShoppingCart, Trash2, Plus, Minus, User, X, Save, Loader2, CheckCircle2, Ticket, Layers, PlusCircle, ClipboardEdit, Camera, Mic, AlertTriangle, ShieldAlert, Pause, Play, Clock, History, Crown, RefreshCcw, Image as ImageIcon, Bell, Shirt, Edit2, Check, DollarSign, WashingMachine, FileText, ListPlus } from 'lucide-react';
 import { Product, CartItem, InvoiceType, InvoiceTotals, Client, PaymentMethodConfig, PickupRequest, Category, UnitCode, GlobalColor, Company, PausedSale, UmSaas } from '../types';
 import { calculateTotals } from '../utils/calculations';
 import { dbUploadImage, dbGetPopularityData } from '../services/dbService';
@@ -22,7 +22,7 @@ interface PointOfSaleProps {
   clients: Client[];
   cart: CartItem[];
   categories: Category[];
-  addToCart: (product: Product) => void;
+  addToCart: (product: Product, forceNew?: boolean) => void;
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   updatePrice: (id: string, price: number) => void;
@@ -83,8 +83,8 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
   const [quoteNotification, setQuoteNotification] = useState<string | null>(null);
   const [editingQuantity, setEditingQuantity] = useState<{ id: string, val: string } | null>(null);
 
-  const handleAddToCart = (product: Product) => {
-    addToCart(product);
+  const handleAddToCart = (product: Product, forceNew = false) => {
+    addToCart(product, forceNew);
     setAddedProductId(product.id);
     setTimeout(() => setAddedProductId(null), 500);
   };
@@ -719,11 +719,21 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
                                   <Crown size={8} /> {p.pointsPrice}
                                 </div>
                               )}
-                              <div 
-                                style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}
-                                className="rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0"
-                              >
-                                <Plus size={14} strokeWidth={3} />
+                              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleAddToCart(p, true); }}
+                                    style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}
+                                    className="rounded-lg p-2 hover:bg-white hover:shadow-md transition-all"
+                                    title="Agregar como nueva línea"
+                                  >
+                                    <ListPlus size={18} strokeWidth={2.5} />
+                                  </button>
+                                  <div 
+                                    style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}
+                                    className="rounded-lg p-2"
+                                  >
+                                    <Plus size={18} strokeWidth={2.5} />
+                                  </div>
                               </div>
                           </div>
 

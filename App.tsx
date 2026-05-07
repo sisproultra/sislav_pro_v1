@@ -1723,14 +1723,22 @@ export default function App() {
                     }}
                     categories={categories} 
                     cart={cart} 
-                    addToCart={(p) => setCart(prev => { 
-                        const existingIdx = prev.findIndex(x => x.id === p.id); 
+                    addToCart={(p, forceNew = false) => setCart(prev => { 
+                        const existingIdx = !forceNew ? prev.findIndex(x => x.id === p.id) : -1; 
                         if (existingIdx !== -1) { 
                             const existingItem = prev[existingIdx]; 
                             const updatedItem = { ...existingItem, quantity: existingItem.quantity + 1, subtotal: roundToOneDecimal((existingItem.quantity + 1) * existingItem.price) }; 
                             return [updatedItem, ...prev.filter((_, i) => i !== existingIdx)]; 
                         } 
-                        return [{ ...p, quantity: 1, subtotal: roundToOneDecimal(p.price), originalPrice: p.price }, ...prev]; 
+                        const newItem: CartItem = { 
+                            ...p, 
+                            id: forceNew ? `${p.id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}` : p.id,
+                            producto_id: p.id,
+                            quantity: 1, 
+                            subtotal: roundToOneDecimal(p.price), 
+                            originalPrice: p.price 
+                        };
+                        return [newItem, ...prev]; 
                     })} 
                     removeFromCart={(id) => setCart(prev => prev.filter(i => i.id !== id))} 
                     updateQuantity={(id, q) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: q, subtotal: roundToOneDecimal(q * i.price) } : i))} 
