@@ -155,6 +155,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     const [auditItemName, setAuditItemName] = useState('');
 
     const [showConfirmUnified, setShowConfirmUnified] = useState(false);
+    const [activeModalTab, setActiveModalTab] = useState<'pagos' | 'entrega'>('entrega');
 
     const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim() || '#0054A6';
     const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--brand-secondary').trim() || '#10B981';
@@ -521,6 +522,9 @@ const MyOrders: React.FC<MyOrdersProps> = ({
         if (isNaN(amountVal) || amountVal <= 0) {
             amountVal = pending;
         }
+        
+        // Estricta prevención de cobros negativos
+        if (amountVal <= 0) return;
 
         if (!isCash && amountVal > pending) amountVal = pending;
 
@@ -574,7 +578,14 @@ const MyOrders: React.FC<MyOrdersProps> = ({
         const pm = paymentMethods.find(p => p.name.toUpperCase() === methodName.toUpperCase());
         const iconData = pm?.icon || '';
         if (iconData.startsWith('data:') || iconData.startsWith('http')) {
-            return <img src={iconData} className="w-full h-full object-contain" />;
+            return (
+                <div 
+                    className="flex items-center justify-center p-0.5" 
+                    style={{ width: size, height: size }}
+                >
+                    <img src={iconData} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                </div>
+            );
         }
         switch (iconData) {
             case 'banknote': return <Banknote size={size} />;
@@ -1063,36 +1074,55 @@ const MyOrders: React.FC<MyOrdersProps> = ({
             {/* MODAL UNIFICADO: COBRO Y GESTIÓN DE ENTREGA - OPTIMIZADO PARA NO SCROLL Y UX */}
             {selectedOrderToPay && (
                 <div className="fixed inset-0 bg-slate-950/95 z-[350] flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-md animate-in fade-in">
-                    <div className="bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] w-full max-w-5xl shadow-[0_0_80px_rgba(0,0,0,0.4)] overflow-hidden border border-white/20 flex flex-col md:flex-row max-h-[95vh] sm:max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95">
+                    <div className="bg-white rounded-t-3xl sm:rounded-[2.5rem] w-full max-w-5xl shadow-[0_0_80px_rgba(0,0,0,0.4)] overflow-hidden border border-white/20 flex flex-col md:flex-row h-[92vh] sm:h-auto sm:max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 relative">
+                        
+                        {/* SELECTOR DE PESTAÑAS MÓVIL */}
+                        <div className="flex md:hidden w-full bg-white border-b border-slate-100 p-2 shrink-0">
+                            <div className="flex w-full bg-slate-100 p-1 rounded-2xl">
+                                <button 
+                                    onClick={() => setActiveModalTab('pagos')}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeModalTab === 'pagos' ? 'bg-white shadow-md' : 'text-slate-400'}`}
+                                    style={activeModalTab === 'pagos' ? { color: primaryColor } : {}}
+                                >
+                                    <DollarSign size={14} /> PAGAR
+                                </button>
+                                <button 
+                                    onClick={() => setActiveModalTab('entrega')}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeModalTab === 'entrega' ? 'bg-white shadow-md' : 'text-slate-400'}`}
+                                    style={activeModalTab === 'entrega' ? { color: secondaryColor } : {}}
+                                >
+                                    <PackageCheck size={14} /> ENTREGAR
+                                </button>
+                            </div>
+                        </div>
 
                         {/* PANEL IZQUIERDO: CAJA / PAGOS */}
-                        <div className="w-full md:w-5/12 p-5 md:p-6 border-b md:border-b-0 md:border-r border-slate-100 bg-white flex flex-col overflow-hidden shrink-0 md:shrink">
-                            <div className="flex items-center justify-between mb-4 md:mb-5">
+                        <div className={`${activeModalTab === 'pagos' ? 'flex' : 'hidden'} md:flex w-full md:w-5/12 p-4 md:p-6 border-b md:border-b-0 md:border-r border-slate-100 bg-white flex-col overflow-hidden shrink-0`}>
+                            <div className="hidden md:flex items-center justify-between mb-3 md:mb-5 pr-10 md:pr-0">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-xl text-white shadow-lg shadow-indigo-100" style={{ backgroundColor: primaryColor }}><DollarSign size={20} /></div>
+                                    <div className="p-1.5 md:p-2 rounded-xl text-white shadow-lg" style={{ backgroundColor: primaryColor }}><DollarSign size={18} className="md:w-5 md:h-5" /></div>
                                     <div>
-                                        <h3 className="font-bold text-base md:text-lg uppercase tracking-tight leading-none">Cerrar Cuenta</h3>
-                                        <p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Orden #{selectedOrderToPay.ordenNumber}</p>
+                                        <h3 className="font-bold text-sm md:text-lg uppercase tracking-tight leading-none">Cerrar Cuenta</h3>
+                                        <p className="text-[7px] md:text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Orden #{selectedOrderToPay.ordenNumber}</p>
                                     </div>
                                 </div>
-                                <button onClick={() => setSelectedOrderToPay(null)} className="md:hidden p-2 text-slate-400"><X size={20} /></button>
                             </div>
 
-                            <div className="space-y-3 overflow-y-auto no-scrollbar md:flex-1 md:flex md:flex-col md:space-y-4">
-                                <div className="grid grid-cols-2 gap-2.5 md:gap-3 shrink-0">
-                                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 block">Total</span>
-                                        <p className="text-base md:text-lg font-bold text-slate-900 leading-none">{currency} {totalAmountInvoiced.toFixed(2)}</p>
+                            <div className="space-y-2.5 overflow-y-auto no-scrollbar md:flex-1 md:flex md:flex-col md:space-y-4">
+                                <div className="grid grid-cols-2 gap-2 md:gap-3 shrink-0">
+                                    <div className="bg-slate-50 p-2.5 md:p-3 rounded-2xl border border-slate-100">
+                                        <span className="text-[7px] md:text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 block">Total</span>
+                                        <p className="text-sm md:text-lg font-bold text-slate-900 leading-none">{currency} {totalAmountInvoiced.toFixed(2)}</p>
                                     </div>
-                                    <div className="p-3 rounded-2xl border bg-slate-50 border-slate-100">
-                                        <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest mb-0.5 block">Abonado</span>
-                                        <p className="text-base md:text-lg font-bold text-indigo-600 leading-none">{currency} {previouslyPaid.toFixed(2)}</p>
+                                    <div className="p-2.5 md:p-3 rounded-2xl border bg-slate-50 border-slate-100">
+                                        <span className="text-[7px] md:text-[8px] font-bold uppercase tracking-widest mb-0.5 block" style={{ color: primaryColor }}>Abonado</span>
+                                        <p className="text-sm md:text-lg font-bold leading-none" style={{ color: primaryColor }}>{currency} {previouslyPaid.toFixed(2)}</p>
                                     </div>
                                 </div>
 
-                                <div className="bg-slate-900 p-4 md:p-5 rounded-[1.5rem] md:rounded-[2rem] shadow-xl text-white text-center relative overflow-hidden group shrink-0">
+                                <div className="bg-slate-900 p-3.5 md:p-5 rounded-2xl md:rounded-[2rem] shadow-xl text-white text-center relative overflow-hidden group shrink-0">
                                     <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform duration-700 hidden md:block"><DollarSign size={80} /></div>
-                                    <span className="text-[8px] md:text-[9px] font-bold text-indigo-300 uppercase tracking-[0.3em] mb-1 md:mb-2 block relative z-10">Saldo Pendiente</span>
+                                    <span className="text-[8px] md:text-[9px] font-bold opacity-60 uppercase tracking-[0.3em] mb-1 md:mb-2 block relative z-10">Saldo Pendiente</span>
                                     <h4 className="text-2xl md:text-4xl font-bold tabular-nums tracking-tight relative z-10 leading-none">
                                         {currency} {pendingInModal.toFixed(2)}
                                     </h4>
@@ -1103,17 +1133,18 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                     )}
                                 </div>
 
-                                <div className="space-y-3 shrink-0">
-                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-                                                <Tag size={12} className="text-indigo-600" /> Aplicar Descuento
+                                <div className="space-y-2 shrink-0">
+                                    <div className="bg-slate-50 p-3 md:p-4 rounded-2xl border border-slate-200">
+                                        <div className="flex items-center justify-between mb-1.5 md:mb-2">
+                                            <label className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                                                <Tag size={12} style={{ color: primaryColor }} /> Aplicar Descuento
                                             </label>
                                             <button 
                                                 onClick={() => setShowDiscount(!showDiscount)}
-                                                className={`w-10 h-5 rounded-full transition-all relative ${showDiscount ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                                                style={{ backgroundColor: showDiscount ? primaryColor : '#e2e8f0' }}
+                                                className="w-8 h-4 md:w-10 md:h-5 rounded-full transition-all relative"
                                             >
-                                                <div className={`absolute top-0.5 h-4 w-4 bg-white rounded-full transition-all ${showDiscount ? 'left-5.5' : 'left-0.5'}`} />
+                                                <div className={`absolute top-0.5 h-3 w-3 md:h-4 md:w-4 bg-white rounded-full transition-all ${showDiscount ? 'right-0.5' : 'left-0.5'}`} />
                                             </button>
                                         </div>
                                         
@@ -1125,13 +1156,14 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                     exit={{ height: 0, opacity: 0 }}
                                                     className="overflow-hidden"
                                                 >
-                                                    <div className="relative pt-2">
+                                                <div className="relative pt-1.5 md:pt-2">
                                                         <span className="absolute left-4 top-[58%] -translate-y-1/2 text-slate-300 font-bold text-base md:text-xl">{currency}</span>
                                                         <input 
                                                             type="number" 
                                                             value={localDiscount} 
                                                             onChange={e => setLocalDiscount(e.target.value)} 
-                                                            className="w-full bg-white border-2 border-slate-100 rounded-xl px-12 py-2.5 md:py-3 text-lg md:text-xl font-bold outline-none focus:border-indigo-500 transition-all shadow-sm text-slate-800" 
+                                                            style={{ borderColor: showDiscount ? primaryColor : '#f1f5f9' }}
+                                                            className="w-full bg-white border-2 rounded-xl px-12 py-2 md:py-3 text-lg md:text-xl font-bold outline-none transition-all shadow-sm text-slate-800" 
                                                             placeholder="0.00" 
                                                         />
                                                     </div>
@@ -1143,9 +1175,9 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                     <div className="relative">
                                         <style>{`
                                             @keyframes neon-pulse {
-                                                0% { box-shadow: 0 0 5px #4f46e5, 0 0 10px #4f46e5; border-color: #4f46e5; }
-                                                50% { box-shadow: 0 0 15px #4f46e5, 0 0 25px #6366f1; border-color: #6366f1; }
-                                                100% { box-shadow: 0 0 5px #4f46e5, 0 0 10px #4f46e5; border-color: #4f46e5; }
+                                                0% { box-shadow: 0 0 5px ${primaryColor}, 0 0 10px ${primaryColor}; border-color: ${primaryColor}; }
+                                                50% { box-shadow: 0 0 10px ${primaryColor}, 0 0 15px ${primaryColor}cc; border-color: ${primaryColor}; }
+                                                100% { box-shadow: 0 0 5px ${primaryColor}, 0 0 10px ${primaryColor}; border-color: ${primaryColor}; }
                                             }
                                             .neon-pulse-input {
                                                 animation: neon-pulse 1.5s infinite;
@@ -1153,70 +1185,92 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                         `}</style>
                                         <input
                                             type="number"
+                                            min="0.01"
+                                            step="0.01"
                                             value={payAmount}
                                             onChange={e => setPayAmount(e.target.value)}
                                             placeholder={pendingInModal > 0 ? `Cobro (${currency} ${pendingInModal.toFixed(2)})` : "0.00"}
-                                            className="w-full bg-white border-4 border-indigo-500 rounded-2xl px-5 py-3 md:py-4 text-2xl md:text-3xl font-black text-slate-900 outline-none transition-all shadow-2xl neon-pulse-input text-center placeholder:text-slate-300"
+                                            style={{ borderColor: primaryColor }}
+                                            className="w-full bg-white border-2 md:border-4 rounded-xl md:rounded-2xl px-4 py-2.5 md:py-4 text-xl md:text-3xl font-black text-slate-900 outline-none transition-all shadow-xl neon-pulse-input text-center placeholder:text-slate-300"
                                             autoFocus
                                         />
                                     </div>
-                                    <div className="flex md:grid md:grid-cols-5 gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
+                                    <div className="grid grid-cols-4 md:grid-cols-5 gap-2.5 md:gap-2 pb-1 md:pb-0">
                                         {paymentMethods.filter(pm => pm.isActive && !pm.isSuspended).map(pm => (
                                             <button
                                                 key={pm.id}
                                                 onClick={() => handleAddPaymentEntry(pm)}
                                                 disabled={pendingInModal <= 0}
-                                                className="bg-white border-2 border-slate-100 p-3 md:p-2.5 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-all flex items-center justify-center disabled:opacity-30 disabled:grayscale group shadow-sm min-w-[50px] shrink-0"
+                                                className="bg-white border-2 border-slate-100 p-2.5 md:p-3 rounded-xl hover:bg-slate-50 transition-all flex items-center justify-center disabled:opacity-30 disabled:grayscale group shadow-sm active:scale-95"
+                                                style={{ borderColor: payments.some(p => p.methodName === pm.name.toUpperCase()) ? primaryColor : '#f1f5f9' }}
                                                 title={pm.name}
                                             >
-                                                <div className="group-hover:scale-110 transition-transform duration-500">{getMethodIcon(pm.name, 20)}</div>
+                                                <div className="group-hover:scale-110 transition-transform duration-300">
+                                                    {getMethodIcon(pm.name, 32)}
+                                                </div>
                                             </button>
                                         ))}
                                     </div>
                                 </div>
 
-                                <div className="hidden md:block flex-1 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 pr-1 min-h-[120px] max-h-[300px] md:max-h-none">
                                     {payments.length === 0 ? (
-                                        <div className="h-full flex items-center justify-center border-2 border-dashed border-slate-100 rounded-2xl">
-                                            <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">Sin abonos en esta sesión</p>
+                                        <div className="h-full min-h-[80px] flex items-center justify-center border-2 border-dashed border-slate-100 rounded-2xl">
+                                            <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">Sin abonos</p>
                                         </div>
                                     ) : (
                                         payments.map(p => (
                                             <div key={p.id} className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center justify-between animate-in slide-in-from-right-2">
                                                 <div className="flex items-center gap-2">
-                                                    <div className="w-6 h-6 bg-white rounded-lg flex items-center justify-center text-indigo-600 shadow-sm border border-slate-100">{getMethodIcon(p.methodName, 12)}</div>
-                                                    <span className="text-[9px] font-bold text-slate-600 uppercase truncate max-w-[120px]">{p.methodName}</span>
+                                                    <div className="w-8 h-8 md:w-6 md:h-6 bg-white rounded-lg flex items-center justify-center shadow-sm border border-slate-100" style={{ color: primaryColor }}>{getMethodIcon(p.methodName, 16)}</div>
+                                                    <span className="text-[9px] font-bold text-slate-600 uppercase truncate max-w-[100px] md:max-w-[120px]">{p.methodName}</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-bold text-[11px] text-slate-900">{currency} {p.amount.toFixed(2)}</span>
-                                                    <button onClick={() => removePaymentEntry(p.id)} className="p-1.5 text-slate-200 hover:text-red-500 transition-colors bg-slate-50 rounded-lg"><Trash2 size={12} /></button>
+                                                    <button 
+                                                        onClick={() => removePaymentEntry(p.id)} 
+                                                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors bg-white border border-rose-100 rounded-lg shadow-sm"
+                                                        title="Eliminar pago"
+                                                    >
+                                                        <Trash2 size={12} strokeWidth={2.5} />
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))
                                     )}
                                 </div>
+                                <div className="md:hidden mt-3 pt-3 border-t border-slate-100">
+                                    <button 
+                                        onClick={() => setSelectedOrderToPay(null)} 
+                                        style={{ backgroundColor: primaryColor }}
+                                        className="w-full py-4 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all active:scale-95 shadow-xl flex items-center justify-center gap-3 border-b-4 border-black/20"
+                                    >
+                                        <ArrowLeft size={18} strokeWidth={3} /> VOLVER AL LISTADO
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
                         {/* PANEL DERECHO: ENTREGA / ITEMS */}
-                        <div className="w-full md:w-7/12 p-5 md:p-6 bg-slate-50 flex flex-col overflow-hidden grow md:grow-0">
-                            <div className="flex items-center justify-between mb-4 md:mb-5 shrink-0">
+                        <div className={`${activeModalTab === 'entrega' ? 'flex' : 'hidden'} md:flex w-full md:w-7/12 p-4 md:p-6 bg-slate-50 flex-col overflow-hidden grow md:grow-0`}>
+                            <div className="flex items-center justify-between mb-3 md:mb-5 shrink-0">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-xl text-white shadow-lg shadow-emerald-100" style={{ backgroundColor: secondaryColor }}><PackageCheck size={20} /></div>
+                                    <div className="p-1.5 md:p-2 rounded-xl text-white shadow-lg" style={{ backgroundColor: secondaryColor }}><PackageCheck size={18} className="md:w-5 md:h-5" /></div>
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-bold text-sm md:text-lg uppercase tracking-tight leading-none truncate">{selectedOrderToPay.client.name}</h3>
-                                        <p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Gestión de entrega física</p>
+                                        <p className="text-[7px] md:text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Gestión de entrega física</p>
                                     </div>
                                 </div>
                                 <button 
                                     onClick={handleSelectAllToDeliver}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 md:px-4 py-2 rounded-xl font-bold text-[8px] md:text-[9px] uppercase tracking-widest transition-all shadow-md active:scale-95 flex items-center gap-2"
+                                    style={{ backgroundColor: primaryColor }}
+                                    className="hover:brightness-110 text-white px-3 md:px-4 py-1.5 md:py-2 rounded-xl font-bold text-[7px] md:text-[9px] uppercase tracking-widest transition-all shadow-md active:scale-95 flex items-center gap-1.5 md:gap-2"
                                 >
-                                    <CheckSquare size={14} /> TODO
+                                    <CheckSquare size={13} className="md:w-[14px] md:h-[14px]" /> TODO
                                 </button>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 mb-4">
+                            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 md:space-y-2 pr-1 mb-3">
                                 {selectedOrderToPay.items.map(it => {
                                     const isDelivered = it.status === 'ENTREGADO';
                                     const isReady = it.status === 'LISTO';
@@ -1289,9 +1343,9 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                             </div>
 
                             <div className="mt-auto pt-3 md:pt-4 border-t border-slate-200 shrink-0">
-                                <div className="flex items-center justify-between bg-indigo-900 text-white p-4 md:p-5 rounded-[1.5rem] md:rounded-[1.8rem] shadow-2xl group transition-all">
+                                <div className="flex items-center justify-between bg-slate-900 text-white p-4 md:p-5 rounded-[1.5rem] md:rounded-[1.8rem] shadow-2xl group transition-all" style={{ backgroundColor: '#1e293b' }}>
                                     <div className="min-w-0">
-                                        <p className="text-[7px] md:text-[8px] font-bold uppercase tracking-widest text-indigo-300 mb-0.5">Estado de Cierre</p>
+                                        <p className="text-[7px] md:text-[8px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">Estado de Cierre</p>
                                         <p className="text-[9px] md:text-[11px] font-bold leading-tight opacity-90 truncate">
                                             {payments.length} abonos • {selectedItemsToDeliver.size} prendas
                                         </p>
@@ -1299,7 +1353,8 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                     <button
                                         onClick={() => setShowConfirmUnified(true)}
                                         disabled={isProcessingPayment || (payments.length === 0 && selectedItemsToDeliver.size === 0 && discountVal === (selectedOrderToPay.descuento || 0))}
-                                        className="bg-white text-indigo-900 px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-bold text-[8px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 shrink-0"
+                                        style={{ backgroundColor: primaryColor }}
+                                        className="text-white px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-bold text-[8px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 shrink-0 border border-white/20"
                                     >
                                         {isProcessingPayment ? <Loader2 size={14} className="animate-spin" /> : (
                                             <>
@@ -1318,7 +1373,8 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                 </div>
                                 <button 
                                     onClick={() => setSelectedOrderToPay(null)} 
-                                    className="w-full mt-3 md:mt-4 py-3 md:py-4 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl font-black text-xs md:text-sm uppercase tracking-[0.2em] transition-all active:scale-95 shadow-xl flex items-center justify-center gap-3 border-b-4 border-slate-950"
+                                    style={{ backgroundColor: primaryColor }}
+                                    className="w-full mt-3 md:mt-4 py-3 md:py-4 text-white rounded-2xl font-black text-xs md:text-sm uppercase tracking-[0.2em] transition-all active:scale-95 shadow-xl flex items-center justify-center gap-3 border-b-4 border-black/20"
                                 >
                                     <ArrowLeft size={18} strokeWidth={3} /> VOLVER AL LISTADO
                                 </button>
@@ -1488,7 +1544,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                         
                                         <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                                             <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Total Cobrado</span>
-                                            <span className="text-lg font-black text-emerald-600 uppercase tabular-nums">{currency} {currentTotalPaidInModal.toFixed(2)}</span>
+                                            <span className="text-lg font-black uppercase tabular-nums" style={{ color: primaryColor }}>{currency} {currentTotalPaidInModal.toFixed(2)}</span>
                                         </div>
                                         
                                         {pendingInModal > 0.01 && (

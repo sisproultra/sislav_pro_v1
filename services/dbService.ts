@@ -63,7 +63,7 @@ export const invalidateCache = (prefix: string) => {
 };
 
 export const setDbBranchContext = (branchId: string, holdingId?: string, userId?: string) => {
-    console.log(`Setting DB Context - Branch: ${branchId}, Holding: ${holdingId}, User: ${userId}`);
+    // console.log(`Setting DB Context - Branch: ${branchId}, Holding: ${holdingId}, User: ${userId}`);
     if (branchId) {
         activeBranchId = branchId;
         localStorage.setItem('sislav_active_branch_uuid', branchId);
@@ -442,7 +442,7 @@ export const dbOwnerAuth = async (email: string, pass: string): Promise<AuthSess
 
 const ensureHoldingId = async (branchId: string): Promise<string> => {
     let hid = getActiveHoldingId();
-    console.log(`Ensuring HoldingId for Branch: ${branchId}, Current: ${hid}`);
+    // console.log(`Ensuring HoldingId for Branch: ${branchId}, Current: ${hid}`);
     if (!hid && branchId) {
         const { data } = await supabase.from('sucursales').select('empresa_id').eq('id', branchId).maybeSingle();
         if (data?.empresa_id) {
@@ -772,9 +772,9 @@ export const dbGetPopularityData = async () => {
         }
         
         // Log para depuración interna del esquema (Solo en desarrollo)
-        if (data.length > 0 && import.meta.env.DEV) {
-            console.log("📊 Esquema items_venta detectado:", Object.keys(data[0]));
-        }
+        // if (data.length > 0 && import.meta.env.DEV) {
+        //     console.log("📊 Esquema items_venta detectado:", Object.keys(data[0]));
+        // }
         
         const catCounts: { [key: string]: number } = {};
         const prodCounts: { [key: string]: number } = {};

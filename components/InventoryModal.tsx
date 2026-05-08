@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, IgvType, UnitCode, UmSaas, Supply, RecipeItem, Category, Company } from '../types';
 import { X, Wand2, Loader2, FlaskConical, Tag, Plus, Trash2, Box, Clock, Save, Crown, Ruler, Beaker, Calculator } from 'lucide-react';
+import SuccessModal from './SuccessModal';
 import { generateProductDescription } from '../services/geminiService';
 
 interface InventoryModalProps {
@@ -122,6 +123,8 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
     setIsGenerating(false);
   };
 
+  const [isSuccess, setIsSuccess] = useState(false);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -161,8 +164,19 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
       estado: 'a',
       activo: true
     });
-    onClose();
+    
+    setIsSuccess(true);
   };
+
+  if (isSuccess) {
+    return (
+        <SuccessModal 
+            isOpen={true} 
+            onClose={() => { setIsSuccess(false); onClose(); }} 
+            message={`El producto "${name.toUpperCase()}" ha sido guardado correctamente.`} 
+        />
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[150] flex items-center justify-center p-2 md:p-4 backdrop-blur-sm overflow-y-auto">
@@ -196,77 +210,82 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
             {activeTab === 'DETAILS' ? (
                 <div className="space-y-6">
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">Nombre del Servicio</label>
-                      <input type="text" required value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 focus:bg-white focus:border-sunat-primary outline-none font-bold text-base uppercase text-slate-800 transition-all shadow-inner"/>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-6">
-                        <div>
-                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1 font-mono">Nombre del Servicio</label>
-                          <input type="text" required value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 focus:bg-white outline-none font-black text-lg uppercase text-slate-800 transition-all shadow-inner" style={{ borderColor: isSunatLocked ? '#f1f5f9' : company.primaryColor }}/>
-                        </div>
-
+                    {/* Sección Principal de Datos */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                           <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1 font-mono">Categoría</label>
-                          <select required value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 font-black text-sm text-slate-800 appearance-none outline-none focus:bg-white">
+                          <select required value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 font-black text-sm text-slate-800 appearance-none outline-none focus:bg-white transition-all focus:border-opacity-50">
                             <option value="">Seleccione...</option>
                             {activeCategories.map(cat => (<option key={cat.id} value={cat.id}>{cat.name}</option>))}
                           </select>
                         </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1 font-mono">Nombre del Servicio</label>
+                          <input type="text" required value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 focus:bg-white outline-none font-black text-lg uppercase text-slate-800 transition-all shadow-inner" style={{ borderColor: isSunatLocked ? '#f1f5f9' : company.primaryColor }}/>
+                        </div>
                     </div>
 
-                    <div className="bg-slate-50/50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner space-y-4">
-                        <div>
-                          <div className="flex justify-between items-center mb-1 ml-1">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1 font-mono"><Box size={12}/> Unidad de Medida Interna (SaaS)</label>
-                          </div>
-                          <select required value={umSaas} onChange={(e) => setUmSaas(e.target.value as UmSaas)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-4 py-4 font-black text-sm text-slate-800 appearance-none outline-none focus:bg-white">
-                            <option value={UmSaas.UNIDAD}>UNIDAD</option>
-                            <option value={UmSaas.PIEZA}>PIEZA</option>
-                            <option value={UmSaas.KILO}>KILO (Permite decimales)</option>
-                            <option value={UmSaas.METROS}>METROS (Permite decimales)</option>
-                            <option value={UmSaas.LITRO}>LITRO (Permite decimales)</option>
-                          </select>
-                          <p className="text-[8px] text-slate-400 font-bold uppercase mt-2 ml-1 italic opacity-60">Define si el producto permite cantidades decimales en el carrito.</p>
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 flex items-center gap-1 font-mono"><Clock size={12}/> Peso Estimado por Unidad ({umSaas === UmSaas.KILO ? 'KGM' : 'KG'})</label>
-                          <input 
-                            type="number" 
-                            step="0.001" 
-                            required 
-                            value={pesoEstimado} 
-                            onChange={(e) => setPesoEstimado(e.target.value)} 
-                            className="w-full bg-white border-2 border-slate-200 rounded-2xl px-4 py-4 font-black text-sm text-slate-800 outline-none focus:bg-white"
-                          />
-                          <p className="text-[8px] text-slate-400 font-bold uppercase mt-2 ml-1 italic opacity-60">
-                            {umSaas === UmSaas.KILO ? 'Para productos al peso, este valor suele ser 1.000 para que se sume el peso real marcado en la balanza.' : 'Para productos por unidad, el promedio estándar es 0.400 KG (400g).'}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-4 bg-white/50 p-4 rounded-2xl border border-slate-200/50">
-                            <div 
-                                onClick={() => setRequiresAreaCalc(!requiresAreaCalc)}
-                                className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${requiresAreaCalc ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                            >
-                                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${requiresAreaCalc ? 'translate-x-6' : 'translate-x-0'}`} />
-                            </div>
+                    <div className="bg-slate-50/50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <span className="block text-[10px] font-black text-slate-700 uppercase tracking-tighter leading-none mb-1">Cálculo por Area (Ancho x Largo)</span>
-                                <span className="block text-[8px] text-slate-400 font-bold uppercase tracking-tight leading-none italic">Ideal para Alfombras, Cortinas, etc.</span>
+                              <div className="flex justify-between items-center mb-1 ml-1">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1 font-mono"><Box size={12}/> Unidad Medida (SaaS)</label>
+                              </div>
+                              <select required value={umSaas} onChange={(e) => setUmSaas(e.target.value as UmSaas)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-4 py-4 font-black text-sm text-slate-800 appearance-none outline-none focus:bg-white">
+                                <option value={UmSaas.UNIDAD}>UNIDAD</option>
+                                <option value={UmSaas.PIEZA}>PIEZA</option>
+                                <option value={UmSaas.KILO}>KILO (Permite decimales)</option>
+                                <option value={UmSaas.METROS}>METROS (Permite decimales)</option>
+                                <option value={UmSaas.LITRO}>LITRO (Permite decimales)</option>
+                              </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 font-mono">Precio Venta ({currency})</label>
+                                <input type="number" required step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 font-black text-3xl outline-none transition-all" style={{ color: company.primaryColor || '#0054A6' }} />
                             </div>
                         </div>
                     </div>
                     
-                    <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-200">
-                        <div className="grid grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1 font-mono">Precio Venta ({currency})</label>
-                                <input type="number" required step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 font-black text-3xl outline-none transition-all" style={{ color: company.primaryColor || '#0054A6' }} />
+                    {/* Otras Configuraciones Group */}
+                    <div className="pt-6 border-t border-dashed border-slate-200">
+                        <h3 className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                           <Tag size={12} /> Otras Configuraciones
+                        </h3>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-4">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 flex items-center gap-1 font-mono"><Clock size={12}/> Peso Estimado por Unidad ({umSaas === UmSaas.KILO ? 'KGM' : 'KG'})</label>
+                                  <input 
+                                    type="number" 
+                                    step="0.001" 
+                                    required 
+                                    value={pesoEstimado} 
+                                    onChange={(e) => setPesoEstimado(e.target.value)} 
+                                    className="w-full bg-white border-2 border-slate-200 rounded-2xl px-4 py-3 font-black text-sm text-slate-800 outline-none focus:bg-white text-center"
+                                  />
+                                  <p className="text-[8px] text-slate-400 font-bold uppercase mt-2 ml-1 italic opacity-60 text-center">
+                                    {umSaas === UmSaas.KILO ? 'Kilo real marcado en balanza' : 'Promedio estándar: 0.400 KG'}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-4 bg-white/50 p-4 rounded-2xl border border-slate-200/50">
+                                    <div 
+                                        onClick={() => setRequiresAreaCalc(!requiresAreaCalc)}
+                                        className={`w-10 h-5 rounded-full p-1 cursor-pointer transition-colors ${requiresAreaCalc ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                    >
+                                        <div className={`w-3 h-3 bg-white rounded-full transition-transform ${requiresAreaCalc ? 'translate-x-5' : 'translate-x-0'}`} />
+                                    </div>
+                                    <div>
+                                        <span className="block text-[9px] font-black text-slate-700 uppercase leading-none mb-1">Cálculo por Area</span>
+                                        <span className="block text-[8px] text-slate-400 font-bold uppercase leading-none italic">Alfombras, Cortinas, etc.</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
+
+                            <div className="bg-amber-50/30 p-6 rounded-3xl border border-amber-100/50">
                                 <label className="block text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-2 ml-1 flex items-center gap-1 font-mono">
                                     <Crown size={12} /> Canje Puntos
                                 </label>
@@ -275,78 +294,88 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
                                     step="1" 
                                     value={pointsPrice} 
                                     onChange={(e) => setPointsPrice(e.target.value)} 
-                                    className="w-full border-2 border-amber-100 bg-white rounded-2xl px-5 py-4 font-black text-3xl text-amber-600 outline-none" 
+                                    className="w-full border-2 border-amber-100 bg-white rounded-2xl px-5 py-3.5 font-black text-2xl text-amber-600 outline-none transition-all focus:border-amber-400" 
                                     placeholder="Ej: 50"
                                 />
+                                <p className="text-[8px] text-amber-400 font-bold uppercase mt-2 ml-1 italic">Puntos necesarios para canjear gratis</p>
                             </div>
                         </div>
-                    </div>
 
-                    <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 font-mono">Descripción del Servicio</label>
-                        <button type="button" onClick={handleGenerateDescription} disabled={isGenerating} className="text-purple-600 hover:bg-purple-50 p-2 rounded-xl transition-all active:scale-95" title="Mejorar con IA">
-                          {isGenerating ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
-                        </button>
-                      </div>
-                      <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-700 resize-none outline-none focus:bg-white shadow-inner" placeholder="Pantalón de gabardina, lavado en seco..."/>
-                    </div>
+                        <div className="space-y-6">
+                            <div>
+                              <div className="flex justify-between items-center mb-1">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 font-mono">Descripción del Servicio</label>
+                                <button type="button" onClick={handleGenerateDescription} disabled={isGenerating} className="text-white p-2 rounded-xl transition-all active:scale-95 shadow-md" style={{ backgroundColor: company.primaryColor || '#0054A6' }} title="Mejorar con IA">
+                                  {isGenerating ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
+                                </button>
+                              </div>
+                              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-700 resize-none outline-none focus:bg-white shadow-inner" placeholder="Pantalón de gabardina, lavado en seco..."/>
+                            </div>
 
-                    {/* Sección Avanzada Sunat Oculta por defecto */}
-                    <div className="pt-4 border-t border-slate-100 space-y-4">
-                        <div className="flex items-center justify-between px-2">
-                           <div className="flex items-center gap-2">
-                              <Ruler size={14} className="text-slate-400" />
-                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Código Unidad SUNAT</span>
-                           </div>
-                           <div 
-                                onClick={() => setIsSunatLocked(!isSunatLocked)}
-                                className={`w-10 h-5 rounded-full p-1 cursor-pointer transition-all flex items-center ${isSunatLocked ? 'bg-slate-200' : 'bg-blue-500'}`}
-                            >
-                                <div className={`w-3 h-3 bg-white rounded-full transition-all ${isSunatLocked ? 'translate-x-0' : 'translate-x-5'}`} />
-                           </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">URL de Imagen</label>
+                                  <div className="flex gap-2">
+                                    <input 
+                                        type="url" 
+                                        value={imageUrl} 
+                                        onChange={(e) => setImageUrl(e.target.value)} 
+                                        placeholder="https://..."
+                                        className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 focus:bg-white outline-none font-bold text-[10px] text-slate-800 transition-all shadow-inner"
+                                      />
+                                      {imageUrl && <img src={imageUrl} className="w-12 h-12 rounded-xl object-cover border border-slate-200" referrerPolicy="no-referrer" />}
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col justify-center">
+                                    <div className="flex items-center gap-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 transition-all hover:bg-indigo-50">
+                                        <input 
+                                            id="showInCatalog"
+                                            type="checkbox" 
+                                            checked={showInCatalog}
+                                            onChange={(e) => setShowInCatalog(e.target.checked)}
+                                            className="w-5 h-5 rounded border-2 border-indigo-200 text-indigo-600 focus:ring-indigo-500 cursor-pointer transition-all"
+                                        />
+                                        <label htmlFor="showInCatalog" className="cursor-pointer select-none">
+                                            <span className="block text-[10px] font-bold text-slate-700 uppercase tracking-widest leading-none">Mostrar en Tienda</span>
+                                            <span className="block text-[8px] text-slate-400 font-bold uppercase tracking-tight leading-none italic mt-1">
+                                                {showInCatalog ? 'Visible en catálogo' : 'Oculto de la web'}
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        
-                        {!isSunatLocked && (
-                          <div className="animate-in slide-in-from-top-2 duration-200">
-                             <select value={unitCode} onChange={(e) => setUnitCode(e.target.value as UnitCode)} className="w-full bg-slate-100 border-2 border-slate-200 rounded-2xl px-4 py-4 font-black text-xs text-slate-600 appearance-none outline-none focus:bg-white">
-                                <option value={UnitCode.ZZ}>SERVICIO (ZZ) - RECOMENDADO</option>
-                                <option value={UnitCode.NIU}>UNIDAD (NIU)</option>
-                                <option value={UnitCode.KGM}>KILOGRAMO (KG)</option>
-                                <option value={UnitCode.MTK}>METRO CUADRADO (M2)</option>
-                                <option value={UnitCode.LTR}>LITRO (LT)</option>
-                             </select>
-                             <p className="text-[8px] text-amber-600 font-bold uppercase mt-2 px-2 text-center">⚠️ Solo modifique este campo si conoce las implicaciones tributarias en sus facturas electrónicas.</p>
-                          </div>
-                        )}
-                    </div>
 
-                    <div className="flex items-center gap-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 shadow-inner group transition-all hover:bg-indigo-50">
-                        <input 
-                            id="showInCatalog"
-                            type="checkbox" 
-                            checked={showInCatalog}
-                            onChange={(e) => setShowInCatalog(e.target.checked)}
-                            className="w-6 h-6 rounded-lg border-2 border-indigo-200 text-indigo-600 focus:ring-indigo-500 cursor-pointer transition-all"
-                        />
-                        <label htmlFor="showInCatalog" className="cursor-pointer select-none">
-                            <span className="block text-[10px] font-bold text-slate-700 uppercase tracking-widest leading-none mb-1">Mostrar en Tienda Virtual</span>
-                            <span className="block text-[8px] text-slate-400 font-bold uppercase tracking-tight leading-none italic">
-                                {showInCatalog ? '✅ Este servicio será visible para tus clientes.' : '❌ Este servicio no aparecerá en el catálogo web.'}
-                            </span>
-                        </label>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">URL de Imagen del Servicio</label>
-                      <input 
-                        type="url" 
-                        value={imageUrl} 
-                        onChange={(e) => setImageUrl(e.target.value)} 
-                        placeholder="https://ejemplo.com/imagen.jpg"
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 focus:bg-white focus:border-sunat-primary outline-none font-bold text-xs text-slate-800 transition-all shadow-inner"
-                      />
-                      <p className="text-[9px] text-slate-400 font-bold uppercase mt-1 ml-1 italic">Proporcione un enlace directo a la imagen cuadrada del servicio.</p>
+                        {/* Sección Avanzada Sunat */}
+                        <div className="mt-8 pt-4 border-t border-slate-100 space-y-4">
+                            <div className="flex items-center justify-between px-2">
+                               <div className="flex items-center gap-2">
+                                  <Ruler size={14} className="text-slate-400" />
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Configuración Fiscal SUNAT</span>
+                               </div>
+                               <button 
+                                    type="button"
+                                    onClick={() => setIsSunatLocked(!isSunatLocked)}
+                                    className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase transition-all ${isSunatLocked ? 'bg-slate-100 text-slate-400' : 'bg-red-100 text-red-600'}`}
+                                >
+                                    {isSunatLocked ? 'Desbloquear' : 'Bloquear'}
+                               </button>
+                            </div>
+                            
+                            {!isSunatLocked && (
+                              <div className="animate-in slide-in-from-top-2 duration-200 bg-amber-50/50 p-4 rounded-3xl border border-amber-100">
+                                 <select value={unitCode} onChange={(e) => setUnitCode(e.target.value as UnitCode)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-4 py-4 font-black text-[10px] text-slate-600 appearance-none outline-none focus:bg-white">
+                                    <option value={UnitCode.ZZ}>SERVICIO (ZZ) - RECOMENDADO</option>
+                                    <option value={UnitCode.NIU}>UNIDAD (NIU)</option>
+                                    <option value={UnitCode.KGM}>KILOGRAMO (KG)</option>
+                                    <option value={UnitCode.MTK}>METRO CUADRADO (M2)</option>
+                                    <option value={UnitCode.LTR}>LITRO (LT)</option>
+                                 </select>
+                                 <p className="text-[8px] text-amber-600 font-bold uppercase mt-2 px-2 text-center italic">Solo modifique si entiende el impacto en facturación electrónica.</p>
+                              </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             ) : (

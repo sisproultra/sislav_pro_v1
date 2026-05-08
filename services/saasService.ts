@@ -318,7 +318,7 @@ export const getSaasCompanies = async (page: number = 1, pageSize: number = 50) 
         }
         
         const data = res.data || [];
-        console.log(`📊 [getSaasCompanies] Empresas encontradas: ${data.length}`);
+        // console.log(`📊 [getSaasCompanies] Empresas encontradas: ${data.length}`);
         
         const mapped = data.map((c: any) => ({
             id: c.id,
@@ -396,7 +396,7 @@ export const getSaasBranches = async (empresaId?: string, page: number = 1, page
         }
         
         const data = res.data || [];
-        console.log(`📊 [getSaasBranches] Sedes encontradas: ${data.length}`);
+        // console.log(`📊 [getSaasBranches] Sedes encontradas: ${data.length}`);
         
         const mapped = data.map((b: any) => ({
             id: b.id, 

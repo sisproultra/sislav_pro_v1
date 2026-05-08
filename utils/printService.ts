@@ -280,8 +280,12 @@ export const printQuoteDirectly = async (quote: PausedSale, company: Company, pa
         
         // Give a small moment for styles/images to settle, then print
         setTimeout(() => {
-            iframe.contentWindow?.focus();
-            iframe.contentWindow?.print();
+            try {
+                iframe.contentWindow?.focus();
+                iframe.contentWindow?.print();
+            } catch (e) {
+                console.error("Error al intentar imprimir (Posible bloqueo de sandbox):", e);
+            }
         }, 100);
     }
 };
@@ -646,8 +650,12 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
         
         // Un respiro para renderizado y luego impresión
         setTimeout(() => {
-            iframe.contentWindow?.focus();
-            iframe.contentWindow?.print();
+            try {
+                iframe.contentWindow?.focus();
+                iframe.contentWindow?.print();
+            } catch (e) {
+                console.error("Error al intentar imprimir (Posible bloqueo de sandbox):", e);
+            }
         }, 150);
     }
 };

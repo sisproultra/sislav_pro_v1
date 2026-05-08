@@ -14,6 +14,11 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Health check
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   // Configuración de Supabase Admin (Backend)
   const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://yvgshdypqanlcgxdyvls.supabase.co';
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'N/A';
@@ -22,14 +27,80 @@ async function startServer() {
     console.log('ℹ️ Nota: SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY no configurados en el servidor.');
   }
 
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
+  const supabaseAdmin = (supabaseUrl && supabaseServiceKey && supabaseServiceKey !== 'N/A') 
+    ? createClient(supabaseUrl, supabaseServiceKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      })
+    : null;
+
+  if (!supabaseAdmin) {
+    console.log('⚠️ Supabase Admin no inicializado. Se omitirá la inyección de metadata en el servidor.');
+  }
+
+  // --- PROXIES DE FACTURACIÓN Y APIS EXTERNAS ---
+
+  // Proxy para SUNAT VPS dinámico (Soporta múltiples dominios)
+  app.post('/api-proxy/sunat-vps/:host/*all', async (req, res) => {
+    const targetUrl = `https://${req.params.host}/${req.params.all}`;
+    console.log(`🌐 Proxying (VPS) to: ${targetUrl}`);
+    try {
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body)
+      });
+      const data = await response.text();
+      res.status(response.status).header('Content-Type', response.headers.get('Content-Type') || 'application/json').send(data);
+    } catch (error: any) {
+      console.error(`❌ Proxy Error (VPS): ${error.message}`);
+      res.status(500).json({ error: error.message });
     }
   });
 
-  // Endpoint solicitado: Sincronización de Metadata
+  // Proxy para SUNAT Estándar
+  app.post('/api-proxy/sunat/*all', async (req, res) => {
+    const subpath = req.params.all || 'post.php';
+    const targetUrl = `https://apisu.sysventa.com/API_SUNAT/${subpath}`;
+    console.log(`🌐 Proxying (SUNAT) to: ${targetUrl}`);
+    try {
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body)
+      });
+      const data = await response.text();
+      res.status(response.status).header('Content-Type', response.headers.get('Content-Type') || 'application/json').send(data);
+    } catch (error: any) {
+      console.error(`❌ Proxy Error (SUNAT): ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Proxy para Decolecta
+  app.all('/api-proxy/decolecta/*all', async (req, res) => {
+    const subpath = req.params.all;
+    const targetUrl = `https://api.decolecta.com/v1/${subpath}`;
+    try {
+      const options: any = {
+        method: req.method,
+        headers: { ...req.headers }
+      };
+      delete options.headers.host;
+      if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+        options.body = JSON.stringify(req.body);
+      }
+      const response = await fetch(targetUrl, options);
+      const data = await response.text();
+      res.status(response.status).send(data);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // --- ENDPOINTS DE APLICACIÓN ---
   app.post('/api/auth/sync-metadata', async (req, res) => {
     const { userId, empresaHoldingId } = req.body;
 
@@ -40,6 +111,10 @@ async function startServer() {
     try {
       console.log(`🚀 Ejecutando sincronización de metadata para usuario: ${userId}`);
       
+      if (!supabaseAdmin) {
+        throw new Error('Supabase Admin no configurado. No se puede actualizar metadata del usuario.');
+      }
+
       // EJECUCIÓN DEL CÓDIGO SOLICITADO
       const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
         app_metadata: {
@@ -70,12 +145,7 @@ async function startServer() {
 
     try {
       if (ownerId) {
-        const { data } = await supabaseAdmin
-          .from('empresas_holding')
-          .select('url_logo, url_favicon, url_favicon_logistica, nombre_empresa, color_primario')
-          .eq('id', ownerId.trim())
-          .maybeSingle();
-        
+        const data = await getCachedMetadata(ownerId, 'empresas_holding');
         if (data) {
           logoUrl = isLogistica ? (data.url_favicon_logistica || data.url_favicon || data.url_logo) : (data.url_favicon || data.url_logo);
           logoUrl = logoUrl || 'https://lavanderiasislav.com/logo-sislav.png';
@@ -84,12 +154,7 @@ async function startServer() {
           startUrl = isLogistica ? `/logistica?o=${ownerId.trim()}` : `/?o=${ownerId.trim()}`;
         }
       } else if (slug) {
-        const { data } = await supabaseAdmin
-          .from('sucursales')
-          .select('url_logo, url_favicon, url_favicon_logistica, nombre_sucursal, color_primario')
-          .eq('slug', slug.trim())
-          .maybeSingle();
-        
+        const data = await getCachedMetadata(slug, 'sucursales');
         if (data) {
           logoUrl = isLogistica ? (data.url_favicon_logistica || data.url_favicon || data.url_logo) : (data.url_favicon || data.url_logo);
           logoUrl = logoUrl || 'https://lavanderiasislav.com/logo-sislav.png';
@@ -131,134 +196,62 @@ async function startServer() {
     });
   });
 
+  // Cache para metadata de empresas/sucursales
+  const metadataCache = new Map<string, { data: any, timestamp: number }>();
+  const CACHE_TTL = 1000 * 60 * 5; // 5 minutos
+
+  async function getCachedMetadata(id: string, type: 'sucursales' | 'empresas_holding') {
+    if (!supabaseAdmin || !id) return null;
+    
+    const cacheKey = `${type}:${id}`;
+    const cached = metadataCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.data;
+    }
+
+    // Si ya hay una promesa en curso para esta misma clave, podríamos esperarla, 
+    // pero para simplificar y evitar bloqueos, solo retornamos null si falla.
+    try {
+      const queryPromise = supabaseAdmin
+        .from(type)
+        .select(type === 'sucursales' 
+          ? 'nombre_sucursal, url_logo, url_favicon, url_favicon_logistica, color_primario'
+          : 'nombre_empresa, url_logo, url_favicon, url_favicon_logistica, color_primario')
+        .eq(type === 'sucursales' ? 'slug' : 'id', id.trim())
+        .maybeSingle();
+
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout DB')), 2000)
+      );
+
+      const result: any = await Promise.race([queryPromise, timeoutPromise]);
+      const data = result?.data;
+      
+      if (data) {
+        metadataCache.set(cacheKey, { data, timestamp: Date.now() });
+      }
+      return data;
+    } catch (e: any) {
+      // Registrar solo una vez por clave para no saturar logs
+      console.warn(`[getCachedMetadata] Omitiendo metadata para ${cacheKey}: ${e.message}`);
+      return null;
+    }
+  }
+
   // Vite middleware para desarrollo
   if (process.env.NODE_ENV !== 'production') {
+    console.log('📦 Iniciando Vite en modo desarrollo...');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     
-    // Middleware para inyectar metadata en desarrollo
-    app.use(async (req, res, next) => {
-      const isHtml = req.url === '/' || req.url.startsWith('/?') || req.url.endsWith('.html');
-      const slug = req.query.s as string;
-      const ownerId = req.query.o as string;
-
-      if (isHtml && (slug || ownerId)) {
-        try {
-          let b: any = null;
-          if (slug) {
-            const { data } = await supabaseAdmin
-              .from('sucursales')
-              .select('nombre_sucursal, url_logo, url_favicon, url_favicon_logistica, color_primario')
-              .eq('slug', slug)
-              .maybeSingle();
-            b = data;
-          } else if (ownerId) {
-            const { data } = await supabaseAdmin
-              .from('empresas_holding')
-              .select('nombre_empresa, url_logo, url_favicon, url_favicon_logistica, color_primario')
-              .eq('id', ownerId)
-              .maybeSingle();
-            if (data) {
-              b = {
-                nombre_sucursal: data.nombre_empresa,
-                url_logo: data.url_logo,
-                url_favicon: data.url_favicon,
-                url_favicon_logistica: data.url_favicon_logistica,
-                color_primario: data.color_primario
-              };
-            }
-          }
-          
-          if (b) {
-            const isLogistica = req.url.includes('/logistica');
-            const logo = isLogistica ? (b.url_favicon_logistica || b.url_favicon || b.url_logo) : (b.url_favicon || b.url_logo || 'https://lavanderiasislav.com/logo-sislav.png');
-            const originalSend = res.send;
-            res.send = function(content) {
-              let html = content.toString();
-              const title = isLogistica ? `LOGÍSTICA ${b.nombre_sucursal}` : `${b.nombre_sucursal} - CONTROL TOTAL`;
-              const themeColor = b.color_primario || '#4f8ef7';
-              let manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
-              if (isLogistica) {
-                manifestUrl += (manifestUrl.includes('?') ? '&' : '?') + 'type=logistica';
-              }
-              
-              html = html.replace(/<title>.*?<\/title>/g, `<title>${title}</title>`);
-              html = html.replace(/<meta property="og:title" content=".*?" \/>/g, `<meta property="og:title" content="${title}" />`);
-              html = html.replace(/<meta property="og:image" content=".*?" \/>/g, `<meta property="og:image" content="${logo}" />`);
-              html = html.replace(/<meta name="theme-color" content=".*?" \/>/g, `<meta name="theme-color" content="${themeColor}" />`);
-              html = html.replace(/<link rel="icon".*?>/g, `<link rel="icon" href="${logo}" />`);
-              html = html.replace(/<link rel="manifest".*?>/g, `<link rel="manifest" href="${manifestUrl}" />`);
-              
-              return originalSend.call(this, html);
-            };
-          }
-        } catch (e) {}
-      }
-      vite.middlewares(req, res, next);
-    });
+    app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath, { index: false }));
-    
-    app.get('*all', async (req, res) => {
-      const slug = req.query.s as string;
-      const ownerId = req.query.o as string;
-      const indexPath = path.join(distPath, 'index.html');
-      
-      try {
-        let html = await fs.promises.readFile(indexPath, 'utf-8');
-        
-        if (slug || ownerId) {
-          let b: any = null;
-          if (slug) {
-            const { data } = await supabaseAdmin
-              .from('sucursales')
-              .select('nombre_sucursal, url_logo, url_favicon, url_favicon_logistica, color_primario')
-              .eq('slug', slug)
-              .maybeSingle();
-            b = data;
-          } else if (ownerId) {
-            const { data } = await supabaseAdmin
-              .from('empresas_holding')
-              .select('nombre_empresa, url_logo, url_favicon, url_favicon_logistica, color_primario')
-              .eq('id', ownerId)
-              .maybeSingle();
-            if (data) {
-              b = {
-                nombre_sucursal: data.nombre_empresa,
-                url_logo: data.url_logo,
-                url_favicon: data.url_favicon,
-                url_favicon_logistica: data.url_favicon_logistica,
-                color_primario: data.color_primario
-              };
-            }
-          }
-            
-          if (b) {
-            const isLogistica = req.url.includes('/logistica');
-            const logo = isLogistica ? (b.url_favicon_logistica || b.url_favicon || b.url_logo) : (b.url_favicon || b.url_logo || 'https://lavanderiasislav.com/logo-sislav.png');
-            const title = isLogistica ? `LOGÍSTICA ${b.nombre_sucursal}` : `${b.nombre_sucursal} - CONTROL TOTAL`;
-            const themeColor = b.color_primario || '#4f8ef7';
-            let manifestUrl = ownerId ? `/manifest.json?o=${ownerId}` : (slug ? `/manifest.json?s=${slug}` : '/manifest.json');
-            if (isLogistica) {
-              manifestUrl += (manifestUrl.includes('?') ? '&' : '?') + 'type=logistica';
-            }
-            
-            html = html.replace(/<title>.*?<\/title>/g, `<title>${title}</title>`);
-            html = html.replace(/<meta property="og:title" content=".*?" \/>/g, `<meta property="og:title" content="${title}" />`);
-            html = html.replace(/<meta property="og:description" content=".*?" \/>/g, `<meta property="og:description" content="Sistema de gestión integral para ${b.nombre_sucursal}." />`);
-            html = html.replace(/<meta property="og:image" content=".*?" \/>/g, `<meta property="og:image" content="${logo}" />`);
-            html = html.replace(/<meta name="theme-color" content=".*?" \/>/g, `<meta name="theme-color" content="${themeColor}" />`);
-            html = html.replace(/<link rel="icon".*?>/g, `<link rel="icon" href="${logo}" />`);
-            html = html.replace(/<link rel="manifest".*?>/g, `<link rel="manifest" href="${manifestUrl}" />`);
-          }
-        }
-        res.send(html);
-      } catch (e) {
-        res.sendFile(indexPath);
-      }
+    app.use(express.static(distPath));
+    app.get('*all', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
