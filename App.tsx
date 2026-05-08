@@ -437,6 +437,30 @@ export default function App() {
     const [cart, setCart] = useState<CartItem[]>([]);
     
     const [isFastOrderOpen, setIsFastOrderOpen] = useState(false);
+    const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+    // GESTIÓN DEL BOTÓN ATRÁS (MOBILE/TABLET) - UBICACIÓN SEGURA
+    useEffect(() => {
+        const handlePopState = () => {
+            if (!authSession) return; // No actuar si no hay sesión
+
+            if (currentView !== 'view:dashboard') {
+                setCurrentView('view:dashboard');
+                window.history.pushState({ view: 'view:dashboard' }, '');
+            } else {
+                setShowExitConfirm(true);
+                window.history.pushState({ view: 'view:dashboard' }, '');
+            }
+        };
+
+        if (!window.history.state) {
+            window.history.pushState({ view: currentView }, '');
+        }
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [currentView, authSession]);
+
     const [activePickupForFastOrder, setActivePickupForFastOrder] = useState<PickupRequest | null>(null);
 
     const [showCobranzaModal, setShowCobranzaModal] = useState(false);
@@ -2086,6 +2110,8 @@ export default function App() {
             setInvoicesPage(1);
         }
         setCurrentView(view);
+        // Empujar al historial del navegador para soportar el botón atrás
+        window.history.pushState({ view }, '');
     };
 
     return (
@@ -2205,6 +2231,42 @@ export default function App() {
                 />
             )}
             <DebugOverlay />
+
+            {/* MODAL DE CONFIRMACIÓN DE SALIDA */}
+            {showExitConfirm && (
+                <div className="fixed inset-0 bg-slate-950/80 z-[5000] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in">
+                    <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 border border-white/20">
+                        <div className="p-8 flex flex-col items-center text-center">
+                            <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6" style={{ backgroundColor: `${activeSucursal?.color_primario || '#0054A6'}15` }}>
+                                <ShieldAlert size={40} style={{ color: activeSucursal?.color_primario || '#0054A6' }} />
+                            </div>
+                            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">¿Salir del Sistema?</h3>
+                            <p className="text-slate-500 font-medium text-xs md:text-sm leading-relaxed mb-8">
+                                Estás a punto de salir de la aplicación. Asegúrate de haber guardado todos tus cambios antes de continuar.
+                            </p>
+                            <div className="flex flex-col w-full gap-3">
+                                <button 
+                                    onClick={() => {
+                                        setShowExitConfirm(false);
+                                        // Intentamos cerrar o simplemente redirigir si el navegador lo permite
+                                        window.location.href = "about:blank";
+                                    }} 
+                                    style={{ backgroundColor: activeSucursal?.color_primario || '#0054A6' }}
+                                    className="w-full py-4 text-white rounded-2xl font-bold text-xs uppercase tracking-widest active:scale-95 transition-all shadow-lg border-b-4 border-black/20"
+                                >
+                                    SÍ, SALIR AHORA
+                                </button>
+                                <button 
+                                    onClick={() => setShowExitConfirm(false)} 
+                                    className="w-full py-4 bg-slate-100 text-slate-400 rounded-2xl font-bold text-xs uppercase tracking-widest active:scale-95 transition-all"
+                                >
+                                    CANCELAR
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </Layout>
         </div>
     );

@@ -445,6 +445,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
           <div style="margin: 6px 0; font-size: 8.5pt;">
             <div>CLIENTE: ${invoice.client.name.toUpperCase()}</div>
             <div>${invoice.client.docType}: ${invoice.client.docNumber}</div>
+            <div>TEL: ${invoice.client.phone || '-'}</div>
             <div>DIR: ${invoice.client.address || '-'}</div>
             <div>MONEDA: SOLES</div>
           </div>
@@ -558,6 +559,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
               <div class="black">FECHA ENTREGA: ${deliveryDate}</div>
               <div class="black" style="font-size: 13pt; margin-top: 2px;">HORA ENTREGA: ${deliveryTime}</div>
               <div class="black" style="font-size: 12pt; margin-top: 5px;">CLIENTE: ${invoice.client.name.toUpperCase()}</div>
+              <div class="black" style="font-size: 11pt; margin-top: 2px;">TELÉFONO: ${invoice.client.phone || '-'}</div>
               <div class="atendido-por">
                 <span class="black" style="font-size: 9pt;">ATENDIDO POR:</span>
                 <span style="font-size: 10pt; font-weight: normal;">${attendingUser.toUpperCase()}</span>

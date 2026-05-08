@@ -294,6 +294,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
           <div style="margin: 8px 0; font-size: 10pt;" class="bold">
             <div>CLIENTE: ${invoice.client.name.toUpperCase()}</div>
             <div>${invoice.client.docType}: ${invoice.client.docNumber}</div>
+            <div>TEL: ${invoice.client.phone || '-'}</div>
             <div>DIR: ${invoice.client.address || '-'}</div>
             <div>MONEDA: SOLES</div>
           </div>
@@ -387,6 +388,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
               <div class="black">FECHA ENTREGA: ${deliveryDate}</div>
               <div class="black" style="font-size: 13pt; margin-top: 2px;">HORA ENTREGA: ${deliveryTime}</div>
               <div class="black" style="font-size: 12pt; margin-top: 5px;">CLIENTE: ${invoice.client.name.toUpperCase()}</div>
+              <div class="black" style="font-size: 11pt; margin-top: 2px;">TELÉFONO: ${invoice.client.phone || '-'}</div>
               <div class="atendido-por">
                   <span class="black" style="font-size: 9pt;">ATENDIDO POR:</span>
                   <span style="font-size: 10pt; font-weight: normal;">${attendingUser.toUpperCase()}</span>
@@ -567,6 +569,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                             <div className="mb-6 space-y-1">
                                 <div className="flex justify-between"><span>CLIENTE:</span> <span className="font-bold">{invoice.client.name.toUpperCase()}</span></div>
                                 <div className="flex justify-between"><span>{invoice.client.docType}:</span> <span className="font-bold">{invoice.client.docNumber}</span></div>
+                                <div className="flex justify-between"><span>TEL:</span> <span className="font-bold">{invoice.client.phone || '-'}</span></div>
                             </div>
 
                             <div className="border-t border-black my-2"></div>
@@ -668,6 +671,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                         <div className="mb-6 space-y-1">
                             <div className="flex justify-between"><span>CLIENTE:</span> <span className="font-bold">{invoice.client.name.toUpperCase()}</span></div>
                             <div className="flex justify-between"><span>{invoice.client.docType}:</span> <span className="font-bold">{invoice.client.docNumber}</span></div>
+                            <div className="flex justify-between"><span>TEL:</span> <span className="font-bold">{invoice.client.phone || '-'}</span></div>
                         </div>
 
                         <div className="border-t border-black my-2"></div>

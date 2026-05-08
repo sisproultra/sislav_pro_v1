@@ -215,7 +215,9 @@ export const generateInternalPDFBlob = async (invoice: Invoice, company: Company
     doc.setFont(primaryFont, 'normal');
     doc.text(`CLIENTE: ${invoice.client.name.toUpperCase()}`, 5, currentY);
     currentY += 4;
-    doc.text(`RUC: ${invoice.client.docNumber}`, 5, currentY);
+    doc.text(`${invoice.client.docType || 'DOC'}: ${invoice.client.docNumber}`, 5, currentY);
+    currentY += 4;
+    doc.text(`TEL: ${invoice.client.phone || '-'}`, 5, currentY);
     currentY += 4;
     doc.text(`DIR: ${(invoice.client.address || '-').toUpperCase()}`, 5, currentY);
     currentY += 4;
