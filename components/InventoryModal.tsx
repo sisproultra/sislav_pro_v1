@@ -42,6 +42,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
   const [useQty, setUseQty] = useState('');
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   useEffect(() => {
       if (isOpen) {
@@ -122,8 +123,6 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
     setDescription(desc);
     setIsGenerating(false);
   };
-
-  const [isSuccess, setIsSuccess] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

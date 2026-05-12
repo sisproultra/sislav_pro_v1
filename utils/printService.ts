@@ -657,7 +657,9 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                 iframe.contentWindow?.print();
             } catch (e) {
                 console.error("Error al intentar imprimir (Posible bloqueo de sandbox):", e);
+                // Si falla por el sandbox de AI Studio, informamos al usuario de forma amigable
+                alert("⚠️ LA IMPRESIÓN FUE BLOQUEADA POR EL NAVEGADOR:\n\nDebido a restricciones de seguridad en la previsualización, para IMPRIMIR de verdad debe abrir el sistema en una PESTAÑA NUEVA usando el botón azul 'OPEN IN NEW TAB' en la esquina superior derecha.");
             }
-        }, 150);
+        }, 300);
     }
 };

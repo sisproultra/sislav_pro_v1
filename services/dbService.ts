@@ -1406,7 +1406,8 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
         await supabase.from('ventas').update({ 
             codigo_orden: formattedOrderCode,
             cash_session_id: activeSession?.id || null,
-            fecha_recepcion: getPeruTimestamp()
+            fecha_recepcion: getPeruTimestamp(),
+            related_document: invoice.relatedDocument || null
         }).eq('id', result.id);
 
         if (activeSession?.id) {
@@ -1927,6 +1928,7 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
                 pickupId: v.pickup_id,
                 operario_id: v.operario_id,
                 entregado_at: v.entregado_at,
+                relatedDocument: v.related_document,
                 sunatResponse: {
                     success: v.sunat_status === 'ACCEPTED',
                     description: v.sunat_description,
@@ -2151,6 +2153,7 @@ export const dbGetInvoiceFull = async (id: string): Promise<Invoice | null> => {
         pickupId: v.pickup_id,
         operario_id: v.operario_id,
         entregado_at: v.entregado_at,
+        relatedDocument: v.related_document,
         sunatResponse: {
             success: v.sunat_status === 'ACCEPTED',
             description: v.sunat_description,

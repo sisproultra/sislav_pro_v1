@@ -43,45 +43,71 @@ async function startServer() {
   // --- PROXIES DE FACTURACIÓN Y APIS EXTERNAS ---
 
   // Proxy para SUNAT VPS dinámico (Soporta múltiples dominios)
-  app.post('/api-proxy/sunat-vps/:host/*all', async (req, res) => {
-    const targetUrl = `https://${req.params.host}/${req.params.all}`;
-    console.log(`🌐 Proxying (VPS) to: ${targetUrl}`);
+  app.post(/^\/api-proxy\/sunat-vps\/([^\/]+)\/(.*)/, async (req: any, res: any) => {
+    const host = req.params[0];
+    const path = req.params[1];
+    const targetUrl = `https://${host}/${path}`;
+    
+    console.log(`🌐 [Proxy VPS] Target: ${targetUrl}`);
+    
     try {
       const response = await fetch(targetUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify(req.body)
       });
+      
+      const contentType = response.headers.get('Content-Type') || 'application/json';
       const data = await response.text();
-      res.status(response.status).header('Content-Type', response.headers.get('Content-Type') || 'application/json').send(data);
+      
+      res.status(response.status).header('Content-Type', contentType).send(data);
     } catch (error: any) {
-      console.error(`❌ Proxy Error (VPS): ${error.message}`);
-      res.status(500).json({ error: error.message });
+      console.error(`❌ [Proxy VPS Error]: ${error.message}`);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error al conectar con el servidor de SUNAT a través del proxy.',
+        details: error.message 
+      });
     }
   });
 
   // Proxy para SUNAT Estándar
-  app.post('/api-proxy/sunat/*all', async (req, res) => {
-    const subpath = req.params.all || 'post.php';
-    const targetUrl = `https://apisu.sysventa.com/API_SUNAT/${subpath}`;
-    console.log(`🌐 Proxying (SUNAT) to: ${targetUrl}`);
+  app.post(/^\/api-proxy\/sunat\/(.*)/, async (req: any, res: any) => {
+    const path = req.params[0] || 'post.php';
+    const targetUrl = `https://apisu.sysventa.com/API_SUNAT/${path}`;
+    
+    console.log(`🌐 [Proxy SUNAT] Target: ${targetUrl}`);
+    
     try {
       const response = await fetch(targetUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify(req.body)
       });
+      
+      const contentType = response.headers.get('Content-Type') || 'application/json';
       const data = await response.text();
-      res.status(response.status).header('Content-Type', response.headers.get('Content-Type') || 'application/json').send(data);
+      
+      res.status(response.status).header('Content-Type', contentType).send(data);
     } catch (error: any) {
-      console.error(`❌ Proxy Error (SUNAT): ${error.message}`);
-      res.status(500).json({ error: error.message });
+      console.error(`❌ [Proxy SUNAT Error]: ${error.message}`);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Error al conectar con apisu.sysventa.com a través del proxy.',
+        details: error.message 
+      });
     }
   });
 
   // Proxy para Decolecta
-  app.all('/api-proxy/decolecta/*all', async (req, res) => {
-    const subpath = req.params.all;
+  app.all(/^\/api-proxy\/decolecta\/(.*)/, async (req: any, res: any) => {
+    const subpath = req.params[0];
     const targetUrl = `https://api.decolecta.com/v1/${subpath}`;
     try {
       const options: any = {
@@ -250,7 +276,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
+    app.get(/^(?!\/api).*$/, (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

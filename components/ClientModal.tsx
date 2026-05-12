@@ -66,8 +66,14 @@ const ClientModal: React.FC<ClientModalProps> = ({
   const [sunatStatus, setSunatStatus] = useState('');
   const [sunatCondition, setSunatCondition] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [duplicateClient, setDuplicateClient] = useState<Client | null>(null);
+  const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
 
-  const primaryColor = document.documentElement.style.getPropertyValue('--primary-color') || '#4f46e5';
+  // Robustly get primary color from CSS or fallback
+  const primaryColor = typeof window !== 'undefined' ? 
+    (getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim() || 
+     getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || 
+     '#0054A6') : '#0054A6';
 
   const [suggestions, setSuggestions] = useState<Client[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -113,7 +119,7 @@ const ClientModal: React.FC<ClientModalProps> = ({
         resetForm();
       }
     }
-  }, [initialData, isOpen, initialDocType]);
+  }, [initialData, isOpen]);
 
   useEffect(() => {
     if (googleMapsUrl) {
@@ -142,7 +148,7 @@ const ClientModal: React.FC<ClientModalProps> = ({
   }, []);
 
   const resetForm = () => {
-    setDocType(initialDocType as any);
+    setDocType('DNI');
     setDocNumber('');
     setName('');
     setAddress('');
@@ -163,13 +169,41 @@ const ClientModal: React.FC<ClientModalProps> = ({
     setSelectedCountry(LATAM_COUNTRIES.find(c => c.code === 'PE')!);
     setSuggestions([]);
     setShowSuggestions(false);
+    setDuplicateClient(null);
+    setShowDuplicateAlert(false);
   };
 
   const handleDocNumberChange = (value: string) => {
     const cleanValue = value.replace(/\D/g, '');
     setDocNumber(cleanValue);
 
-    if (cleanValue.length >= 5 && !isLocked) {
+    // Robust exact duplicate detection - Improved for DNI(8) and RUC(11)
+    const minLength = docType === 'DNI' ? 8 : (docType === 'RUC' ? 11 : 8);
+    
+    if (cleanValue.length >= minLength && ((docType as string) === 'DNI' || (docType as string) === 'RUC')) {
+        const exactDuplicate = clientsList.find(c => {
+            const cType = String(c.docType || '');
+            const cNum = String(c.docNumber || '').replace(/\D/g, '');
+            const isSameDoc = cType === String(docType) && cNum === cleanValue;
+            const isNotSelf = initialData ? String(c.id) !== String(initialData.id) : true;
+            return isSameDoc && isNotSelf;
+        });
+        
+        if (exactDuplicate) {
+            setDuplicateClient(exactDuplicate);
+            setShowDuplicateAlert(true);
+            setSuggestions([]);
+            setShowSuggestions(false);
+        } else {
+            setDuplicateClient(null);
+            setShowDuplicateAlert(false);
+        }
+    } else {
+        setDuplicateClient(null);
+        setShowDuplicateAlert(false);
+    }
+
+    if (cleanValue.length >= 5 && !isLocked && !duplicateClient) {
         const filtered = clientsList.filter(c => {
             const storedDoc = (c.docNumber || '').replace(/\D/g, '');
             return storedDoc.includes(cleanValue);
@@ -247,7 +281,7 @@ const ClientModal: React.FC<ClientModalProps> = ({
   };
 
   const handleSearch = async () => {
-    if (!docNumber || isSearching || (docType as string) === '-' || isLocked) return;
+    if (!docNumber || isSearching || (docType as string) === '-' || isLocked || duplicateClient) return;
     
     const local = clientsList.find(c => {
         const stored = (c.docNumber || '').replace(/\D/g, '');
@@ -282,22 +316,30 @@ const ClientModal: React.FC<ClientModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    // FINAL ESCAPE HATCH: Block submission if a duplicate is already detected in state
+    if (duplicateClient) {
+        setShowDuplicateAlert(true);
+        return;
+    }
+    
     // LÓGICA DE VALIDACIÓN MEJORADA
     const isDocumentChanged = initialData 
         ? (String(initialData.docNumber) !== String(docNumber) || String(initialData.docType) !== String(docType)) 
         : true;
 
-    // FIX: Using casting to avoid comparison error between enum and string
     if (((docType as string) === 'DNI' || (docType as string) === 'RUC') && isDocumentChanged) {
-        // Solo buscamos duplicados si el documento ha sido cambiado o es un registro nuevo
-        const existing = clientsList.find(c => 
-            String(c.docType) === String(docType) && 
-            String(c.docNumber) === String(docNumber) && 
-            (initialData ? String(c.id) !== String(initialData.id) : true)
-        );
+        const cleanCurrent = docNumber.replace(/\D/g, '');
+        const existing = clientsList.find(c => {
+            const cType = String(c.docType || '');
+            const cNum = String(c.docNumber || '').replace(/\D/g, '');
+            const isSameDoc = cType === String(docType) && cNum === cleanCurrent;
+            const isNotSelf = initialData ? String(c.id) !== String(initialData.id) : true;
+            return isSameDoc && isNotSelf;
+        });
 
         if (existing) {
-            alert(`⚠️ BLOQUEO DE SEGURIDAD:\n\nEl documento ${docType} "${docNumber}" ya se encuentra registrado a nombre de:\n\n👉 ${existing.name}\n\nNo se permite registrar el mismo documento varias veces.`);
+            setDuplicateClient(existing);
+            setShowDuplicateAlert(true);
             return;
         }
     }
@@ -333,326 +375,286 @@ const ClientModal: React.FC<ClientModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-2 md:p-4 backdrop-blur-md overflow-y-auto">
-      <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 my-auto">
+    <div className="fixed inset-0 bg-black/60 z-[150] flex items-end md:items-center justify-center p-0 md:p-4 backdrop-blur-md overflow-hidden">
+      <div className="bg-white rounded-t-[2.5rem] md:rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom md:zoom-in-95 duration-300 flex flex-col h-[92dvh] md:h-auto md:max-h-[95vh]">
         
-        <div className="px-6 py-4 flex justify-between items-center border-b border-gray-100 bg-white">
-            <h2 className="text-slate-900 font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+        <div className="px-6 py-4 flex justify-between items-center border-b border-gray-100 bg-white shrink-0">
+            <h2 className="text-slate-900 font-extrabold text-xs md:text-sm uppercase tracking-[0.2em] flex items-center gap-2">
                 {initialData ? 'EDITAR CLIENTE' : 'NUEVO CLIENTE'}
             </h2>
-            <button onClick={onClose} className="text-gray-300 hover:text-red-500 transition-colors p-1 hover:bg-red-50 rounded-full">
+            <button onClick={onClose} className="bg-slate-50 text-slate-300 hover:text-red-500 transition-all p-2 hover:bg-red-50 rounded-full border border-slate-100">
                 <X size={20} />
             </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
-                <div className="space-y-4">
-                    <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-2">Identificación y Datos</h3>
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-0 bg-slate-50/30">
+            <div className="p-4 md:p-6 space-y-4 pb-24 md:pb-6">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                     
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tipo de documento</label>
-                        <div className="flex gap-1">
-                            {(['-', 'DNI', 'RUC'] as const).map((type) => (
-                                <button
-                                    key={type}
-                                    type="button"
-                                    disabled={isLocked && type !== docType} 
-                                    onClick={() => setDocType(type)}
-                                    style={docType === type ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
-                                    className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase transition-all border ${
-                                        docType === type 
-                                        ? 'text-white shadow-md' 
-                                        : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-200'
-                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                                >
-                                    {type === '-' ? 'Sin Doc' : type}
-                                </button>
-                            ))}
+                    {/* SECTION: IDENTIFICACIÓN Y DATOS */}
+                    <div className="lg:col-span-12">
+                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                            <div className="bg-slate-50/50 px-4 py-1.5 border-b border-slate-100 flex items-center gap-2">
+                                <User size={13} className="text-indigo-500" />
+                                <h3 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Información Principal</h3>
+                            </div>
+                            
+                            <div className="p-4 space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                                    {/* TIPO DOC */}
+                                    <div className="md:col-span-4 space-y-1">
+                                        <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-1">Documento</label>
+                                        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                                            {(['-', 'DNI', 'RUC'] as const).map((type) => (
+                                                <button
+                                                    key={type}
+                                                    type="button"
+                                                    disabled={isLocked && type !== docType} 
+                                                    onClick={() => {
+                                                        setDocType(type);
+                                                        if (docNumber) handleDocNumberChange(docNumber);
+                                                    }}
+                                                    style={docType === type ? { backgroundColor: primaryColor } : {}}
+                                                    className={`flex-1 py-1 rounded-lg text-[9px] font-bold uppercase transition-all ${
+                                                        docType === type 
+                                                        ? 'text-white shadow-sm' 
+                                                        : 'text-slate-400 hover:text-slate-600'
+                                                    } disabled:opacity-50`}
+                                                >
+                                                    {type === '-' ? 'Sin Doc' : type}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* NUM DOC */}
+                                    <div className="md:col-span-8 space-y-1">
+                                        <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-1">Número de documento</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                required={(docType as string) !== '-'}
+                                                disabled={isLocked}
+                                                value={docNumber}
+                                                onChange={(e) => handleDocNumberChange(e.target.value)}
+                                                className={`flex-1 bg-slate-50 border-2 ${duplicateClient ? 'border-red-400' : 'border-slate-200'} rounded-xl px-4 py-1.5 text-base font-black text-slate-900 outline-none focus:bg-white focus:border-indigo-500 transition-all placeholder:text-slate-200 shadow-inner`}
+                                                placeholder={docType === 'DNI' ? '8 dígitos' : (docType === 'RUC' ? '11 dígitos' : 'Opcional')}
+                                            />
+                                            {(docType as string) !== '-' && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleSearch}
+                                                    disabled={isSearching || !docNumber || isLocked || !!duplicateClient}
+                                                    className="bg-slate-900 text-white px-3 py-1.5 rounded-xl hover:bg-black transition-all shadow-md active:scale-95 disabled:opacity-20"
+                                                >
+                                                    {isSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                                                </button>
+                                            )}
+                                        </div>
+                                        {duplicateClient && (
+                                            <div className="mt-1 text-[8px] bg-red-50 text-red-600 px-2 py-1 rounded border border-red-100 font-bold flex items-center gap-1 animate-in slide-in-from-top-1">
+                                                <AlertTriangle size={10} /> YA REGISTRADO: {duplicateClient.name}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* NOMBRE */}
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-1">Nombre Completo / Razón Social</label>
+                                    <div className="relative">
+                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                        <input
+                                            required
+                                            disabled={isLocked}
+                                            value={name}
+                                            onChange={(e) => setName(e.target.value.toUpperCase())}
+                                            className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-9 pr-4 py-2 text-sm font-bold text-slate-900 focus:bg-white focus:border-indigo-500 transition-all uppercase placeholder:text-slate-300 shadow-sm disabled:cursor-not-allowed"
+                                            placeholder="Nombre del cliente"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* PAIS Y TEL */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-1">País</label>
+                                            <div className="relative">
+                                                <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center">
+                                                    <img src={`https://flagcdn.com/w20/${selectedCountry.code.toLowerCase()}.png`} className="w-4 h-auto rounded-sm" alt="flag" />
+                                                </div>
+                                                <select 
+                                                    value={selectedCountry.code}
+                                                    onChange={(e) => setSelectedCountry(LATAM_COUNTRIES.find(c => c.code === e.target.value)!)}
+                                                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-9 pr-8 py-2 text-[10px] font-bold text-slate-900 outline-none focus:bg-white appearance-none shadow-sm cursor-pointer"
+                                                >
+                                                    {LATAM_COUNTRIES.map(c => (
+                                                        <option key={c.code} value={c.code}>{c.name} ({c.phone})</option>
+                                                    ))}
+                                                </select>
+                                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={10} />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-1">Teléfono</label>
+                                            <div className="relative">
+                                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                                                <input
+                                                    value={phone}
+                                                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                                                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm font-bold text-slate-900 focus:bg-white focus:border-indigo-500 transition-all placeholder:text-slate-300 shadow-sm"
+                                                    placeholder="999888777"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* CUMPLE Y GENERO */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-1">Cumpleaños</label>
+                                            <div className="grid grid-cols-2 gap-1">
+                                                <select value={birthMonth} onChange={e => setBirthMonth(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-2 py-2 text-[10px] font-bold text-slate-900 outline-none appearance-none shadow-sm cursor-pointer">
+                                                    <option value="">Mes</option>
+                                                    {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].map((m, i) => (
+                                                        <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>
+                                                    ))}
+                                                </select>
+                                                <select value={birthDay} onChange={e => setBirthDay(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-2 py-2 text-[10px] font-bold text-slate-900 outline-none appearance-none shadow-sm cursor-pointer">
+                                                    <option value="">Día</option>
+                                                    {Array.from({ length: 31 }, (_, i) => (<option key={i + 1} value={String(i + 1).padStart(2, '0')}>{i + 1}</option>))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-1">Género</label>
+                                            <select value={gender} onChange={e => setGender(e.target.value as any)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-[10px] font-bold text-slate-900 focus:bg-white appearance-none shadow-sm cursor-pointer uppercase">
+                                                <option value="Masculino">MASCULINO</option>
+                                                <option value="Femenino">FEMENINO</option>
+                                                <option value="Otro">OTRO</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    {(docType as string) !== '-' && (
-                        <div className="space-y-1 animate-in fade-in slide-in-from-top-1 duration-200 relative z-50" ref={suggestionRef}>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Número de documento</label>
-                            <div className="flex gap-2">
-                                <input
-                                    required={(docType as string) !== '-'}
-                                    disabled={isLocked}
-                                    value={docNumber}
-                                    onChange={(e) => handleDocNumberChange(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            handleSearch();
-                                        }
-                                    }}
-                                    className="flex-1 bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-4 text-xl font-bold text-slate-900 outline-none focus:bg-white focus:border-indigo-500 transition-all placeholder:text-slate-300 shadow-inner disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500"
-                                    placeholder={docType === 'DNI' ? '8 dígitos' : (docType === 'RUC' ? '11 dígitos' : 'Opcional')}
-                                />
-                                {(docType as string) !== '-' && (
-                                    <button 
-                                        type="button" 
-                                        onClick={handleSearch}
-                                        disabled={isSearching || !docNumber || isLocked}
-                                        className="bg-slate-900 text-white px-3 py-2 rounded-xl hover:bg-black transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {isSearching ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
-                                    </button>
-                                )}
+                    {/* SECTION: UBICACIÓN Y ALERTAS */}
+                    <div className="lg:col-span-7">
+                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden h-full">
+                            <div className="bg-slate-50/50 px-4 py-1.5 border-b border-slate-100 flex items-center gap-2">
+                                <MapPin size={13} className="text-emerald-500" />
+                                <h3 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Ubicación</h3>
                             </div>
-
-                            {showSuggestions && suggestions.length > 0 && (
-                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[160] overflow-hidden animate-in fade-in slide-in-from-top-2">
-                                    <div className="p-2.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-                                        <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-md">
-                                            <Search size={12} strokeWidth={3}/>
-                                        </div>
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Resultados en base de datos</span>
+                            <div className="p-4 space-y-3">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-1">Dirección Exacta</label>
+                                    <div className="relative">
+                                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                                        <input
+                                            value={address}
+                                            onChange={(e) => setAddress(e.target.value.toUpperCase())}
+                                            className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-9 pr-3 py-2 text-[10px] font-bold text-slate-900 focus:bg-white focus:border-emerald-500 transition-all shadow-sm"
+                                            placeholder="JR. DIRECCIÓN #123..."
+                                        />
                                     </div>
-                                    <div className="max-h-48 overflow-y-auto custom-scrollbar">
-                                        {suggestions.map((client) => (
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest ml-1">Google Maps URL</label>
+                                    <div className="relative">
+                                        <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                                        <input
+                                            value={googleMapsUrl}
+                                            onChange={(e) => setGoogleMapsUrl(e.target.value)}
+                                            className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-9 pr-3 py-2 text-[10px] font-bold text-blue-600 truncate focus:bg-white transition-all shadow-sm"
+                                            placeholder="https://maps.app.goo.gl/..."
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-5">
+                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden h-full flex flex-col">
+                            <div className="bg-slate-50/50 px-4 py-1.5 border-b border-slate-100 flex items-center gap-2">
+                                <AlertTriangle size={13} className="text-amber-500" />
+                                <h3 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Nota Especial</h3>
+                            </div>
+                            <div className="p-4 flex-1 flex flex-col space-y-3">
+                                <div className="flex-1 min-h-[60px]">
+                                    <textarea 
+                                        value={alertMessage}
+                                        onChange={(e) => setAlertMessage(e.target.value)}
+                                        className="w-full h-full min-h-[60px] border-2 border-slate-100 rounded-xl p-3 text-[10px] font-medium text-slate-600 outline-none focus:border-amber-400 bg-slate-50 shadow-inner resize-none transition-all"
+                                        placeholder="Restricciones, deudas, etc..."
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-tight ml-2">Color:</span>
+                                    <div className="flex gap-2">
+                                        {ALERT_COLORS.map(color => (
                                             <button
-                                                key={client.id}
+                                                key={color.id}
                                                 type="button"
-                                                onClick={() => selectSuggestion(client)}
-                                                className="w-full p-4 hover:bg-indigo-50 flex items-center justify-between border-b border-gray-50 last:border-0 transition-colors text-left group"
+                                                onClick={() => setAlertColor(color.id as any)}
+                                                className={`w-6 h-6 rounded-full ${color.bg} transition-all flex items-center justify-center relative ${alertColor === color.id ? 'ring-2 ring-indigo-500/50 scale-110' : 'hover:scale-105 opacity-60'}`}
                                             >
-                                                <div className="flex-1 min-w-0 mr-3">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="bg-slate-900 text-white px-2.5 py-1 rounded-lg text-xs font-mono tracking-tight font-bold">#{client.docNumber}</span>
-                                                        <span className="font-bold text-slate-800 text-[15px] truncate uppercase tracking-tight">{client.name}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 text-slate-500">
-                                                        <MapPin size={10} />
-                                                        <span className="text-[10px] font-bold truncate uppercase tracking-wide">{client.address || 'Sin dirección registrada'}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="bg-indigo-600 text-white p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Check size={12} strokeWidth={3}/>
-                                                </div>
+                                                {alertColor === color.id && <Check size={10} className="text-white drop-shadow-sm" strokeWidth={4} />}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
-                            )}
-                        </div>
-                    )}
-
-                    <div className="space-y-1">
-                        <div className="flex justify-between items-center ml-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nombre / Nombre Comercial</label>
-                            {sunatStatus && (
-                                <div className="flex gap-2 animate-in fade-in slide-in-from-right-2">
-                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter ${
-                                        sunatStatus.toUpperCase() === 'ACTIVO' ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-red-100 text-red-600 border border-red-200'
-                                    }`}>
-                                        {sunatStatus}
-                                    </span>
-                                    {sunatCondition && (
-                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter ${
-                                            sunatCondition.toUpperCase() === 'HABIDO' ? 'bg-blue-100 text-blue-600 border border-blue-200' : 'bg-amber-100 text-amber-600 border border-amber-200'
-                                        }`}>
-                                            {sunatCondition}
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                        <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                            <input
-                                required
-                                disabled={isLocked}
-                                value={name}
-                                onChange={(e) => setName(e.target.value.toUpperCase())}
-                                className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl pl-10 pr-4 py-2.5 text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-indigo-500 transition-all uppercase placeholder:text-slate-300 shadow-inner disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500"
-                                placeholder="Nombre completo del cliente"
-                            />
-                        </div>
-                    </div>
-
-                    {(docType as string) === 'RUC' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-1 duration-300">
-                             <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">RUC Fiscal</label>
-                                <div className="relative">
-                                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
-                                    <input
-                                        value={ruc}
-                                        onChange={(e) => setRuc(e.target.value.replace(/\D/g, ''))}
-                                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl pl-10 pr-4 py-2.5 text-[11px] font-bold text-slate-900 outline-none focus:bg-white focus:border-indigo-500 transition-all placeholder:text-slate-300 shadow-inner"
-                                        placeholder="11 dígitos"
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Razón Social</label>
-                                <div className="relative">
-                                    <input
-                                        value={razonSocial}
-                                        onChange={(e) => setRazonSocial(e.target.value.toUpperCase())}
-                                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2.5 text-[11px] font-bold text-slate-900 outline-none focus:bg-white focus:border-indigo-500 transition-all uppercase placeholder:text-slate-300 shadow-inner"
-                                        placeholder="Nombre legal completo"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">País</label>
-                            <div className="relative">
-                                <select 
-                                    value={selectedCountry.code}
-                                    onChange={(e) => setSelectedCountry(LATAM_COUNTRIES.find(c => c.code === e.target.value)!)}
-                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl pl-10 pr-2 py-2.5 text-[11px] font-bold text-slate-900 outline-none focus:bg-white appearance-none shadow-inner"
-                                >
-                                    {LATAM_COUNTRIES.map(c => (
-                                        <option key={c.code} value={c.code}>{c.name} ({c.phone})</option>
-                                    ))}
-                                </select>
-                                <img 
-                                    src={`https://flagcdn.com/w20/${selectedCountry.code.toLowerCase()}.png`} 
-                                    className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-auto rounded-sm" 
-                                    alt="flag" 
-                                />
-                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12} />
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Teléfono</label>
-                            <div className="relative">
-                                <Phone className="absolute left-3 top-2.5 text-slate-300" size={16} />
-                                <input
-                                    value={phone}
-                                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl pl-10 pr-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-indigo-500 transition-all placeholder:text-slate-300 shadow-inner"
-                                    placeholder="999888777"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Cumpleaños 🪅</label>
-                            <div className="grid grid-cols-2 gap-1.5">
-                                <select 
-                                    value={birthMonth} 
-                                    onChange={e => setBirthMonth(e.target.value)}
-                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-2 py-2.5 text-[11px] font-bold text-slate-900 outline-none appearance-none shadow-inner"
-                                >
-                                    <option value="">Mes</option>
-                                    {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].map((m, i) => (
-                                        <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>
-                                    ))}
-                                </select>
-                                <select 
-                                    value={birthDay} 
-                                    onChange={e => setBirthDay(e.target.value)}
-                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-2 py-2.5 text-[11px] font-bold text-slate-900 outline-none appearance-none shadow-inner"
-                                >
-                                    <option value="">Día</option>
-                                    {Array.from({ length: 31 }, (_, i) => (
-                                        <option key={i + 1} value={String(i + 1).padStart(2, '0')}>{i + 1}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Género</label>
-                            <select 
-                                value={gender} 
-                                onChange={e => setGender(e.target.value as any)}
-                                className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-3 py-2.5 text-[11px] font-bold text-slate-900 outline-none appearance-none shadow-inner"
-                            >
-                                <option value="Masculino">Masculino</option>
-                                <option value="Femenino">Femenino</option>
-                                <option value="Otro">Otro</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Dirección (Opcional)</label>
-                        <div className="relative">
-                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                            <input
-                                value={address}
-                                onChange={(e) => setAddress(e.target.value.toUpperCase())}
-                                className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl pl-10 pr-4 py-2.5 text-[11px] font-bold text-slate-900 outline-none focus:bg-white focus:border-indigo-500 transition-all uppercase placeholder:text-slate-300 shadow-inner"
-                                placeholder="Ej: JR. LIMA 123..."
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Ubicación Google Maps (URL)</label>
-                        <div className="relative">
-                            <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                            <input
-                                value={googleMapsUrl}
-                                onChange={(e) => setGoogleMapsUrl(e.target.value)}
-                                className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl pl-10 pr-4 py-2.5 text-[11px] font-bold text-blue-600 underline outline-none focus:bg-white focus:border-indigo-500 transition-all placeholder:text-slate-300 shadow-inner"
-                                placeholder="https://maps.app.goo.gl/..."
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="space-y-4">
-                    <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-2 flex items-center gap-2">
-                        <AlertTriangle className="text-amber-500" size={14} /> Gestión de Alertas
-                    </h3>
-                    
-                    <div className="bg-slate-50 p-5 rounded-[2rem] border border-slate-100 space-y-5 h-full flex flex-col justify-between shadow-inner">
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Mensaje de alerta</label>
-                            <textarea 
-                                value={alertMessage}
-                                onChange={(e) => setAlertMessage(e.target.value)}
-                                className="w-full border-2 border-white rounded-2xl p-4 text-xs font-bold text-slate-900 outline-none focus:ring-4 focus:ring-indigo-50 min-h-[160px] resize-none bg-white placeholder:text-slate-200 shadow-sm transition-all"
-                                placeholder="Escriba aquí si el cliente tiene alguna restricción, deuda pendiente o nota especial..."
-                            />
-                        </div>
-
-                        <div className="space-y-3 pb-2">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 text-center block">Color del Indicador</label>
-                            <div className="flex gap-4 items-center justify-center">
-                                {ALERT_COLORS.map(color => (
-                                    <button
-                                        key={color.id}
-                                        type="button"
-                                        onClick={() => setAlertColor(color.id as any)}
-                                        className={`w-10 h-10 rounded-full ${color.bg} transition-all flex items-center justify-center relative ${alertColor === color.id ? 'ring-4 ring-indigo-100 ring-offset-2 scale-110 shadow-lg' : 'hover:scale-105 opacity-50'}`}
-                                    >
-                                        {alertColor === color.id && (
-                                            <div className="bg-indigo-600 text-white rounded-full p-0.5 shadow-sm border-2 border-white">
-                                                <Check size={10} strokeWidth={4} />
-                                            </div>
-                                        )}
-                                    </button>
-                                ))}
                             </div>
                         </div>
                     </div>
                 </div>
-
             </div>
 
-            <div className="mt-8 flex justify-end">
+            <div className="shrink-0 p-4 md:p-6 bg-white border-t border-slate-100 flex justify-end z-10 sticky bottom-0">
                 <button
                     type="submit"
+                    disabled={!!duplicateClient}
                     style={{ backgroundColor: primaryColor }}
-                    className="hover:opacity-90 text-white font-bold py-4 px-12 rounded-2xl shadow-xl shadow-indigo-600/30 transition-all flex items-center gap-3 active:scale-95 uppercase text-xs tracking-widest"
+                    className="w-full md:w-auto hover:opacity-90 text-white font-black py-3 px-12 rounded-xl shadow-lg shadow-indigo-900/10 transition-all flex items-center justify-center gap-3 active:scale-95 uppercase text-[10px] tracking-[0.2em] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    <Save size={20} /> Guardar Cliente
+                    <Save size={16} /> Guardar Cambios
                 </button>
             </div>
         </form>
+
+        {/* MODAL PEQUEÑO DE ALERTA DE DUPLICADO */}
+        {showDuplicateAlert && duplicateClient && (
+            <div className="fixed inset-0 bg-slate-950/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+                <div className="bg-white rounded-[2rem] p-8 max-w-sm w-full text-center shadow-2xl border border-slate-100 animate-in zoom-in-95">
+                    <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <AlertTriangle size={40} />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">¡Cliente ya existe!</h3>
+                    <p className="text-slate-500 text-sm font-medium leading-relaxed mb-8">
+                        El documento <span className="text-slate-900 font-bold">{duplicateClient.docType} {duplicateClient.docNumber}</span> ya está registrado a nombre de:<br/>
+                        <span className="text-indigo-600 font-black mt-2 block text-lg">{duplicateClient.name}</span>
+                    </p>
+                    <button 
+                        onClick={() => {
+                            setShowDuplicateAlert(false);
+                            selectSuggestion(duplicateClient);
+                        }}
+                        style={{ backgroundColor: primaryColor }}
+                        className="w-full py-4 text-white rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-lg"
+                    >
+                        VER CLIENTE EXISTENTE
+                    </button>
+                    <button 
+                        onClick={() => setShowDuplicateAlert(false)}
+                        className="w-full py-4 mt-2 text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-slate-600 transition-colors"
+                    >
+                        CERRAR AVISO
+                    </button>
+                </div>
+            </div>
+        )}
       </div>
     </div>
   );

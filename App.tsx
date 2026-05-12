@@ -5,7 +5,7 @@ import {
     CartItem, InvoiceType, OrderStatus, SaasGlobalConfig, Machine, Expense, 
     Supply, Purchase, PaymentMethodConfig, PausedSale, Employee, 
     CampaignStatus, Contact, CampaignTemplate, PickupRequest, SunatResponse,
-    SaasCompany, SaasBranch
+    SaasCompany, SaasBranch, UmSaas
 } from './types';
 import {
     dbGetSucursalBySlug, dbGlobalLogin, setDbBranchContext, getActiveBranchId, getActiveHoldingId, withTimeout, invalidateCache,
@@ -90,7 +90,8 @@ import MyReports from './views/MyReports';
 import YapeMonitor from './views/YapeMonitor';
 import DevConfig from './views/DevConfig';
 import { SuperAdmin } from './views/SuperAdmin';
-import { Loader2, X, ShieldAlert } from 'lucide-react';
+import { Loader2, X, ShieldAlert, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from './services/supabaseClient';
 import { DebugOverlay } from './components/DebugOverlay';
@@ -438,6 +439,24 @@ export default function App() {
     
     const [isFastOrderOpen, setIsFastOrderOpen] = useState(false);
     const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+    // Modal de estado temporal (1 segundo)
+    const [statusModal, setStatusModal] = useState<{ 
+        isOpen: boolean; 
+        message: string; 
+        type: 'success' | 'error' | 'pending'; 
+    }>({ 
+        isOpen: false, 
+        message: '', 
+        type: 'success' 
+    });
+
+    const showStatusModal = (message: string, type: 'success' | 'error' | 'pending' = 'success', duration: number = 2500) => {
+        setStatusModal({ isOpen: true, message, type });
+        setTimeout(() => {
+            setStatusModal(prev => ({ ...prev, isOpen: false }));
+        }, duration);
+    };
 
     // GESTIÓN DEL BOTÓN ATRÁS (MOBILE/TABLET) - UBICACIÓN SEGURA
     useEffect(() => {
@@ -1329,13 +1348,13 @@ export default function App() {
             // 6. Refrescar datos
             queryClient.invalidateQueries({ queryKey: ['invoices'] });
             
-            // 7. Mostrar resultado al usuario
+             // 7. Mostrar resultado al usuario
             if (sunatRes.success) {
-                alert(`✅ ${targetType === InvoiceType.FACTURA ? 'FACTURA' : 'BOLETA'} ${serie}-${String(updatedVenta.correlativo).padStart(8,'0')} emitida y enviada a SUNAT correctamente.`);
+                showStatusModal(`✅ ${targetType === InvoiceType.FACTURA ? 'FACTURA' : 'BOLETA'} ${serie}-${String(updatedVenta.correlativo).padStart(8,'0')} emitida y enviada a SUNAT correctamente.`, 'success', 2500);
             } else if (sunatRes.isPending) {
-                alert(`⏳ Documento convertido. No se pudo conectar con SUNAT ahora. Quedó en estado PENDIENTE para re-intentar.`);
+                showStatusModal(`⏳ Documento convertido. No se pudo conectar con SUNAT ahora. Quedó en estado PENDIENTE.`, 'pending', 2000);
             } else {
-                alert(`⚠️ Documento convertido pero SUNAT lo rechazó: ${sunatRes.description}`);
+                showStatusModal(`⚠️ Documento convertido pero SUNAT lo rechazó: ${sunatRes.description}`, 'error', 3000);
             }
 
         } catch (error: any) {
@@ -1525,7 +1544,7 @@ export default function App() {
             pickup_id: pickupOverride || initialPickupForPos?.id
         };
 
-        if (!cartOverride) setCart([]);
+        setCart([]);
 
         try {
             const savedVenta = await dbCreateInvoice(localInvoiceTemplate, finalCart, activeSucursal, customerPhotos, paymentsList);
@@ -1590,14 +1609,14 @@ export default function App() {
             ));
 
             if (sunatRes.success) {
-                alert("✅ Comprobante aceptado por SUNAT con éxito.");
+                showStatusModal("✅ Comprobante aceptado por SUNAT con éxito.", 'success', 2000);
             } else {
-                alert("❌ SUNAT respondió: " + sunatRes.description);
+                showStatusModal("❌ SUNAT respondió: " + sunatRes.description, 'error', 4000);
             }
             refreshData(false);
         } catch (e) {
             console.error(e);
-            alert("Error al intentar conectar con el API de SUNAT");
+            showStatusModal("Error al intentar conectar con el API de SUNAT", 'error', 4000);
         }
     };
 
@@ -1618,7 +1637,8 @@ export default function App() {
                 relatedDocument: {
                     serie: invoice.serie,
                     correlativo: invoice.correlativo,
-                    type: invoice.type
+                    type: invoice.type,
+                    date: invoice.date
                 }
             };
 
@@ -1637,14 +1657,14 @@ export default function App() {
             await dbUpdateSunatResponse(savedNc.id, sunatRes);
             
             if (sunatRes.success) {
-                alert(`✅ Nota de Crédito ${targetSerie}-${savedNc.correlativo} generada y aceptada.`);
+                showStatusModal(`✅ Nota de Crédito ${targetSerie}-${savedNc.correlativo} generada y aceptada.`, 'success', 2000);
             } else {
-                alert(`⚠️ La Nota de Crédito fue rechazada por SUNAT: ${sunatRes.description}`);
+                showStatusModal(`⚠️ La Nota de Crédito fue rechazada por SUNAT: ${sunatRes.description}`, 'error', 4000);
             }
             refreshData(false);
         } catch (e) {
             console.error(e);
-            alert("Error al generar la Nota de Crédito legal.");
+            showStatusModal("Error al generar la Nota de Crédito legal.", 'error', 4000);
         }
     };
 
@@ -1666,14 +1686,14 @@ export default function App() {
                 const updateTasks = pendingBoletas.map(inv => dbUpdateSunatResponse(inv.id, sunatRes));
                 await Promise.all(updateTasks);
                 
-                alert(`✅ Resumen enviado con éxito. ${pendingBoletas.length} boletas procesadas.`);
+                showStatusModal(`✅ Resumen enviado con éxito. ${pendingBoletas.length} boletas procesadas.`, 'success', 2000);
                 refreshData(false);
             } else {
-                alert("❌ Error en Resumen Diario: " + res.description);
+                showStatusModal("❌ Error en Resumen Diario: " + res.description, 'error', 4000);
             }
         } catch (e) {
             console.error(e);
-            alert("Error crítico al enviar resumen diario.");
+            showStatusModal("Error crítico al enviar resumen diario.", 'error', 4000);
         }
     };
 
@@ -1751,7 +1771,9 @@ export default function App() {
                         const existingIdx = !forceNew ? prev.findIndex(x => x.id === p.id) : -1; 
                         if (existingIdx !== -1) { 
                             const existingItem = prev[existingIdx]; 
-                            const updatedItem = { ...existingItem, quantity: existingItem.quantity + 1, subtotal: roundToOneDecimal((existingItem.quantity + 1) * existingItem.price) }; 
+                            const rawQty = existingItem.quantity + 1;
+                            const subtotal = roundToOneDecimal(rawQty * existingItem.price);
+                            const updatedItem = { ...existingItem, quantity: rawQty, subtotal }; 
                             return [updatedItem, ...prev.filter((_, i) => i !== existingIdx)]; 
                         } 
                         const newItem: CartItem = { 
@@ -1765,17 +1787,31 @@ export default function App() {
                         return [newItem, ...prev]; 
                     })} 
                     removeFromCart={(id) => setCart(prev => prev.filter(i => i.id !== id))} 
-                    updateQuantity={(id, q) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: q, subtotal: roundToOneDecimal(q * i.price) } : i))} 
-                    updatePrice={(id, p) => setCart(prev => prev.map(i => i.id === id ? { ...i, price: p, subtotal: roundToOneDecimal(i.quantity * p) } : i))} 
-                    updateDetails={(id, det, imgs, aud, date, newQty) => setCart(prev => prev.map(i => i.id === id ? { 
-                        ...i, 
-                        details: det, 
-                        images: imgs, 
-                        audioNote: aud, 
-                        itemDeliveryDate: date,
-                        quantity: newQty !== undefined ? newQty : i.quantity,
-                        subtotal: roundToOneDecimal((newQty !== undefined ? newQty : i.quantity) * i.price)
-                    } : i))} 
+                    updateQuantity={(id, q) => setCart(prev => prev.map(i => i.id === id ? (() => {
+                        const isWeightUnit = [UmSaas.KILO, UmSaas.METROS, UmSaas.LITRO].includes(i.um_saas as UmSaas);
+                        const subtotal = roundToOneDecimal(q * i.price);
+                        const finalQty = isWeightUnit ? q : Math.round(q);
+                        return { ...i, quantity: finalQty, subtotal };
+                    })() : i))} 
+                    updatePrice={(id, p) => setCart(prev => prev.map(i => i.id === id ? (() => {
+                        const subtotal = roundToOneDecimal(i.quantity * p);
+                        return { ...i, price: p, subtotal };
+                    })() : i))} 
+                    updateDetails={(id, det, imgs, aud, date, newQty) => setCart(prev => prev.map(i => i.id === id ? (() => {
+                        const q = newQty !== undefined ? newQty : i.quantity;
+                        const subtotal = roundToOneDecimal(q * i.price);
+                        const isWeightUnit = [UmSaas.KILO, UmSaas.METROS, UmSaas.LITRO].includes(i.um_saas as UmSaas);
+                        const finalQty = isWeightUnit ? q : Math.round(q);
+                        return { 
+                            ...i, 
+                            details: det, 
+                            images: imgs, 
+                            audioNote: aud, 
+                            itemDeliveryDate: date,
+                            quantity: finalQty,
+                            subtotal: subtotal
+                        };
+                    })() : i))} 
                     onCheckout={(...args) => {
                         return new Promise((resolve) => {
                             checkCajaOpen(() => {
@@ -2231,6 +2267,37 @@ export default function App() {
                 />
             )}
             <DebugOverlay />
+
+            <AnimatePresence>
+                {statusModal.isOpen && (
+                    <div className="fixed inset-0 z-[6000] flex items-center justify-center p-4 pointer-events-none">
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="bg-white rounded-[2rem] shadow-2xl border border-slate-100 p-8 flex flex-col items-center max-w-sm w-full text-center pointer-events-auto"
+                        >
+                            <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-6 ${
+                                statusModal.type === 'success' ? 'bg-emerald-50 text-emerald-500' : 
+                                statusModal.type === 'error' ? 'bg-rose-50 text-rose-500' : 
+                                'bg-amber-50 text-amber-500'
+                            }`}>
+                                {statusModal.type === 'success' ? <CheckCircle2 size={40} /> : 
+                                 statusModal.type === 'error' ? <AlertTriangle size={40} /> : 
+                                 <Clock size={40} className="animate-pulse" />}
+                            </div>
+                            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">
+                                {statusModal.type === 'success' ? 'Éxito' : 
+                                 statusModal.type === 'error' ? 'Atención' : 
+                                 'Procesando'}
+                            </h3>
+                            <p className="text-slate-600 font-medium text-xs leading-relaxed">
+                                {statusModal.message}
+                            </p>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* MODAL DE CONFIRMACIÓN DE SALIDA */}
             {showExitConfirm && (

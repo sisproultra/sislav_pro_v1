@@ -26,7 +26,12 @@ export const DebugOverlay: React.FC = () => {
         const originalError = console.error;
         console.error = (...args: any[]) => {
             const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
-            addLog('error', message, args[1]);
+            
+            // Usar setTimeout para evitar "Cannot update a component while rendering a different component"
+            // si el error ocurre durante un ciclo de renderizado de React
+            setTimeout(() => {
+                addLog('error', message, args[1]);
+            }, 0);
             
             // Persistir en base de datos de forma asíncrona
             dbLogSystemError(message, args[1]);

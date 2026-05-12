@@ -99,38 +99,50 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
         "fecha_emision": fechaEmision,
         "hora_emision": horaEmision,
         "fecha_vencimiento": fechaEmision, // Usamos la misma fecha si no hay vencimiento
-        "moneda_id": company.moneda_simbolo?.includes('$') ? "2" : "1", 
+        "moneda_id": company.moneda_simbolo?.includes('$') ? "USD" : "PEN",
+        "tipo_moneda": company.moneda_simbolo?.includes('$') ? "USD" : "PEN",
+        "moneda": company.moneda_simbolo?.includes('$') ? "USD" : "PEN",
         "forma_pago_id": "1", 
         "total_gravada": safeNumber(invoice.totals.gravada),
         "total_igv": safeNumber(invoice.totals.igv),
         "total_exonerada": safeNumber(invoice.totals.exonerada),
         "total_inafecta": safeNumber(invoice.totals.inafecta),
         "total_gratuitas": "0.00",
+        "total_gratuita": "0.00",
         "total_otros_cargos": "0.00",
         "total_descuento": "0.00",
         "total_exportacion": "0.00",
         "total_venta": safeNumber(invoice.totals.total),
+        "total_pago": safeNumber(invoice.totals.total),
         "tipo_documento_codigo": invoice.type,
         "nota": cleanText(invoice.notes || "VENTA REALIZADA DESDE SISTEMA POS"),
         // Campos para Nota de Crédito (Tipo 07)
         ...(invoice.type === '07' && invoice.relatedDocument ? {
             "tipo_documento_referencia": invoice.relatedDocument.type,
-            "serie_referencia": invoice.relatedDocument.serie,
-            "numero_referencia": String(invoice.relatedDocument.correlativo),
+            "serie_referencia": invoice.relatedDocument.serie.toUpperCase().trim(),
+            "numero_referencia": String(invoice.relatedDocument.correlativo).padStart(8, '0'),
+            "cod_motivo": "01", // Algunos proveedores usan cod_motivo
             "motivo_codigo": "01", 
-            "motivo_descripcion": "ANULACION DE LA OPERACION"
+            "des_motivo": cleanText(invoice.notes || "ANULACION DE LA OPERACION"), // Algunos usan des_motivo
+            "motivo_descripcion": cleanText(invoice.notes || "ANULACION DE LA OPERACION"),
+            "sustento": cleanText(invoice.notes || "ANULACION DE LA OPERACION"), // Otros usan sustento
+            // Nombres alternativos para máxima compatibilidad con diferentes versiones de API
+            "num_referencia": String(invoice.relatedDocument.correlativo).padStart(8, '0'),
+            "documento_que_se_modifica_tipo": invoice.relatedDocument.type,
+            "documento_que_se_modifica_serie": invoice.relatedDocument.serie.toUpperCase().trim(),
+            "documento_que_se_modifica_numero": String(invoice.relatedDocument.correlativo).padStart(8, '0'),
+            "documento_que_se_modifica_fecha": invoice.relatedDocument.date ? invoice.relatedDocument.date.split('T')[0] : "",
+            "fecha_documento_referencia": invoice.relatedDocument.date ? invoice.relatedDocument.date.split('T')[0] : "",
+            "tipo_nota_id": "1"
         } : {})
     },
     "items": invoice.items.map((item, idx) => {
         const itemIgvType = item.igvType || '10';
-        const cantidad = Number(item.quantity) || 0;
+        const cantidadOriginal = Number(item.quantity) || 0;
+        const precioOriginal = Number(item.price) || 0;
         
-        // IMPORTANTE: El total de la línea debe coincidir con el redondeo usado en calculations.ts
-        // para que la suma de ítems sea exactamente igual al total del comprobante.
-        const totalLine = Math.round(Number(item.price) * cantidad * 10) / 10;
-        
-        // Calculamos valores con alta precisión para SUNAT para que la multiplicación sea consistente
-        const precioUnitarioVirtual = cantidad > 0 ? totalLine / cantidad : Number(item.price);
+        // Redondeo crítico para SUNAT: El total de línea debe ser exacto a 2 decimales
+        const totalLine = Number((precioOriginal * cantidadOriginal).toFixed(2));
         
         let valorUnitario;
         let subtotal;
@@ -140,20 +152,21 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
             // Gravado: Desglosamos el IGV del total de la línea redondeado
             subtotal = Number((totalLine / igvFactor).toFixed(2));
             igv = Number((totalLine - subtotal).toFixed(2));
-            valorUnitario = cantidad > 0 ? subtotal / cantidad : (precioUnitarioVirtual / igvFactor);
+            // Recalculamos el valor unitario para que cuadre con el subtotal
+            valorUnitario = cantidadOriginal > 0 ? subtotal / cantidadOriginal : (precioOriginal / igvFactor);
         } else {
             // Exonerado / Inafecto
             subtotal = totalLine;
             igv = 0;
-            valorUnitario = precioUnitarioVirtual;
+            valorUnitario = precioOriginal;
         }
         
         return {
             "producto": cleanText(item.name || "PRODUCTO"),
-            "cantidad": cantidad.toString(),
-            "valor_unitario": valorUnitario.toFixed(6), // Usamos 6 decimales para evitar errores de redondeo en SUNAT
-            "precio_unitario": precioUnitarioVirtual.toFixed(6),
-            "precio_base": valorUnitario.toFixed(6), 
+            "cantidad": cantidadOriginal.toFixed(6),
+            "valor_unitario": valorUnitario.toFixed(10),
+            "precio_unitario": precioOriginal.toFixed(6),
+            "precio_base": valorUnitario.toFixed(10), 
             "codigo_sunat": "",
             "codigo_producto": item.id ? item.id.substring(0, 15) : `p-${idx}`,
             "codigo_unidad": item.unitCode || 'NIU', 

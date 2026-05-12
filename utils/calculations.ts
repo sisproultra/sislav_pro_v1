@@ -1,13 +1,13 @@
 import { CartItem, IgvType, InvoiceTotals, Company } from '../types';
 
 /**
- * Redondea un valor a un decimal siguiendo la regla:
+ * Redondea un valor a un decimal hacia abajo (siempre a favor del cliente):
  * .34 -> .30
- * .35 -> .40
- * .37 -> .40
+ * .35 -> .30
+ * .37 -> .30
  */
 export const roundToOneDecimal = (value: number): number => {
-    return Math.round(value * 10) / 10;
+    return Math.floor(value * 10 + 0.0001) / 10;
 };
 
 export const calculateTotals = (items: CartItem[], igvPercentage: number = 18.00): InvoiceTotals => {

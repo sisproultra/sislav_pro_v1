@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, ShoppingBasket, ShoppingCart, Trash2, Plus, Minus, User, X, Save, Loader2, CheckCircle2, Ticket, Layers, PlusCircle, ClipboardEdit, Camera, Mic, AlertTriangle, ShieldAlert, Pause, Play, Clock, History, Crown, RefreshCcw, Image as ImageIcon, Bell, Shirt, Edit2, Check, DollarSign, WashingMachine, FileText, ListPlus } from 'lucide-react';
 import { Product, CartItem, InvoiceType, InvoiceTotals, Client, PaymentMethodConfig, PickupRequest, Category, UnitCode, GlobalColor, Company, PausedSale, UmSaas } from '../types';
-import { calculateTotals } from '../utils/calculations';
+import { calculateTotals, roundToOneDecimal } from '../utils/calculations';
 import { dbUploadImage, dbGetPopularityData } from '../services/dbService';
 import { printQuoteDirectly } from '../utils/printService';
 import ClientModal from '../components/ClientModal';
@@ -463,6 +463,25 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
   const handleFinalCheckout = async (data: { deliveryDate: string | undefined, notes: string, prePaymentAmount: number, discountAmount: number, paymentDetailsStr: string, paymentsList?: { methodName: string, amount: number }[] }) => {
       const clientToProcess = activeClientData;
       const photosToProcess = [...customerPhotos];
+
+      // RECALCULO INTERNO PARA SUNAT (Ajuste de Cantidad para cuadrar Redondeo)
+      // Solo aplica cuando la cantidad es decimal, para forzar que (cant * precio) sea igual al total redondeado
+      const adjustedCart = cart.map(item => {
+          const isDecimal = item.quantity % 1 !== 0;
+          if (isDecimal && item.price > 0) {
+              const rawTotal = item.price * item.quantity;
+              const roundedTotal = roundToOneDecimal(rawTotal);
+              const adjustedQty = roundedTotal / item.price;
+              
+              return {
+                  ...item,
+                  quantity: adjustedQty,
+                  subtotal: roundedTotal
+              };
+          }
+          return item;
+      });
+
       setIsPreCheckoutOpen(false);
       setIsProcessing(true);
       setClientSearch('');
@@ -481,10 +500,15 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
                   data.prePaymentAmount, 
                   data.discountAmount,
                   photosToProcess, 
-                  data.paymentsList
+                  data.paymentsList,
+                  adjustedCart // ENVIAMOS EL CARRITO CON CANTIDADES AJUSTADAS INTERNAMENTE
               );
           }
           if (initialPickupRequest) onClearPickupRequest();
+          // Reset UI states for next sale
+          setSearchTerm('');
+          setSelectedCategoryId('ALL');
+          setActiveTab('CATALOG');
       } catch (e) { 
           console.error("Error en checkout:", e); 
       } finally { 

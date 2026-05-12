@@ -278,6 +278,7 @@ export interface Invoice extends BaseEntity {
         serie: string;
         correlativo: number;
         type: string;
+        date?: string;
     };
     url_foto_cliente_1?: string;
     url_foto_cliente_2?: string;
