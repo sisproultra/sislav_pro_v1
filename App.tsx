@@ -36,6 +36,7 @@ import {
     dbGetMachines,
     dbGetActiveItems,
     normalizeSucursal,
+    dbUpdateInvoice,
     dbCreateInvoice,
     dbCreateClient,
     dbUpdateInvoiceStatus,
@@ -451,11 +452,16 @@ export default function App() {
         type: 'success' 
     });
 
+    const statusModalTimer = useRef<any>(null);
+
     const showStatusModal = (message: string, type: 'success' | 'error' | 'pending' = 'success', duration: number = 2500) => {
+        if (statusModalTimer.current) clearTimeout(statusModalTimer.current);
         setStatusModal({ isOpen: true, message, type });
-        setTimeout(() => {
-            setStatusModal(prev => ({ ...prev, isOpen: false }));
-        }, duration);
+        if (duration > 0) {
+            statusModalTimer.current = setTimeout(() => {
+                setStatusModal(prev => ({ ...prev, isOpen: false }));
+            }, duration);
+        }
     };
 
     // GESTIÓN DEL BOTÓN ATRÁS (MOBILE/TABLET) - UBICACIÓN SEGURA
@@ -1309,6 +1315,7 @@ export default function App() {
         if (!activeSucursal) return;
         
         try {
+            showStatusModal(`Convirtiendo y enviando a SUNAT...`, 'pending', 0);
             const serie = targetType === InvoiceType.FACTURA 
                 ? activeSucursal.serieFactura 
                 : activeSucursal.serieBoleta;
@@ -1586,6 +1593,7 @@ export default function App() {
 
     const handleRetrySunat = async (invoice: Invoice) => {
         try {
+            showStatusModal(`Re-intentando envío de ${invoice.serie}-${invoice.correlativo}...`, 'pending', 0);
             console.log("🔄 Re-intentando envío a SUNAT:", invoice.serie + "-" + invoice.correlativo);
             const sunatRes = await sendBillToSunat(invoice, activeSucursal);
             await dbUpdateSunatResponse(invoice.id, sunatRes);
@@ -1622,6 +1630,8 @@ export default function App() {
 
     const handleVoidInvoice = async (invoice: Invoice, reason: string) => {
         try {
+            showStatusModal(`Procesando Nota de Crédito para ${invoice.serie}-${invoice.correlativo}...`, 'pending', 0); // Duración 0 = permanecer abierto
+            
             const isFactura = invoice.type === InvoiceType.FACTURA;
             const targetSerie = isFactura ? activeSucursal.serieNcFactura : activeSucursal.serieNcBoleta;
             
@@ -1654,22 +1664,44 @@ export default function App() {
             };
 
             const sunatRes = await sendBillToSunat(finalNc, activeSucursal);
+            
+            // 1. Guardar respuesta SUNAT siempre (éxito o rechazo)
             await dbUpdateSunatResponse(savedNc.id, sunatRes);
             
-            if (sunatRes.success) {
-                showStatusModal(`✅ Nota de Crédito ${targetSerie}-${savedNc.correlativo} generada y aceptada.`, 'success', 2000);
-            } else {
-                showStatusModal(`⚠️ La Nota de Crédito fue rechazada por SUNAT: ${sunatRes.description}`, 'error', 4000);
+            // 2. Vincular con documento original para bloquearlo
+            // Lo hacemos antes de mostrar el éxito para asegurar consistencia
+            try {
+                await dbUpdateInvoice(invoice.id, {
+                    status: 'anulado',
+                    orderStatus: 'CANCELADO',
+                    relatedNcId: savedNc.id,
+                    notes: `${invoice.notes || ''} [NC ${targetSerie}-${savedNc.correlativo}: ${reason.toUpperCase()}]`.trim()
+                });
+            } catch (linkError) {
+                console.error("Error vinculando NC con original, pero NC ya fue creada:", linkError);
             }
-            refreshData(false);
-        } catch (e) {
+            
+            if (sunatRes.success) {
+                // Refrescar para asegurar que el estado persistente se cargue
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                
+                showStatusModal(`✅ Nota de Crédito ${targetSerie}-${savedNc.correlativo} generada y aceptada.`, 'success', 3000);
+            } else {
+                showStatusModal(`⚠️ La Nota de Crédito fue rechazada por SUNAT: ${sunatRes.description}`, 'error', 5000);
+            }
+            
+            // Refrescar datos para que desaparezca el botón de anular y se vea la marca de NC
+            await refreshData(false);
+        } catch (e: any) {
             console.error(e);
-            showStatusModal("Error al generar la Nota de Crédito legal.", 'error', 4000);
+            showStatusModal(`Error al procesar: ${e.message || 'Falla en comunicación legal'}. Revise el historial.`, 'error', 5000);
+            refreshData(true); // Forzar refresh profundo si falló algo crítico
         }
     };
 
     const handleSendDailySummary = async (pendingBoletas: Invoice[]) => {
         try {
+            showStatusModal(`Enviando Resumen Diario (${pendingBoletas.length} boletas)...`, 'pending', 0);
             const res = await sendSummaryToSunat(pendingBoletas, activeSucursal);
             
             if (res.success) {
@@ -1865,6 +1897,7 @@ export default function App() {
                     setWaActiveTab('reminder');
                     setCurrentView('view:wa_campaign');
                 }}
+                onConvertInvoice={handleConvertInvoice}
                 onAddPayment={async (ventaId, amount, method) => { 
                 checkCajaOpen(async () => {
                    // Pago optimista individual
@@ -1952,7 +1985,18 @@ export default function App() {
             case 'view:my_reports': return <MyReports invoices={invoices} paymentMethods={paymentMethods} company={activeSucursal} />;
             case 'view:accounting': return <Accounting invoices={invoices} paymentMethods={paymentMethods} company={activeSucursal} />;
             case 'view:modificaciones': return <Modificaciones invoices={invoices} products={products} company={activeSucursal} paymentMethods={paymentMethods} onRefresh={() => refreshData(true)} canManage={canManageApp} checkCajaOpen={checkCajaOpen} />;
-            case 'view:history': return <SalesHistory invoices={invoices} company={activeSucursal} clients={clients} onViewReceipt={(inv) => setSelectedInvoiceForReceipt(inv)} onAddClient={dbCreateClient} onConvertInvoice={handleConvertInvoice} onVoidInvoice={handleVoidInvoice} onRetrySunat={handleRetrySunat} onSendSummary={handleSendDailySummary} />;
+            case 'view:history': return <SalesHistory 
+                invoices={invoices} 
+                company={activeSucursal} 
+                clients={clients} 
+                onViewReceipt={(inv) => setSelectedInvoiceForReceipt(inv)} 
+                onAddClient={dbCreateClient} 
+                onConvertInvoice={handleConvertInvoice} 
+                onVoidInvoice={handleVoidInvoice} 
+                onRetrySunat={handleRetrySunat} 
+                onSendSummary={handleSendDailySummary}
+                ticketConfig={activeSucursal?.ticket_config}
+            />;
             case 'view:owner_dashboard': return <OwnerDashboard session={authSession} isDarkMode={darkMode} toggleTheme={toggleDarkMode} onLogout={handleLogout} onSelectBranch={(b) => { 
                 console.log("OWNER selecting branch:", b);
                 const normalized = normalizeSucursal(b);
@@ -2284,12 +2328,12 @@ export default function App() {
                             }`}>
                                 {statusModal.type === 'success' ? <CheckCircle2 size={40} /> : 
                                  statusModal.type === 'error' ? <AlertTriangle size={40} /> : 
-                                 <Clock size={40} className="animate-pulse" />}
+                                 <Loader2 size={40} className="animate-spin" />}
                             </div>
                             <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">
                                 {statusModal.type === 'success' ? 'Éxito' : 
                                  statusModal.type === 'error' ? 'Atención' : 
-                                 'Procesando'}
+                                 'Procesando...'}
                             </h3>
                             <p className="text-slate-600 font-medium text-xs leading-relaxed">
                                 {statusModal.message}

@@ -5,8 +5,10 @@ import {
     FileText, CheckCircle2, AlertTriangle, Eye, XCircle, Undo2, Ban, 
     FileCode, FileArchive, Search, Filter, Calendar, Trash2, 
     FileWarning, Download, Table, MessageCircle, Loader2, 
-    ExternalLink, Check, ArrowRightLeft, Phone, ShieldCheck, FileCheck
+    ExternalLink, Check, ArrowRightLeft, Phone, ShieldCheck, FileCheck, RotateCcw,
+    Printer
 } from 'lucide-react';
+import { printInvoiceDirectly } from '../utils/printService';
 import ConfirmationModal from '../components/ConfirmationModal';
 import VoidReasonModal from '../components/VoidReasonModal';
 import ConvertInvoiceModal from '../components/ConvertInvoiceModal';
@@ -25,9 +27,10 @@ interface SalesHistoryProps {
   onRetrySunat?: (invoice: Invoice) => Promise<void>;
   onSendSummary?: (invoices: Invoice[]) => Promise<void>;
   onAddClient: (client: Client) => Promise<Client>;
+  ticketConfig?: any;
 }
 
-const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients, onViewReceipt, onVoidInvoice, onDeleteInvoice, onConvertInvoice, onRetrySunat, onSendSummary, onAddClient }) => {
+const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients, onViewReceipt, onVoidInvoice, onDeleteInvoice, onConvertInvoice, onRetrySunat, onSendSummary, onAddClient, ticketConfig }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
@@ -55,7 +58,13 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
   }, []);
 
   const filteredInvoices = invoices.filter(inv => {
-      if (inv.orderStatus === 'CANCELADO') return false;
+      // No mostrar Notas de Crédito como filas independientes a menos que se filtre por ellas
+      if (inv.type === InvoiceType.NOTA_CREDITO && filterType !== InvoiceType.NOTA_CREDITO) return false;
+
+      // Permitir mostrar anulados si son comprobantes electrónicos que fueron aceptados (para ver la marca de NC)
+      const isElectronicVoided = (inv.type === InvoiceType.BOLETA || inv.type === InvoiceType.FACTURA) && (inv.orderStatus === 'CANCELADO' || (inv as any).status === 'anulado');
+      
+      if (inv.orderStatus === 'CANCELADO' && !isElectronicVoided) return false;
       if (selectedPeriod !== 'ALL' && !inv.date.startsWith(selectedPeriod)) return false;
       const term = searchTerm.toLowerCase();
       const matchesSearch = inv.client.name.toLowerCase().includes(term) || 
@@ -78,14 +87,41 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
 
   const sortedInvoices = [...filteredInvoices].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const totalSales = filteredInvoices.reduce((sum, inv) => {
-    if (inv.type === InvoiceType.NOTA_CREDITO && inv.sunatStatus === 'ACCEPTED') return sum - inv.totals.total;
-    if (inv.type !== InvoiceType.NOTA_CREDITO) return sum + inv.totals.total;
-    return sum;
-  }, 0);
+  // Cálculo de venta neta del periodo considerando NCs aunque no se listen como filas
+  const totalSales = useMemo(() => {
+    return invoices.filter(inv => {
+        if (selectedPeriod !== 'ALL' && !inv.date.startsWith(selectedPeriod)) return false;
+        return true;
+    }).reduce((sum, inv) => {
+        if (inv.sunatStatus !== 'ACCEPTED' && inv.type !== InvoiceType.NOTA_VENTA) return sum;
+        const isNC = inv.type === InvoiceType.NOTA_CREDITO;
+        return isNC ? sum - inv.totals.total : sum + inv.totals.total;
+    }, 0);
+  }, [invoices, selectedPeriod]);
   
   const getVoidingNc = (targetInv: Invoice) => {
-    return invoices.find(inv => inv.type === InvoiceType.NOTA_CREDITO && inv.sunatStatus === 'ACCEPTED' && inv.relatedDocument && inv.relatedDocument.serie === targetInv.serie && String(inv.relatedDocument.correlativo) === String(targetInv.correlativo));
+    // Primero intentar por ID relacionado si existe
+    if (targetInv.relatedNcId) {
+        const found = invoices.find(i => i.id === targetInv.relatedNcId);
+        if (found) return found;
+    }
+    // Si no, buscar por referencia de serie/correlativo
+    return invoices.find(inv => 
+        inv.type === InvoiceType.NOTA_CREDITO && 
+        inv.sunatStatus === 'ACCEPTED' && 
+        inv.relatedDocument && 
+        inv.relatedDocument.serie === targetInv.serie && 
+        String(inv.relatedDocument.correlativo) === String(targetInv.correlativo)
+    );
+  };
+
+  const handleDirectPrint = async (inv: Invoice) => {
+    try {
+        // Request 3: Only client document (shouldPrintBoth = true for clientOnly)
+        await printInvoiceDirectly(inv, company, ticketConfig, true);
+    } catch (error) {
+        console.error("Error direct printing:", error);
+    }
   };
 
   const handleSendWA = async (order: Invoice) => {
@@ -218,14 +254,16 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                 <tbody className="divide-y divide-gray-100">
                   {sortedInvoices.map((inv) => {
                     const voidingNc = getVoidingNc(inv);
-                    const isVoided = !!voidingNc;
-                    // FIX: Changed status literal to ENTREGADO
-                    const canDelete = inv.type === InvoiceType.NOTA_VENTA && inv.orderStatus !== 'ENTREGADO';
+                    const isVoided = !!voidingNc || inv.status === 'anulado' || (inv as any).orderStatus === 'CANCELADO' || !!inv.relatedNcId;
+                    
+                    // Bloquear botón de anular si ya está anulado para evitar duplicados
                     const canVoid = (inv.type === InvoiceType.BOLETA || inv.type === InvoiceType.FACTURA) && inv.sunatStatus === 'ACCEPTED' && !isVoided;
+                    
+                    const canDelete = inv.type === InvoiceType.NOTA_VENTA && inv.orderStatus !== 'ENTREGADO';
                     const canConvert = inv.type === InvoiceType.NOTA_VENTA && !isVoided;
                     const isSendingWa = sendingWaId === inv.id;
                     const isSent = sentSuccessIds.has(inv.id);
-                    const rowClass = isVoided ? 'bg-red-50/50 hover:bg-red-50' : (inv.type === InvoiceType.NOTA_CREDITO ? 'bg-orange-50/30 hover:bg-orange-50' : 'hover:bg-gray-50');
+                    const rowClass = isVoided ? 'bg-red-100 hover:bg-red-100 border-l-4 border-l-red-500 opacity-75' : (inv.type === InvoiceType.NOTA_CREDITO ? 'bg-orange-50/30 hover:bg-orange-50' : 'hover:bg-gray-50');
                     const canRetry = (inv.type === InvoiceType.BOLETA || inv.type === InvoiceType.FACTURA || inv.type === InvoiceType.NOTA_CREDITO) && 
                                      (inv.sunatStatus === 'REJECTED' || inv.sunatStatus === 'PENDING') && !isVoided;
                     
@@ -251,9 +289,23 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                           <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2">
                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${inv.type === InvoiceType.FACTURA ? 'bg-blue-100 text-blue-800' : (inv.type === InvoiceType.NOTA_VENTA ? 'bg-gray-200 text-gray-700' : (inv.type === InvoiceType.NOTA_CREDITO ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'))}`}>
-                                {inv.type === InvoiceType.FACTURA ? 'FACTURA' : (inv.type === InvoiceType.NOTA_VENTA ? 'NOTA VENTA' : (inv.type === InvoiceType.NOTA_CREDITO ? 'NOTA CRÉDITO' : 'BOLETA'))}
+                                  {inv.type === InvoiceType.FACTURA ? 'FACTURA' : (inv.type === InvoiceType.NOTA_VENTA ? 'NOTA VENTA' : (inv.type === InvoiceType.NOTA_CREDITO ? 'NOTA CRÉDITO' : 'BOLETA'))}
                                 </span>
-                                {inv.serie}-{String(inv.correlativo).padStart(8, '0')}
+                                
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleDirectPrint(inv); }}
+                                    className="p-1.5 hover:bg-indigo-50 rounded-lg text-brand-primary transition-all shadow-sm border border-brand-primary/20 bg-white"
+                                    title="Imprimir Documento del Cliente"
+                                >
+                                    <Printer size={14} className="animate-pulse" />
+                                </button>
+
+                                <span className={isVoided ? 'line-through text-red-600 font-black' : ''}>
+                                  {inv.serie}-{String(inv.correlativo).padStart(8, '0')}
+                                </span>
+                                {isVoided && <span className="ml-2 px-1.5 py-1 bg-red-700 text-white text-[10px] font-black rounded-lg uppercase animate-bounce shadow-lg ring-4 ring-red-200 flex items-center gap-1 border-2 border-white">
+                                  <Ban size={10} /> ANULADO
+                                </span>}
                             </div>
                             
                             {/* HASH DEL COMPROBANTE - BAJO EL DOCUMENTO */}
@@ -270,8 +322,26 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                                 </div>
                             )}
                             {isVoided && (
-                                <div className="mt-2 text-[10px] text-red-700 font-bold flex items-center gap-1 bg-red-100 border border-red-200 rounded px-2 py-0.5 w-fit">
-                                <Ban size={10} /> ANULADO POR {voidingNc?.serie}-{voidingNc?.correlativo}
+                                <div className="mt-2 flex flex-col gap-1">
+                                    <div className="flex items-center gap-1.5 bg-red-600 text-white 
+                                                    font-black px-3 py-1 rounded-lg text-[11px] w-fit shadow-sm">
+                                        <Ban size={12} /> ANULADO
+                                        <span className="font-normal opacity-80 text-[9px]">
+                                            {voidingNc ? `NC: ${voidingNc.serie}-${String(voidingNc.correlativo).padStart(8, '0')}` : 'CON NOTA DE CRÉDITO'}
+                                        </span>
+                                    </div>
+                                    {voidingNc?.sunatResponse?.pdfUrl && (
+                                        <div className="flex gap-2 ml-1">
+                                            <a href={voidingNc.sunatResponse.pdfUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] text-red-500 font-bold hover:underline">
+                                                <FileText size={8} /> PDF NC
+                                            </a>
+                                            {voidingNc.sunatResponse.xmlUrl && (
+                                                <a href={voidingNc.sunatResponse.xmlUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] text-indigo-500 font-bold hover:underline">
+                                                    <FileCode size={8} /> XML NC
+                                                </a>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                           </div>
@@ -298,9 +368,17 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                           <div className="flex flex-col items-center gap-1">
                             {inv.sunatStatus === 'ACCEPTED' ? (
                               isVoided ? (
-                                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-200 text-gray-600 border border-gray-300">
-                                  <Ban size={12} /> ANULADO
-                                </span>
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-600 border border-gray-200">
+                                    <Ban size={12} /> ANULADO
+                                  </span>
+                                  {inv.notes && inv.notes.includes('NC') && (
+                                    <div className="flex items-center gap-1 text-[9px] text-red-500 font-black uppercase">
+                                      <RotateCcw size={10} /> 
+                                      {inv.notes.match(/\[(.*?)\]/)?.[1] || 'CON NOTA CRÉDITO'}
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
                                 <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700 border border-green-200">
                                   <CheckCircle2 size={12} /> ACEPTADO
@@ -402,10 +480,19 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                             
                             {/* BOTONES DE DESCARGA SUNAT - PDF, XML, CDR */}
                             {inv.sunatResponse?.pdfUrl && (
-                              <a href={inv.sunatResponse.pdfUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-white text-red-600 rounded border border-red-200 hover:bg-red-50 transition-all shadow-sm" title="Descargar PDF">
+                              <a href={inv.sunatResponse.pdfUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-white text-red-600 rounded border border-red-200 hover:bg-red-50 transition-all shadow-sm" title="Descargar PDF Original">
                                 <FileText size={16} />
                               </a>
                             )}
+                            
+                            {/* BOTON PDF DE LA NOTA DE CREDITO VINCULADA */}
+                            {isVoided && voidingNc?.sunatResponse?.pdfUrl && (
+                              <a href={voidingNc.sunatResponse.pdfUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-orange-600 text-white rounded border border-orange-700 hover:bg-orange-700 transition-all shadow-sm flex items-center gap-1" title="Descargar PDF de Anulación (NC)">
+                                <FileText size={14} />
+                                <span className="text-[10px] font-bold">PDF NC</span>
+                              </a>
+                            )}
+
                             {inv.sunatResponse?.xmlUrl && (
                               <a href={inv.sunatResponse.xmlUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-white text-indigo-600 rounded border border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm" title="Descargar XML">
                                 <FileCode size={16} />

@@ -217,7 +217,7 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, onViewReceipt, on
 
                     // Estilos dinámicos para filas anuladas
                     const rowClass = isVoided 
-                        ? 'bg-red-50/50 hover:bg-red-50' 
+                        ? 'bg-red-100 hover:bg-red-100 border-l-4 border-l-red-500 opacity-75' 
                         : (inv.type === InvoiceType.NOTA_CREDITO ? 'bg-orange-50/30 hover:bg-orange-50' : 'hover:bg-gray-50');
 
                     return (
@@ -242,8 +242,12 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, onViewReceipt, on
                           )}
                           
                           {isVoided && (
-                              <div className="mt-2 text-[10px] text-red-700 font-bold flex items-center gap-1 bg-red-100 border border-red-200 rounded px-2 py-0.5 w-fit">
-                                  <Ban size={10} /> ANULADO POR {voidingNc?.serie}-{voidingNc?.correlativo}
+                              <div className="mt-2 flex items-center gap-1.5 bg-red-600 text-white 
+                                              font-black px-3 py-1 rounded-lg text-[11px] w-fit shadow-sm">
+                                  <Ban size={12} /> ANULADO
+                                  <span className="font-normal opacity-80 text-[9px]">
+                                      NC: {voidingNc?.serie}-{String(voidingNc?.correlativo).padStart(8,'0')}
+                                  </span>
                               </div>
                           )}
                         </td>

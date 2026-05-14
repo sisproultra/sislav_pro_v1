@@ -266,6 +266,8 @@ export interface Invoice extends BaseEntity {
     sunatResponse?: SunatResponse;
     vistoDelivery?: boolean;
     paymentMethod?: string;
+    status?: string;
+    relatedNcId?: string;
     orderCorrelativoRaw?: number;
     cash_session_id?: string;
     lavanderia_at?: string;

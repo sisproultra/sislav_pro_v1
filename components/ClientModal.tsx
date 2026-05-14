@@ -282,6 +282,11 @@ const ClientModal: React.FC<ClientModalProps> = ({
 
   const handleSearch = async () => {
     if (!docNumber || isSearching || (docType as string) === '-' || isLocked || duplicateClient) return;
+
+    if (!apiToken) {
+        alert("Token de API no configurado. Vaya a Ajustes > APIs para configurarlo.");
+        return;
+    }
     
     const local = clientsList.find(c => {
         const stored = (c.docNumber || '').replace(/\D/g, '');
@@ -436,6 +441,12 @@ const ClientModal: React.FC<ClientModalProps> = ({
                                                 disabled={isLocked}
                                                 value={docNumber}
                                                 onChange={(e) => handleDocNumberChange(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && (docType as string) !== '-') {
+                                                        e.preventDefault();
+                                                        handleSearch();
+                                                    }
+                                                }}
                                                 className={`flex-1 bg-slate-50 border-2 ${duplicateClient ? 'border-red-400' : 'border-slate-200'} rounded-xl px-4 py-1.5 text-base font-black text-slate-900 outline-none focus:bg-white focus:border-indigo-500 transition-all placeholder:text-slate-200 shadow-inner`}
                                                 placeholder={docType === 'DNI' ? '8 dígitos' : (docType === 'RUC' ? '11 dígitos' : 'Opcional')}
                                             />

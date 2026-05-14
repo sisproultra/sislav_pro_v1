@@ -99,7 +99,7 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
         "fecha_emision": fechaEmision,
         "hora_emision": horaEmision,
         "fecha_vencimiento": fechaEmision, // Usamos la misma fecha si no hay vencimiento
-        "moneda_id": company.moneda_simbolo?.includes('$') ? "USD" : "PEN",
+        "moneda_id": company.moneda_simbolo?.includes('$') ? "2" : "1",
         "tipo_moneda": company.moneda_simbolo?.includes('$') ? "USD" : "PEN",
         "moneda": company.moneda_simbolo?.includes('$') ? "USD" : "PEN",
         "forma_pago_id": "1", 
@@ -107,7 +107,6 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
         "total_igv": safeNumber(invoice.totals.igv),
         "total_exonerada": safeNumber(invoice.totals.exonerada),
         "total_inafecta": safeNumber(invoice.totals.inafecta),
-        "total_gratuitas": "0.00",
         "total_gratuita": "0.00",
         "total_otros_cargos": "0.00",
         "total_descuento": "0.00",
@@ -116,24 +115,23 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
         "total_pago": safeNumber(invoice.totals.total),
         "tipo_documento_codigo": invoice.type,
         "nota": cleanText(invoice.notes || "VENTA REALIZADA DESDE SISTEMA POS"),
+        "motivo_descripcion": cleanText(invoice.notes || "VENTA REALIZADA DESDE SISTEMA POS"),
         // Campos para Nota de Crédito (Tipo 07)
         ...(invoice.type === '07' && invoice.relatedDocument ? {
-            "tipo_documento_referencia": invoice.relatedDocument.type,
-            "serie_referencia": invoice.relatedDocument.serie.toUpperCase().trim(),
-            "numero_referencia": String(invoice.relatedDocument.correlativo).padStart(8, '0'),
-            "cod_motivo": "01", // Algunos proveedores usan cod_motivo
-            "motivo_codigo": "01", 
-            "des_motivo": cleanText(invoice.notes || "ANULACION DE LA OPERACION"), // Algunos usan des_motivo
-            "motivo_descripcion": cleanText(invoice.notes || "ANULACION DE LA OPERACION"),
-            "sustento": cleanText(invoice.notes || "ANULACION DE LA OPERACION"), // Otros usan sustento
-            // Nombres alternativos para máxima compatibilidad con diferentes versiones de API
-            "num_referencia": String(invoice.relatedDocument.correlativo).padStart(8, '0'),
+            "relacionado_serie": invoice.relatedDocument.serie.toUpperCase().trim(),
+            "relacionado_numero": String(invoice.relatedDocument.correlativo),
+            "relacionado_tipo_documento": invoice.relatedDocument.type,
+            "relacionado_motivo_codigo": "01",
+            "motivo_codigo": "01",
+            "des_motivo": cleanText(invoice.notes || "ANULACION DE LA OPERACION"),
+            "sustento": cleanText(invoice.notes || "ANULACION DE LA OPERACION"),
+            "tipo_nota_id": "1",
+            // Mantener estos como fallback por si acaso, pero los principales son los de arriba
             "documento_que_se_modifica_tipo": invoice.relatedDocument.type,
             "documento_que_se_modifica_serie": invoice.relatedDocument.serie.toUpperCase().trim(),
-            "documento_que_se_modifica_numero": String(invoice.relatedDocument.correlativo).padStart(8, '0'),
+            "documento_que_se_modifica_numero": String(invoice.relatedDocument.correlativo),
             "documento_que_se_modifica_fecha": invoice.relatedDocument.date ? invoice.relatedDocument.date.split('T')[0] : "",
-            "fecha_documento_referencia": invoice.relatedDocument.date ? invoice.relatedDocument.date.split('T')[0] : "",
-            "tipo_nota_id": "1"
+            "fecha_documento_referencia": invoice.relatedDocument.date ? invoice.relatedDocument.date.split('T')[0] : ""
         } : {})
     },
     "items": invoice.items.map((item, idx) => {
@@ -141,18 +139,19 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
         const cantidadOriginal = Number(item.quantity) || 0;
         const precioOriginal = Number(item.price) || 0;
         
-        // Redondeo crítico para SUNAT: El total de línea debe ser exacto a 2 decimales
-        const totalLine = Number((precioOriginal * cantidadOriginal).toFixed(2));
+        // IMPORTANTE: El total de línea debe redondearse igual que en calculateTotals (roundToOneDecimal)
+        // para que la suma de ítems coincida con el total de venta en la cabecera.
+        const totalLine = Math.floor((precioOriginal * cantidadOriginal) * 10 + 0.0001) / 10;
         
         let valorUnitario;
         let subtotal;
         let igv;
 
         if (itemIgvType === '10') {
-            // Gravado: Desglosamos el IGV del total de la línea redondeado
+            // Gravado: Desglosamos el IGV del total de la línea (ya redondeado a 1 decimal)
             subtotal = Number((totalLine / igvFactor).toFixed(2));
             igv = Number((totalLine - subtotal).toFixed(2));
-            // Recalculamos el valor unitario para que cuadre con el subtotal
+            // Recalculamos el valor unitario para que cuadre exactamente con el subtotal
             valorUnitario = cantidadOriginal > 0 ? subtotal / cantidadOriginal : (precioOriginal / igvFactor);
         } else {
             // Exonerado / Inafecto

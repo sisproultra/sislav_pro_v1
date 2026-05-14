@@ -46,7 +46,8 @@ async function startServer() {
   app.post(/^\/api-proxy\/sunat-vps\/([^\/]+)\/(.*)/, async (req: any, res: any) => {
     const host = req.params[0];
     const path = req.params[1];
-    const targetUrl = `https://${host}/${path}`;
+    const queryString = req.url.includes('?') ? '?' + req.url.split('?')[1] : '';
+    const targetUrl = `https://${host}/${path}${queryString}`;
     
     console.log(`🌐 [Proxy VPS] Target: ${targetUrl}`);
     
@@ -77,7 +78,8 @@ async function startServer() {
   // Proxy para SUNAT Estándar
   app.post(/^\/api-proxy\/sunat\/(.*)/, async (req: any, res: any) => {
     const path = req.params[0] || 'post.php';
-    const targetUrl = `https://apisu.sysventa.com/API_SUNAT/${path}`;
+    const queryString = req.url.includes('?') ? '?' + req.url.split('?')[1] : '';
+    const targetUrl = `https://apisu.sysventa.com/API_SUNAT/${path}${queryString}`;
     
     console.log(`🌐 [Proxy SUNAT] Target: ${targetUrl}`);
     
@@ -108,20 +110,29 @@ async function startServer() {
   // Proxy para Decolecta
   app.all(/^\/api-proxy\/decolecta\/(.*)/, async (req: any, res: any) => {
     const subpath = req.params[0];
-    const targetUrl = `https://api.decolecta.com/v1/${subpath}`;
+    const queryString = req.url.includes('?') ? '?' + req.url.split('?')[1] : '';
+    const targetUrl = `https://api.decolecta.com/v1/${subpath}${queryString}`;
     try {
       const options: any = {
         method: req.method,
-        headers: { ...req.headers }
+        headers: {
+          'Authorization': req.headers.authorization || '',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       };
-      delete options.headers.host;
+      
       if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
         options.body = JSON.stringify(req.body);
       }
+      
       const response = await fetch(targetUrl, options);
+      const contentType = response.headers.get('Content-Type') || 'application/json';
       const data = await response.text();
-      res.status(response.status).send(data);
+      
+      res.status(response.status).header('Content-Type', contentType).send(data);
     } catch (error: any) {
+      console.error(`❌ [Proxy Decolecta Error]: ${error.message}`);
       res.status(500).json({ error: error.message });
     }
   });

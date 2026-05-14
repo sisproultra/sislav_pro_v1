@@ -7,6 +7,6 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Estrategia básica de red para permitir la instalación
-  event.respondWith(fetch(event.request));
+  // we do not intercept any requests to avoid issues with API proxies in dev/construction mode
+  return;
 });

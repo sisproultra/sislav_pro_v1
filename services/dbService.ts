@@ -1199,7 +1199,7 @@ export const dbGetPickupRequests = async (): Promise<PickupRequest[]> => {
         const holdingId = await ensureHoldingId(branchId);
         const { data, error } = await supabase.from('recojos_delivery').select('*, clientes(nombres, latitud, longitud, google_maps_url)').eq('sucursal_id', branchId).eq('empresa_holding_id', holdingId).order('fecha_programada', { ascending: true });
         if (error) return [];
-        return (data || []).map(r => ({ id: r.id, sucursal_id: r.sucursal_id, empresa_holding_id: r.empresa_holding_id, cliente_id: r.cliente_id, clientName: r.clientes?.nombres || 'Cliente', address: r.direccion, phone: r.telefono, scheduledDate: r.fecha_programada, timeRange: r.rango_horario, status: mapStatusFromDb(r.estado_recojo), notes: r.notes, createdAt: r.fecha_registro, registrado_por: r.registrado_por, googleMapsUrl: r.clientes?.google_maps_url, latitude: r.clientes?.latitud ? Number(r.clientes.latitud) : undefined, longitude: r.clientes?.longitud ? Number(r.clientes.longitud) : undefined, isSelfScheduled: r.is_self_scheduled ?? false, isReadByAdmin: r.is_read_by_admin ?? false }));
+        return (data || []).map(r => ({ id: r.id, sucursal_id: r.sucursal_id, empresa_holding_id: r.empresa_holding_id, cliente_id: r.cliente_id, clientName: r.clientes?.nombres || 'Cliente', address: r.direccion, phone: r.telefono, scheduledDate: r.fecha_programada, timeRange: r.rango_horario, status: mapStatusFromDb(r.estado_recojo), notes: r.notas, createdAt: r.fecha_registro, registrado_por: r.registrado_por, googleMapsUrl: r.clientes?.google_maps_url, latitude: r.clientes?.latitud ? Number(r.clientes.latitud) : undefined, longitude: r.clientes?.longitud ? Number(r.clientes.longitud) : undefined, isSelfScheduled: r.is_self_scheduled ?? false, isReadByAdmin: r.is_read_by_admin ?? false }));
     } catch (e) { return []; }
 };
 
@@ -1407,7 +1407,8 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
             codigo_orden: formattedOrderCode,
             cash_session_id: activeSession?.id || null,
             fecha_recepcion: getPeruTimestamp(),
-            related_document: invoice.relatedDocument || null
+            documento_referencia_id: invoice.relatedDocument || null,
+            notes: invoice.notes || null // Persistir las notas (razón de la NC si aplica)
         }).eq('id', result.id);
 
         if (activeSession?.id) {
@@ -1773,8 +1774,7 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
             .from('ventas')
             .select('*, clientes(*), items_venta(*)', { count: 'exact' })
             .eq('sucursal_id', branchId)
-            .eq('empresa_holding_id', holdingId)
-            .neq('estado', 'CANCELADO');
+            .eq('empresa_holding_id', holdingId);
 
         if (searchTerm) {
             let intelligentSearch = searchTerm.trim().toUpperCase();
@@ -1868,6 +1868,9 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
                 serie: v.serie || 'NV01', 
                 correlativo: v.correlativo || 0, 
                 type: docType, 
+                notes: v.notes || '',
+                status: v.status || '',
+                relatedNcId: v.related_nc_id || null,
                 client: c ? { 
                     id: c.id, 
                     sucursal_id: c.sucursal_id, 
@@ -1928,7 +1931,7 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
                 pickupId: v.pickup_id,
                 operario_id: v.operario_id,
                 entregado_at: v.entregado_at,
-                relatedDocument: v.related_document,
+                relatedDocument: v.documento_referencia_id,
                 sunatResponse: {
                     success: v.sunat_status === 'ACCEPTED',
                     description: v.sunat_description,
@@ -1936,7 +1939,9 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
                     pdfUrl: v.sunat_pdf_url,
                     xmlUrl: v.sunat_xml_url,
                     cdrUrl: v.sunat_cdr_url
-                }
+                },
+                qrCodeData: v.qr_code_data || null,
+                relatedNcId: v.related_nc_id
             };
         });
 
@@ -2153,7 +2158,9 @@ export const dbGetInvoiceFull = async (id: string): Promise<Invoice | null> => {
         pickupId: v.pickup_id,
         operario_id: v.operario_id,
         entregado_at: v.entregado_at,
-        relatedDocument: v.related_document,
+        relatedDocument: v.documento_referencia_id,
+        relatedNcId: v.related_nc_id,
+        notes: v.notes,
         sunatResponse: {
             success: v.sunat_status === 'ACCEPTED',
             description: v.sunat_description,
@@ -2161,7 +2168,8 @@ export const dbGetInvoiceFull = async (id: string): Promise<Invoice | null> => {
             pdfUrl: v.sunat_pdf_url,
             xmlUrl: v.sunat_xml_url,
             cdrUrl: v.sunat_cdr_url
-        }
+        },
+        qrCodeData: v.qr_code_data || null
     };
 };
 
@@ -2171,6 +2179,23 @@ export const dbUpdateInvoiceStatus = async (id: string, status: OrderStatus, pho
         payload.entregado_at = new Date().toISOString();
     }
     if (photos) { payload.url_foto_evidencia_1 = photos[0] || null; payload.url_foto_evidencia_2 = photos[1] || null; payload.url_foto_evidencia_3 = photos[2] || null; }
+    const { error } = await supabase.from('ventas').update(payload).eq('id', id);
+    if (error) throw error;
+    invalidateCache('invoices');
+};
+
+export const dbUpdateInvoice = async (id: string, updates: Partial<Invoice>) => {
+    const payload: any = {};
+    
+    if (updates.orderStatus !== undefined) {
+        payload.estado = updates.orderStatus;
+        payload.estado_id = ORDER_STATUS_MAP[updates.orderStatus as OrderStatus];
+    }
+    if (updates.notes !== undefined) {
+        payload.notes = updates.notes;
+    }
+    if (updates.relatedNcId !== undefined) payload.related_nc_id = updates.relatedNcId;
+    
     const { error } = await supabase.from('ventas').update(payload).eq('id', id);
     if (error) throw error;
     invalidateCache('invoices');
@@ -3634,18 +3659,88 @@ export const dbGetTrackingInfo = async (id: string) => {
     }
 
     // 2. Si no es recojo, intentar con venta directa
-    const { data: invoice, error: iErr } = await supabase.from('ventas').select('*, items_venta(*)').eq('id', id).maybeSingle();
-    if (invoice) {
-        console.log("✅ Venta encontrada:", invoice.id);
-        const { data: company } = await supabase.from('sucursales').select('*').eq('id', invoice.sucursal_id).maybeSingle();
-        const { data: client } = await supabase.from('clientes').select('id, nombres, puntos, sucursal_id, telefono').eq('id', invoice.cliente_id).maybeSingle();
+    const { data: v, error: iErr } = await supabase.from('ventas').select('*, items_venta(*)').eq('id', id).maybeSingle();
+    if (v) {
+        console.log("✅ Venta encontrada:", v.id);
+        const { data: companyRaw } = await supabase.from('sucursales').select('*').eq('id', v.sucursal_id).maybeSingle();
+        const { data: clientRaw } = await supabase.from('clientes').select('*').eq('id', v.cliente_id).maybeSingle();
         
         // Fetch payments
-        const { data: pagos } = await supabase.from('pagos_venta').select('monto, metodo_pago_id, fecha_pago').eq('venta_id', invoice.id);
+        const { data: pagosVenta } = await supabase.from('pagos_venta').select('*, metodos_pago(nombre)').eq('venta_id', v.id);
+
+        const totalPagado = (pagosVenta || []).reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
+        const client = normalizeRelation(clientRaw);
+        
+        const mappedInvoice: Invoice = {
+            id: v.id,
+            sucursal_id: v.sucursal_id,
+            cliente_id: v.cliente_id,
+            client: client ? {
+                id: client.id,
+                docType: client.tipo_documento_codigo || 'DNI',
+                docNumber: client.dni,
+                name: client.nombres,
+                phone: client.telefono,
+                address: client.direccion,
+                points: client.puntos || 0,
+                sucursal_id: client.sucursal_id
+            } : { id: '', docType: '0', docNumber: '0', name: 'PUBLICO GENERAL', address: '', points: 0, sucursal_id: v.sucursal_id },
+            ordenNumber: v.codigo_orden,
+            serie: v.serie,
+            correlativo: v.correlativo,
+            type: v.tipo_documento_codigo as InvoiceType,
+            items: (v.items_venta || []).map((it: any) => ({
+                id: it.item_id || it.id,
+                name: it.nombre,
+                quantity: Number(it.cantidad),
+                price: Number(it.precio_unitario),
+                subtotal: Number(it.subtotal),
+                category: it.categoria || '',
+                unitCode: it.codigo_unidad || UnitCode.ZZ,
+                activo: true,
+                stock: 0,
+                cost: 0,
+                estado: it.estado || 'PENDIENTE',
+                color: it.color,
+                defectos: it.defectos,
+                details: it.observaciones,
+                item_id_raw: it.id,
+                audioNote: it.url_audio
+            })),
+            payments: (pagosVenta || []).map(p => ({
+                id: p.id,
+                metodo_pago_id: p.metodo_pago_id,
+                metodo_pago_name: (p.metodos_pago as any)?.nombre || 'EFECTIVO',
+                monto: Number(p.monto),
+                date: p.fecha_pago
+            })),
+            totals: {
+                total: Number(v.total) || 0,
+                igv: Number(v.total_igv) || 0,
+                gravada: Number(v.total_gravada) || 0,
+                exonerada: Number(v.total_exonerada) || 0,
+                inafecta: Number(v.total_inafecta) || 0
+            },
+            date: v.fecha_recepcion || v.fecha || new Date().toISOString(),
+            fecha_emision: v.fecha_emision,
+            deliveryDate: v.fecha_entrega,
+            orderStatus: (v.estado as OrderStatus) || 'PENDIENTE',
+            sunatStatus: v.sunat_status || (v.tipo_documento_codigo === InvoiceType.NOTA_VENTA ? 'INTERNAL' : 'PENDING'),
+            prePaymentAmount: totalPagado,
+            qrCodeData: v.qr_code_data || null,
+            sunatResponse: {
+                success: v.sunat_status === 'ACCEPTED',
+                description: v.sunat_description,
+                hash: v.sunat_hash,
+                pdfUrl: v.sunat_pdf_url,
+                xmlUrl: v.sunat_xml_url,
+                cdrUrl: v.sunat_cdr_url
+            }
+        };
 
         return { 
-            invoice: { ...invoice, clientes: client, pagos_venta: pagos || [] }, 
-            company: company ? normalizeSucursal(company) : null 
+            invoice: mappedInvoice, 
+            company: companyRaw ? normalizeSucursal(companyRaw) : null 
         };
     }
 

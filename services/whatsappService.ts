@@ -502,7 +502,9 @@ const getBase64FromUrl = async (url: string): Promise<string> => {
 };
 
 /**
- * Envía el comprobante al cliente vía WhatsApp usando Evolution API.
+ * Envía el comprobante al cliente vía WhatsApp mediante un link de descarga directa.
+ * OPTIMIZACIÓN: Ya no genera el PDF en el navegador para ahorrar tiempo y recursos, 
+ * en su lugar envía un link que abre el comprobante en el módulo de Tracking.
  */
 export const sendInvoiceViaWhatsApp = async (
   invoice: Invoice, 
@@ -514,98 +516,61 @@ export const sendInvoiceViaWhatsApp = async (
   const apiKey = company.whatsapp_token?.trim();
   const instance = company.whatsapp_instance_name?.trim();
 
-  const fallbackUrl = generateWhatsAppLink(invoice, company, phoneNumber);
+  // Generamos el link de vista digital (Tracking + Receipt mode)
+  const downloadUrl = `${window.location.origin}/?t=${invoice.id}&v=receipt`;
+  const isNotaVenta = invoice.type === InvoiceType.NOTA_VENTA;
+  const docTypeName = isNotaVenta ? 'Nota de Venta' : (invoice.type === InvoiceType.FACTURA ? 'Factura' : 'Boleta');
+
+  // Texto optimizado para el mensaje
+  let text = `*${company.razonSocial}*\n`;
+  text += `Estimado cliente, puede visualizar y descargar su *${docTypeName}* desde el siguiente enlace:\n\n`;
+  text += `🔗 ${downloadUrl}\n\n`;
+  text += `📄 *Número*: ${invoice.serie}-${invoice.correlativo}\n`;
+  text += `💰 *Importe*: S/ ${invoice.totals.total.toFixed(2)}\n\n`;
+  text += `¡Gracias por su preferencia!`;
+
+  const fallbackUrl = `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
 
   if (!baseUrl || !apiKey || !instance) {
-    return { success: false, message: 'Configuración de WhatsApp incompleta.', fallbackUrl };
+    return { success: false, message: 'API no configurada. Redirigiendo...', fallbackUrl };
   }
 
-  const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  const isNotaVenta = invoice.type === InvoiceType.NOTA_VENTA;
-  let mediaSource = "";
-  const fileName = `${company.ruc}-${invoice.serie}-${invoice.correlativo}.pdf`;
-
   try {
-      if (isNotaVenta) {
-          // Generar y subir (sobrescribe siempre para tener data actualizada)
-          const pdfBlob = await generateInternalPDFBlob(invoice, company);
-          const branchIdForFile = company.sucursal_id || (company as any).id || invoice.sucursal_id;
-          const storagePath = `${branchIdForFile}/${fileName}`;
-          mediaSource = await uploadToSupabaseStorage(pdfBlob, storagePath);
-      } else {
-          // Documentos SUNAT: Intentamos obtener Base64 para evitar que Evolution API falle al descargar
-          const sunatUrl = `https://apisu.sysventa.com/API_SUNAT/files/facturacion_electronica/PDF/${fileName}`;
-          try {
-              mediaSource = await getBase64FromUrl(sunatUrl);
-          } catch (e) {
-              console.warn("Fallo al obtener base64 del PDF, enviando URL como fallback", e);
-              mediaSource = sunatUrl; // Fallback a URL si falla la descarga local
-          }
-      }
-
-      const docTypeName = isNotaVenta ? 'Nota de Venta' : (invoice.type === InvoiceType.FACTURA ? 'Factura' : 'Boleta');
-      
-      let caption = `*${company.razonSocial}*\n`;
-      caption += `Estimado cliente, adjuntamos su *${docTypeName}*.\n\n`;
-      caption += `📄 *Número*: ${invoice.serie}-${invoice.correlativo}\n`;
-      caption += `💰 *Importe*: S/ ${invoice.totals.total.toFixed(2)}\n\n`;
-      caption += `¡Gracias por su preferencia!`;
-
       const cleanNumber = phoneNumber.replace(/\D/g, '');
-
       const payload = {
-        "number": cleanNumber, 
-        "mediatype": "document",
-        "mimetype": "application/pdf",
-        "caption": caption,
-        "media": mediaSource, 
-        "fileName": fileName,
+        "number": cleanNumber,
+        "text": text,
         "delay": 1200
       };
 
-      // Asegurar que el baseUrl tenga protocolo
-      let finalBaseUrl = cleanBaseUrl;
-      if (!finalBaseUrl.startsWith('http')) {
-        finalBaseUrl = `https://${finalBaseUrl}`;
-      }
+      let finalBaseUrl = baseUrl.trim();
+      if (!finalBaseUrl.startsWith('http')) finalBaseUrl = `https://${finalBaseUrl}`;
+      const finalEndpoint = `${finalBaseUrl}/message/sendText/${instance}`;
       
-      const finalEndpoint = `${finalBaseUrl}/message/sendMedia/${instance}`;
+      // Intentamos envío via Proxy para evitar CORS
       const proxiedUrl = `${PROXY_URL}${encodeURIComponent(finalEndpoint)}`;
       
-      let response;
-      try {
-        // Intento 1: Con Proxy (para evitar CORS)
-        response = await fetch(proxiedUrl, {
+      console.log(`🚀 Intentando enviar WA via API: ${instance}`);
+      
+      const response = await fetch(proxiedUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'apikey': apiKey 
           },
           body: JSON.stringify(payload)
-        });
-      } catch (proxyError) {
-        console.warn("Fallo con proxy, reintentando directo...", proxyError);
-        // Intento 2: Directo (por si el proxy falla o no es necesario)
-        response = await fetch(finalEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': apiKey 
-          },
-          body: JSON.stringify(payload)
-        });
-      }
+      }).catch(e => {
+          console.error("Fetch failed, likely CORS or Proxy error", e);
+          throw new Error("Network Error");
+      });
 
       if (response.ok) {
-          return { success: true, message: 'Documento enviado con éxito' };
+          return { success: true, message: 'Link enviado con éxito' };
       } else {
-          const errorText = await response.text();
-          console.error("Error Evolution API:", errorText);
-          return { success: false, message: `Error en API (${response.status})`, fallbackUrl };
+          return { success: false, message: `API WhatsApp ocupada o error ${response.status}`, fallbackUrl };
       }
-
   } catch (error: any) {
-    console.error("Error técnico envío WA:", error);
-    return { success: false, message: error.message || 'Error de conexión', fallbackUrl };
+    console.warn("⚠️ Fallo envío automático, usando fallback manual:", error.message);
+    return { success: false, message: 'Reintentando por WhatsApp...', fallbackUrl };
   }
 };

@@ -632,6 +632,18 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                              }}>
                         </div>
                     </div>
+
+                    {/* Botón de Descarga para Clientes en Vista de Tracking */}
+                    <div className="mt-8 flex flex-col gap-3 w-full animate-in slide-in-from-bottom-5 duration-500 delay-150">
+                        <button 
+                            onClick={handleDownloadPDF}
+                            disabled={isGeneratingPDF}
+                            className="w-full py-5 bg-white/10 hover:bg-white/20 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] transition-all active:scale-95 flex items-center justify-center gap-3 backdrop-blur-md border border-white/20 shadow-2xl"
+                        >
+                            {isGeneratingPDF ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} 
+                            {isGeneratingPDF ? 'Generando...' : 'Descargar PDF'}
+                        </button>
+                    </div>
                 </div>
             </div>
         );

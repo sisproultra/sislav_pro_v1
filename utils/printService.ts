@@ -290,7 +290,7 @@ export const printQuoteDirectly = async (quote: PausedSale, company: Company, pa
     }
 };
 
-export const printInvoiceDirectly = async (invoice: Invoice, company: Company, passedConfig?: any) => {
+export const printInvoiceDirectly = async (invoice: Invoice, company: Company, passedConfig?: any, clientOnly = false) => {
     const config = passedConfig || await dbGetTicketConfig(company.id).catch(() => null);
     
     // Create hidden iframe for printing
@@ -339,9 +339,18 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
         barcodeUrl = generateBarcodeDataUrl(invoice.ordenNumber);
     }
 
+    // Build SUNAT QR string if missing but we have a hash
+    // The format is: RUC|TIPO_DOC|SERIE|CORRELATIVO|IGV|TOTAL|FECHA|TIPO_DOC_CLIENTE|NUMERO_DOC_CLIENTE|HASH|
+    if ([InvoiceType.BOLETA, InvoiceType.FACTURA, InvoiceType.NOTA_CREDITO].includes(invoice.type as any) && !invoice.qrCodeData && invoice.sunatResponse?.hash) {
+        const docTypeClient = invoice.client.docType === 'RUC' ? '6' : (invoice.client.docType === 'DNI' ? '1' : '0');
+        const formattedDateIso = (invoice.fecha_emision || invoice.date).split('T')[0];
+        
+        invoice.qrCodeData = `${company.ruc}|${invoice.type}|${invoice.serie}|${invoice.correlativo}|${invoice.totals.igv.toFixed(2)}|${invoice.totals.total.toFixed(2)}|${formattedDateIso}|${docTypeClient}|${invoice.client.docNumber}|${invoice.sunatResponse.hash}|`;
+    }
+
     // QR Code generation (LOCAL)
     let qrUrl = '';
-    if ([InvoiceType.BOLETA, InvoiceType.FACTURA].includes(invoice.type)) {
+    if ([InvoiceType.BOLETA, InvoiceType.FACTURA, InvoiceType.NOTA_CREDITO].includes(invoice.type as any)) {
         qrUrl = generateQRCodeDataUrl(invoice.qrCodeData || '');
     }
 
@@ -546,6 +555,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
             SISLAV: software para lavanderia 931200353
           </div>
 
+          ${!clientOnly ? `
           <div class="page-break"></div>
 
           <!-- ORDEN DE TRABAJO (PLANTA) -->
@@ -639,7 +649,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
             <div style="margin-top: 35px; border-top: 1.5px solid #000; padding-top: 10px; text-align: center; font-size: 8pt; font-weight: normal; opacity: 0.9;">
               SISTEMA DE GESTIÓN SISLAV
             </div>
-          </div>
+          </div>` : ''}
         </body>
       </html>
     `;

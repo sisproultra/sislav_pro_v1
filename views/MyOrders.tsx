@@ -7,11 +7,13 @@ import {
     AlertTriangle, Phone, Eye, Image as ImageIcon, MessageSquare,
     ListFilter, Shirt, Check, Store, Truck, Smartphone, Loader2, Navigation,
     MoreVertical, PackageCheck, Send, Edit, Waves, Wind, DollarSign, Save, CreditCard, Banknote, QrCode, Landmark, Wallet,
-    Square, CheckSquare, Maximize2, MapPin, ExternalLink, Info, History, ArrowLeft, Tag,
+    Square, CheckSquare, Maximize2, MapPin, ExternalLink, Info, History, ArrowLeft, Tag, ArrowRightLeft,
     ChevronLeft, ChevronRight, FileSpreadsheet
 } from 'lucide-react';
+import { printInvoiceDirectly } from '../utils/printService';
 import OrderItemsDetailModal from '../components/OrderItemsDetailModal';
 import OrderPrintModal from '../components/OrderPrintModal';
+import ConvertInvoiceModal from '../components/ConvertInvoiceModal';
 import DeliveryItemsModal from '../components/DeliveryItemsModal';
 import OrderAuditModal from '../components/OrderAuditModal';
 import LogisticsDispatchModal from '../components/LogisticsDispatchModal';
@@ -41,6 +43,7 @@ interface MyOrdersProps {
     globalStats?: { toCollect: number, toDeliver: number };
     currentUser?: { id: string, name: string, username: string };
     onOpenWaCampaign?: (contacts?: Contact[]) => void;
+    onConvertInvoice?: (invoice: Invoice, targetType: InvoiceType, finalClient: Client) => Promise<void>;
 }
 
 interface PaymentEntry {
@@ -113,13 +116,14 @@ const CircularProgress = ({ percent, color: customColor }: { percent: number; co
 };
 
 const MyOrders: React.FC<MyOrdersProps> = ({
-    invoices, total, currentPage, onPageChange, onSearch, company, onUpdateStatus, onEditOrder, onAddPayment, onUnifiedAction, onAddClient, paymentMethods, clients, onUpdateItemStatus, canManage = true, globalColors = [], ticketConfig, globalStats, currentUser, onOpenWaCampaign
+    invoices, total, currentPage, onPageChange, onSearch, company, onUpdateStatus, onEditOrder, onAddPayment, onUnifiedAction, onAddClient, paymentMethods, clients, onUpdateItemStatus, canManage = true, globalColors = [], ticketConfig, globalStats, currentUser, onOpenWaCampaign, onConvertInvoice
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isSearching, setIsSearching] = useState(false);
     const [filterStatus, setFilterStatus] = useState<OrderStatus | 'ALL'>('ALL');
     const [selectedOrderDetails, setSelectedOrderDetails] = useState<Invoice | null>(null);
     const [selectedOrderToPrint, setSelectedOrderToPrint] = useState<Invoice | null>(null);
+    const [invoiceToConvert, setInvoiceToConvert] = useState<Invoice | null>(null);
     const [selectedOrderToDeliver, setSelectedOrderToDeliver] = useState<Invoice | null>(null);
     const [selectedOrderToPay, setSelectedOrderToPay] = useState<Invoice | null>(null);
     const [selectedOrderToDispatch, setSelectedOrderToDispatch] = useState<Invoice | null>(null);
@@ -607,6 +611,15 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     const rawChangeInModal = currentTotalPaidInModal - totalToPayInModal;
     const changeInModal = (hasCashInModal && rawChangeInModal > 0) ? rawChangeInModal : 0;
 
+    const handleDirectPrint = async (inv: Invoice) => {
+        try {
+            // Request 3: Only client document (shouldPrintBoth = true for clientOnly)
+            await printInvoiceDirectly(inv, company, ticketConfig, true);
+        } catch (error) {
+            console.error("Error direct printing:", error);
+        }
+    };
+
     return (
         <div className="p-4 lg:p-6 h-full flex flex-col bg-gray-50 overflow-hidden">
             <style>{`
@@ -759,8 +772,11 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                         const isFullyDelivered = deliveredPercent === 100;
                                         const balance = inv.totals.total - (inv.descuento || 0) - (inv.prePaymentAmount || 0);
 
+                                        const isVoided = inv.status === 'anulado' || inv.orderStatus === 'CANCELADO' || !!inv.relatedNcId;
+                                        const rowClass = isVoided ? 'bg-red-50/30 grayscale-[0.3]' : 'hover:bg-gray-50/80';
+
                                         return (
-                                            <tr key={inv.id} className="hover:bg-gray-50/80 transition-colors group">
+                                            <tr key={inv.id} className={`${rowClass} transition-colors group`}>
                                                 <td className="px-6 py-5">
                                                     <div className="flex flex-col gap-2">
                                                         <div className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-base font-bold inline-block shadow-sm w-fit border-2 border-indigo-100">{displayOrderNumber}</div>
@@ -801,8 +817,33 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <div className="flex flex-col gap-1.5 min-w-[140px]">
-                                                        <span className={`px-2 py-0.5 rounded-md w-fit text-[10px] font-bold tracking-wider ${inv.type === InvoiceType.FACTURA ? 'bg-blue-100 text-blue-800' : (inv.type === InvoiceType.NOTA_VENTA ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800')}`}>{inv.type === InvoiceType.FACTURA ? 'FACTURA' : (inv.type === InvoiceType.NOTA_VENTA ? 'NOTA VENTA' : 'BOLETA')}</span>
-                                                        <p className="text-xs text-slate-900 font-black font-mono tracking-tighter">{inv.serie}-{String(inv.correlativo).padStart(8, '0')}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`px-2 py-0.5 rounded-md w-fit text-[10px] font-bold tracking-wider ${inv.type === InvoiceType.FACTURA ? 'bg-blue-100 text-blue-800' : (inv.type === InvoiceType.NOTA_VENTA ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800')}`}>{inv.type === InvoiceType.FACTURA ? 'FACTURA' : (inv.type === InvoiceType.NOTA_VENTA ? 'NOTA VENTA' : 'BOLETA')}</span>
+                                                            
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleDirectPrint(inv); }}
+                                                                className="p-1 px-1.5 hover:bg-gray-100 rounded-lg text-brand-primary transition-all shadow-sm border border-brand-primary/10 bg-white group/print"
+                                                                title="Imprimir Documento"
+                                                            >
+                                                                <Printer className="w-4 h-4 group-hover/print:scale-110 transition-transform" />
+                                                            </button>
+
+                                                            {inv.type === InvoiceType.NOTA_VENTA && (company.sunatEnvironment === 'BETA' || company.sunatEnvironment === 'PRODUCTION') && (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); setInvoiceToConvert(inv); }}
+                                                                    className="p-1 px-1.5 hover:bg-gray-100 rounded-lg text-emerald-600 transition-all shadow-sm border border-emerald-100 bg-white"
+                                                                    title="Convertir"
+                                                                >
+                                                                    <ArrowRightLeft className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <span className={isVoided ? 'line-through text-red-600 font-black' : ''}>{inv.serie}-{String(inv.correlativo).padStart(8, '0')}</span>
+                                                            {isVoided && <span className="ml-2 px-1.5 py-1 bg-red-700 text-white text-[10px] font-black rounded-lg uppercase animate-bounce shadow-lg ring-4 ring-red-200 flex items-center gap-1 border-2 border-white">
+                                                                <Ban size={10} /> ANULADO
+                                                            </span>}
+                                                        </div>
                                                         <div className="flex flex-col gap-1 mt-1">
                                                             <p className="text-[10px] text-slate-600 font-bold uppercase tracking-tight flex items-center gap-1.5">{dateStr}</p>
                                                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight flex items-center gap-1.5"><Clock size={12} /> {timeStr}</p>
@@ -927,9 +968,27 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                 <div className="bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-xl text-sm font-bold w-fit border border-indigo-100">{displayOrderNumber}</div>
                                                 <div className="flex flex-wrap gap-1.5">
                                                     <span className="text-[9px] font-bold uppercase text-slate-400 tracking-widest">{dateStr} • {timeStr}</span>
-                                                    <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tighter ${inv.type === InvoiceType.FACTURA ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-                                                        {inv.type === InvoiceType.FACTURA ? 'FACTURA' : 'BOLETA/NV'}
-                                                    </span>
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tighter ${inv.type === InvoiceType.FACTURA ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                                            {inv.type === InvoiceType.FACTURA ? 'FACTURA' : (inv.type === InvoiceType.NOTA_VENTA ? 'NOTA VENTA' : 'BOLETA')}
+                                                        </span>
+                                                        <div className="flex items-center space-x-1.5">
+                                                            <button
+                                                                onClick={() => handleDirectPrint(inv)}
+                                                                className="p-1 hover:bg-gray-50 rounded-md text-blue-600 transition-colors"
+                                                            >
+                                                                <Printer className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            {inv.type === InvoiceType.NOTA_VENTA && (company.sunatEnvironment === 'BETA' || company.sunatEnvironment === 'PRODUCTION') && (
+                                                                <button
+                                                                    onClick={() => setInvoiceToConvert(inv)}
+                                                                    className="p-1 hover:bg-gray-50 rounded-md text-emerald-600 transition-colors"
+                                                                >
+                                                                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div className="flex gap-2">
@@ -1411,6 +1470,24 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                 secondaryColor={secondaryColor}
                 ticketConfig={ticketConfig}
             />
+
+            {invoiceToConvert && (
+                <ConvertInvoiceModal
+                    isOpen={!!invoiceToConvert}
+                    onClose={() => setInvoiceToConvert(null)}
+                    invoice={invoiceToConvert}
+                    clients={clients}
+                    onConvert={async (type, client) => {
+                        if (onConvertInvoice) {
+                            await onConvertInvoice(invoiceToConvert, type, client);
+                            setInvoiceToConvert(null);
+                        }
+                    }}
+                    apiToken={company.apiToken}
+                    onAddClient={onAddClient}
+                    company={company}
+                />
+            )}
             {selectedOrderToDeliver && (
                 <DeliveryItemsModal
                     isOpen={true}

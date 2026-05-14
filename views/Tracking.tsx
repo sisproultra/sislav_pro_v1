@@ -72,6 +72,12 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
     const res = await dbGetTrackingInfo(id);
     setData(res as any);
     
+    // Auto-open receipt if requested via URL (?v=receipt)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('v') === 'receipt' && res.invoice) {
+        setShowReceipt(true);
+    }
+    
     if (res && !localStorage.getItem('sislav_auth_session')) {
         const type = res.invoice ? 'invoice' : 'pickup';
         const entityId = res.invoice ? res.invoice.id : res.pickup.id;
