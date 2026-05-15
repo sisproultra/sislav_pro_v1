@@ -536,41 +536,52 @@ export const sendInvoiceViaWhatsApp = async (
   }
 
   try {
-      const cleanNumber = phoneNumber.replace(/\D/g, '');
-      const payload = {
-        "number": cleanNumber,
-        "text": text,
-        "delay": 1200
-      };
+      const downloadUrl = `${window.location.origin}/?t=${invoice.id}&v=receipt`;
+      const isNotaVenta = invoice.type === InvoiceType.NOTA_VENTA;
+      const docTypeName = isNotaVenta ? 'Nota de Venta' : (invoice.type === InvoiceType.FACTURA ? 'Factura' : 'Boleta');
 
-      let finalBaseUrl = baseUrl.trim();
-      if (!finalBaseUrl.startsWith('http')) finalBaseUrl = `https://${finalBaseUrl}`;
-      const finalEndpoint = `${finalBaseUrl}/message/sendText/${instance}`;
+      let text = `*${company.razonSocial}*\n`;
+      text += `Estimado cliente, puede visualizar y descargar su *${docTypeName}* desde el siguiente enlace:\n\n`;
+      text += `🔗 ${downloadUrl}\n\n`;
+      text += `📄 *Número*: ${invoice.serie}-${invoice.correlativo}\n`;
+      text += `💰 *Importe*: S/ ${invoice.totals.total.toFixed(2)}\n\n`;
+      text += `¡Gracias por su preferencia!`;
+
+      const fallbackUrl = `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+
+      if (!baseUrl || !apiKey || !instance) {
+        return { success: false, message: 'API no configurada. Redirigiendo...', fallbackUrl };
+      }
+
+      console.log(`🚀 Solicitando envío de WA al servidor...`);
       
-      // Intentamos envío via Proxy para evitar CORS
-      const proxiedUrl = `${PROXY_URL}${encodeURIComponent(finalEndpoint)}`;
-      
-      console.log(`🚀 Intentando enviar WA via API: ${instance}`);
-      
-      const response = await fetch(proxiedUrl, {
+      const response = await fetch('/api/whatsapp/send', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'apikey': apiKey 
+            'Content-Type': 'application/json'
           },
-          body: JSON.stringify(payload)
-      }).catch(e => {
-          console.error("Fetch failed, likely CORS or Proxy error", e);
-          throw new Error("Network Error");
+          body: JSON.stringify({
+            baseUrl,
+            apiKey,
+            instance,
+            phoneNumber,
+            text
+          })
       });
 
-      if (response.ok) {
+      const result = await response.json();
+
+      if (response.ok && result.success) {
           return { success: true, message: 'Link enviado con éxito' };
       } else {
-          return { success: false, message: `API WhatsApp ocupada o error ${response.status}`, fallbackUrl };
+          console.warn("⚠️ Fallo envío automático:", result.message);
+          return { success: false, message: `Reintentando por WhatsApp...`, fallbackUrl };
       }
   } catch (error: any) {
-    console.warn("⚠️ Fallo envío automático, usando fallback manual:", error.message);
-    return { success: false, message: 'Reintentando por WhatsApp...', fallbackUrl };
+    console.error("Error en flujo de envío WA:", error);
+    const downloadUrl = `${window.location.origin}/?t=${invoice.id}&v=receipt`;
+    const text = `*${company.razonSocial}*\nLink: ${downloadUrl}`;
+    const fallbackUrl = `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+    return { success: false, message: 'Fallo de conexión, intente manual', fallbackUrl };
   }
 };

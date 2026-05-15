@@ -8,7 +8,7 @@ import {
     ListFilter, Shirt, Check, Store, Truck, Smartphone, Loader2, Navigation,
     MoreVertical, PackageCheck, Send, Edit, Waves, Wind, DollarSign, Save, CreditCard, Banknote, QrCode, Landmark, Wallet,
     Square, CheckSquare, Maximize2, MapPin, ExternalLink, Info, History, ArrowLeft, Tag, ArrowRightLeft,
-    ChevronLeft, ChevronRight, FileSpreadsheet
+    ChevronLeft, ChevronRight, FileSpreadsheet, Ban
 } from 'lucide-react';
 import { printInvoiceDirectly } from '../utils/printService';
 import OrderItemsDetailModal from '../components/OrderItemsDetailModal';

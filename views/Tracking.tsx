@@ -74,7 +74,7 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
     
     // Auto-open receipt if requested via URL (?v=receipt)
     const params = new URLSearchParams(window.location.search);
-    if (params.get('v') === 'receipt' && res.invoice) {
+    if (params.get('v') === 'receipt' && res?.invoice) {
         setShowReceipt(true);
     }
     

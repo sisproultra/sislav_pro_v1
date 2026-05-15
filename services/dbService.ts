@@ -1940,8 +1940,7 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
                     xmlUrl: v.sunat_xml_url,
                     cdrUrl: v.sunat_cdr_url
                 },
-                qrCodeData: v.qr_code_data || null,
-                relatedNcId: v.related_nc_id
+                qrCodeData: v.qr_code_data || null
             };
         });
 
@@ -2194,7 +2193,15 @@ export const dbUpdateInvoice = async (id: string, updates: Partial<Invoice>) => 
     if (updates.notes !== undefined) {
         payload.notes = updates.notes;
     }
-    if (updates.relatedNcId !== undefined) payload.related_nc_id = updates.relatedNcId;
+    // Usamos documento_referencia_id para vincular con la NC
+    if (updates.relatedNcId !== undefined) {
+        payload.documento_referencia_id = updates.relatedNcId;
+    }
+    // Si se intenta anular, usamos sunat_status o estado dependiendo de la lógica de negocio
+    // Como 'status' no existe, lo omitimos o lo mapeamos a sunat_status si es pertinente
+    if ((updates as any).status === 'anulado') {
+        payload.sunat_status = 'VOIDED';
+    }
     
     const { error } = await supabase.from('ventas').update(payload).eq('id', id);
     if (error) throw error;

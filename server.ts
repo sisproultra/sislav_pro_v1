@@ -275,6 +275,57 @@ async function startServer() {
     }
   }
 
+  // Proxy para Evolution API (WhatsApp)
+  app.post('/api/whatsapp/send', async (req: any, res: any) => {
+    const { baseUrl, apiKey, instance, phoneNumber, text } = req.body;
+
+    if (!baseUrl || !apiKey || !instance || !phoneNumber || !text) {
+      return res.status(400).json({ success: false, message: 'Faltan parámetros requeridos' });
+    }
+
+    try {
+      const cleanNumber = phoneNumber.replace(/\D/g, '');
+      const payload = {
+        "number": cleanNumber,
+        "text": text,
+        "delay": 1200
+      };
+
+      let finalBaseUrl = baseUrl.trim();
+      if (!finalBaseUrl.startsWith('http')) finalBaseUrl = `https://${finalBaseUrl}`;
+      const finalEndpoint = `${finalBaseUrl}/message/sendText/${instance}`;
+
+      console.log(`🚀 [Server WA] Enviando mensaje a ${cleanNumber} via ${instance}`);
+
+      const response = await fetch(finalEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const responseText = await response.text();
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        responseData = { raw: responseText };
+      }
+
+      if (response.ok) {
+        res.json({ success: true, data: responseData });
+      } else {
+        console.error(`❌ [Server WA Error]:`, responseData);
+        res.status(response.status).json({ success: false, message: `Error Evolution API: ${response.status}`, details: responseData });
+      }
+    } catch (error: any) {
+      console.error(`❌ [Server WA Exception]: ${error.message}`);
+      res.status(500).json({ success: false, message: 'Error interno al enviar WhatsApp', details: error.message });
+    }
+  });
+
   // Vite middleware para desarrollo
   if (process.env.NODE_ENV !== 'production') {
     console.log('📦 Iniciando Vite en modo desarrollo...');
