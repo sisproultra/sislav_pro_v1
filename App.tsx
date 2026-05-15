@@ -2249,8 +2249,8 @@ export default function App() {
                     <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 border border-white/20">
                         <img src={globalConfig.bannerCobro} className="w-full h-full object-cover" alt="Cobranza" />
                         <div className="p-8 bg-slate-50 flex flex-col items-center gap-6">
-                            <p className="text-slate-600 font-bold text-sm text-center uppercase leading-relaxed max-w-md">
-                                Estimado administrador, se ha detectado un saldo pendiente en su facturación. Regularice su situación para evitar la suspensión.
+                            <p className="text-slate-700 font-bold text-sm text-center uppercase leading-relaxed max-w-md">
+                                Hola, el servicio esta bloqueado por tener un saldo pendiente. Favor de regularizar el pago al PLIN 931200353 OSNAR JHON OBREGON V. muchas gracias
                             </p>
                             {!isCobranzaBlocking && (
                                 <button onClick={() => { setShowCobranzaModal(false); setHasClosedCobranza(true); }} className="px-12 py-4 bg-slate-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl">CERRAR AVISO</button>
