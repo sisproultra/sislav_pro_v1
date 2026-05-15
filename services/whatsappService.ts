@@ -555,7 +555,7 @@ export const sendInvoiceViaWhatsApp = async (
 
       console.log(`🚀 Solicitando envío de WA al servidor...`);
       
-      const response = await fetch('/api/whatsapp/send', {
+      const response = await fetch('/api/whatsapp-send', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -569,12 +569,19 @@ export const sendInvoiceViaWhatsApp = async (
           })
       });
 
-      const result = await response.json();
+      let result;
+      const responseText = await response.text();
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        console.error("Fallo al parsear respuesta JSON:", responseText);
+        result = { success: false, message: "Error en formato de respuesta del servidor" };
+      }
 
       if (response.ok && result.success) {
           return { success: true, message: 'Link enviado con éxito' };
       } else {
-          console.warn("⚠️ Fallo envío automático:", result.message);
+          console.warn("⚠️ Fallo envío automático:", result.message || response.statusText);
           return { success: false, message: `Reintentando por WhatsApp...`, fallbackUrl };
       }
   } catch (error: any) {

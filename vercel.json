@@ -17,6 +17,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/whatsapp-send",
+      "destination": "/api/whatsapp-send.ts"
+    },
+    {
       "source": "/manifest.json",
       "destination": "/api/manifest"
     },
@@ -33,7 +37,7 @@
       "destination": "/index.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

@@ -534,114 +534,164 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
 
     if (isTrackingView) {
         return (
-            <div className="fixed inset-0 bg-slate-950/90 z-[2000] flex flex-col items-center pt-20 pb-10 px-4 backdrop-blur-xl overflow-y-auto">
-                <div className="w-full max-w-[380px] animate-in zoom-in-95 duration-300 relative">
-                    {/* Boton X Rojo Pastel Flotante */}
+            <div className="fixed inset-0 bg-slate-100 z-[2000] flex flex-col items-center pt-1 pb-10 px-0 overflow-y-auto">
+                <div className="w-full max-w-[400px] animate-in zoom-in-95 duration-300 relative px-2">
+                    {/* Boton X Flotante */}
                     <button 
                         onClick={onClose} 
-                        className="absolute -top-6 -right-2 z-[2100] bg-red-400 text-white p-2 rounded-full shadow-xl hover:bg-red-500 transition-all active:scale-95 border-2 border-white/40 flex items-center justify-center"
+                        className="fixed top-4 right-4 z-[2100] bg-white text-slate-400 p-3 rounded-full shadow-lg hover:text-red-500 transition-all active:scale-95 border border-slate-200 flex items-center justify-center"
                     >
-                        <X size={16} strokeWidth={4} />
+                        <X size={20} />
                     </button>
 
-                    <div className="relative bg-white shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col">
-                        {/* Zig-zag Top Edge */}
-                        <div className="absolute -top-[12px] left-0 right-0 h-[12px] w-full z-10" 
-                             style={{ 
-                                backgroundImage: `radial-gradient(circle at 6px -4px, transparent 8px, white 8px)`,
-                                backgroundSize: '12px 14px'
-                             }}>
-                        </div>
-
-                        <div className="p-8 font-mono text-[12px] leading-relaxed text-black">
-                            <div className="text-center mb-6">
-                                {ticketConfig?.url_logo_ticket && <img src={ticketConfig.url_logo_ticket} className="max-w-[120px] mx-auto mb-4" referrerPolicy="no-referrer" />}
-                                <div className="font-bold text-base mb-1">{company.razonSocial.toUpperCase()}</div>
-                                <div className="text-[10px] text-slate-600 mb-1">RUC: {company.ruc}</div>
-                                <div className="text-[10px] text-slate-500 leading-tight">{company.address.toUpperCase()}</div>
-                                <div className="border-t-2 border-black border-dashed my-4"></div>
-                                <div className="font-bold text-sm tracking-widest">{docTitle}</div>
-                                <div className="font-bold text-base">{invoice.serie}-{String(invoice.correlativo).padStart(8, '0')}</div>
-                                <div className="text-[10px] mt-1">FECHA: {formattedDate}</div>
-                                <div className="border-t-2 border-black border-dashed my-4"></div>
+                    <div className="bg-white shadow-[0_0_20px_rgba(0,0,0,0.05)] border border-slate-200 flex flex-col min-h-screen sm:min-h-0 sm:rounded-lg">
+                        <div className="p-6 font-mono text-[12px] leading-relaxed text-black">
+                            {/* Header exacto como la imagen */}
+                            <div className="text-center mb-4">
+                                {ticketConfig?.url_logo_ticket && (
+                                    <div className="flex justify-center mb-4">
+                                        <img 
+                                            src={ticketConfig.url_logo_ticket} 
+                                            className="max-w-[140px] h-auto" 
+                                            referrerPolicy="no-referrer" 
+                                        />
+                                    </div>
+                                )}
+                                <div className="font-bold text-base mb-1 tracking-tight leading-tight">{company.razonSocial.toUpperCase()}</div>
+                                <div className="font-bold text-[11px] mb-0.5">RUC: {company.ruc}</div>
+                                <div className="text-[10px] text-slate-700 leading-tight mb-0.5 uppercase">{company.address.toUpperCase()}</div>
+                                {ticketConfig?.horario_atencion && (
+                                    <div className="text-[9px] italic text-slate-600 mb-1 leading-tight uppercase font-bold">
+                                        {ticketConfig.horario_atencion}
+                                    </div>
+                                )}
+                                
+                                <div className="border-t-[1.5px] border-black my-3"></div>
+                                
+                                <div className="font-black text-[13px] tracking-normal mb-0.5 uppercase">{docTitle}</div>
+                                <div className="font-black text-[14px] mb-1">{invoice.serie}-{String(invoice.correlativo).padStart(8, '0')}</div>
+                                <div className="text-[10px] uppercase">Emisión: {formattedDate}</div>
+                                
+                                <div className="border-t-[1.5px] border-black my-3"></div>
                             </div>
 
-                            <div className="mb-6 space-y-1">
-                                <div className="flex justify-between"><span>CLIENTE:</span> <span className="font-bold">{invoice.client.name.toUpperCase()}</span></div>
-                                <div className="flex justify-between"><span>{invoice.client.docType}:</span> <span className="font-bold">{invoice.client.docNumber}</span></div>
-                                <div className="flex justify-between"><span>TEL:</span> <span className="font-bold">{invoice.client.phone || '-'}</span></div>
+                            {/* Info Cliente */}
+                            <div className="mb-4 space-y-0.5 text-[10.5px]">
+                                <div className="flex justify-start gap-2"><span>CLIENTE:</span> <span className="font-bold uppercase">{invoice.client.name.toUpperCase()}</span></div>
+                                <div className="flex justify-start gap-2"><span>{invoice.client.docType === 'DNI' ? '<' : invoice.client.docType}:</span> <span className="font-bold">{invoice.client.docNumber}</span></div>
+                                <div className="flex justify-start gap-2"><span>TEL:</span> <span className="font-bold">{invoice.client.phone || '-'}</span></div>
+                                <div className="flex justify-start gap-2"><span>DIR:</span> <span className="font-bold uppercase">{invoice.client.address || '-'}</span></div>
+                                <div className="flex justify-start gap-2"><span>MONEDA:</span> <span className="font-bold">SOLES</span></div>
                             </div>
 
-                            <div className="border-t border-black my-2"></div>
-                            <table className="w-full mb-4">
+                            {/* Tabla de Items */}
+                            <div className="border-t-[1.5px] border-black mb-1"></div>
+                            <table className="w-full mb-2">
                                 <thead>
-                                    <tr className="border-b-2 border-black text-[10px]">
-                                        <th className="text-left py-1">CANT</th>
+                                    <tr className="text-[10.5px] font-bold border-b border-black">
+                                        <th className="text-left py-1 w-[15%]">CANT.</th>
                                         <th className="text-left py-1">DESCRIPCIÓN</th>
-                                        <th className="text-right py-1">TOTAL</th>
+                                        <th className="text-right py-1 w-[20%]">TOTAL</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {invoice.items.map((item, idx) => (
-                                        <tr key={idx} className="align-top">
-                                            <td className="py-2 pr-2 font-bold">{item.quantity.toFixed(1)}</td>
-                                            <td className="py-2 uppercase text-[11px] leading-tight">
-                                                {item.name}
-                                                {(item.details || item.color || item.defectos) && <div className="text-[9px] text-slate-500 mt-1 italic leading-none">{formatItemDetails(item, true, 'none')}</div>}
-                                            </td>
-                                            <td className="py-2 text-right font-bold">{(item.price * item.quantity).toFixed(2)}</td>
-                                        </tr>
+                                <tbody className="">
+                                    {invoice.items.filter(item => !((item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO')).map((item, idx) => (
+                                        <React.Fragment key={idx}>
+                                            <tr className="align-top text-[11px] font-medium">
+                                                <td className="py-1 pr-1">{item.quantity.toFixed(2)}</td>
+                                                <td className="py-1 uppercase leading-tight font-black tracking-tight">
+                                                    {item.name}
+                                                </td>
+                                                <td className="py-1 text-right">{(item.price * item.quantity).toFixed(2)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td></td>
+                                                <td colSpan={2} className="text-[9.5px] italic pb-1 pl-4 font-bold">
+                                                    P.U: {item.price.toFixed(2)}
+                                                    {(item.details || item.color || item.defectos) && (
+                                                        <div className="text-[8.5px] mt-0.5 text-slate-700 leading-tight not-italic font-bold">
+                                                            {formatItemDetails(item, true, 'none')}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        </React.Fragment>
                                     ))}
                                 </tbody>
                             </table>
 
-                            <div className="border-t-2 border-black border-dashed my-4"></div>
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between text-slate-600"><span>Op. Gravada:</span> <span>{invoice.totals.gravada.toFixed(2)}</span></div>
-                                <div className="flex justify-between text-slate-600"><span>IGV ({igvRate}%):</span> <span>{invoice.totals.igv.toFixed(2)}</span></div>
-                                <div className="flex justify-between font-bold text-lg pt-2 border-t border-slate-100"><span>TOTAL:</span> <span>S/ {invoice.totals.total.toFixed(2)}</span></div>
+                            {/* Totales */}
+                            <div className="border-t-[1.5px] border-black my-2 pt-1">
+                                <div className="flex justify-between text-[11px]"><span>Op. Gravada:</span> <span className="font-bold">{invoice.totals.gravada.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-[11px]"><span>IGV (18%):</span> <span className="font-bold">{invoice.totals.igv.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-[14px] font-black mt-1">
+                                    <span>TOTAL A PAGAR:</span> 
+                                    <span>S/ {invoice.totals.total.toFixed(2)}</span>
+                                </div>
                             </div>
 
-                            <div className="mt-6 font-bold text-[10px] leading-tight text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">{montoLetras}</div>
+                            <div className="mt-4 font-black text-[10px] leading-tight uppercase">{montoLetras}</div>
                             
-                            <div className="border-t-2 border-black border-dashed my-6"></div>
+                            <div className="border-t-[1.5px] border-black my-3"></div>
                             
-                            <div className="text-center mb-4 border-2 border-black p-2 rounded-lg bg-slate-50">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Entrega Estimada</div>
-                                <div className="text-sm font-black text-slate-900">{fullDeliveryInfo}</div>
+                            {/* Métodos de Pago */}
+                            <div className="space-y-0.5 text-[10.5px]">
+                                <div className="flex justify-between"><span>FORMA DE PAGO:</span> <span className="font-bold uppercase">MÚLTIPLE</span></div>
+                                {invoice.prePaymentAmount ? (
+                                    <>
+                                        <div className="flex justify-between font-bold"><span>PAGADO (ADELANTO):</span> <span>S/ {invoice.prePaymentAmount.toFixed(2)}</span></div>
+                                        <div className="flex justify-between font-bold"><span>SALDO PENDIENTE:</span> <span>S/ {(invoice.totals.total - invoice.prePaymentAmount).toFixed(2)}</span></div>
+                                    </>
+                                ) : (
+                                    <div className="flex justify-between font-bold"><span>PAGADO:</span> <span>S/ {invoice.totals.total.toFixed(2)}</span></div>
+                                )}
                             </div>
 
-                            <div className="text-left text-justify text-[10px] italic leading-relaxed text-slate-600 whitespace-pre-line px-1" style={{ textAlign: 'justify' }}>
-                                {ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.'}
-                            </div>
-                            
-                            {barcodeUrl && (
+                            {/* QR y HASH como en la imagen */}
+                            {invoice.qrCodeData && (
                                 <div className="mt-4 flex flex-col items-center">
-                                    <img src={barcodeUrl} className="max-w-[200px] h-auto" alt="Barcode" referrerPolicy="no-referrer" />
+                                    <img 
+                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(invoice.qrCodeData)}`} 
+                                        className="w-[140px] h-[140px]" 
+                                        alt="Sunat QR" 
+                                        referrerPolicy="no-referrer"
+                                    />
+                                    <div className="text-[8.5px] font-black mt-1 text-center font-mono">HASH: {invoice.sunatResponse?.hash || '---'}</div>
+                                    
+                                    <div className="text-center text-[8.5px] mt-4 leading-tight font-medium max-w-[280px] mx-auto uppercase">
+                                        Representación impresa de la {docTitle}.<br/>
+                                        Autorizado mediante Resolución de Intendencia Nro. 034-005-0005315
+                                    </div>
                                 </div>
                             )}
 
-                            <div className="text-center font-bold mt-6 tracking-[0.3em] text-slate-400">¡VUELVA PRONTO!</div>
-                        </div>
+                            <div className="border-t-[1.5px] border-black my-4"></div>
 
-                        {/* Zig-zag Bottom Edge */}
-                        <div className="absolute -bottom-[12px] left-0 right-0 h-[12px] w-full z-10" 
-                             style={{ 
-                                backgroundImage: `radial-gradient(circle at 6px 16px, transparent 8px, white 8px)`,
-                                backgroundSize: '12px 14px'
-                             }}>
+                            {/* Otras políticas o info */}
+                            <div className="text-center mb-4 p-2 border border-slate-200">
+                                <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Entrega Estimada</div>
+                                <div className="text-[12px] font-black tracking-tight">{fullDeliveryInfo}</div>
+                            </div>
+
+                            <div className="text-[9.5px] text-center leading-tight italic font-bold">
+                                {ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.'}
+                            </div>
+                            
+                            <div className="text-center font-black mt-8 text-slate-300 text-[10px] tracking-[0.2em] uppercase">
+                                SISLAV: software para lavanderia 931200353
+                            </div>
                         </div>
                     </div>
 
-                    {/* Botón de Descarga para Clientes en Vista de Tracking */}
-                    <div className="mt-8 flex flex-col gap-3 w-full animate-in slide-in-from-bottom-5 duration-500 delay-150">
+                    {/* Botón de Descarga Persistente */}
+                    <div className="my-6 px-4">
                         <button 
                             onClick={handleDownloadPDF}
                             disabled={isGeneratingPDF}
-                            className="w-full py-5 bg-white/10 hover:bg-white/20 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] transition-all active:scale-95 flex items-center justify-center gap-3 backdrop-blur-md border border-white/20 shadow-2xl"
+                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-3 shadow-xl"
                         >
                             {isGeneratingPDF ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} 
-                            {isGeneratingPDF ? 'Generando...' : 'Descargar PDF'}
+                            {isGeneratingPDF ? 'Generando PDF...' : 'Descargar en PDF'}
                         </button>
                     </div>
                 </div>
