@@ -87,24 +87,26 @@ const getBase64ImageFromUrl = async (url: string): Promise<string | null> => {
  */
 const formatItemDetailsInternal = (item: any) => {
     if (!item) return '';
-    const details = item.details || '';
+    const details = item.details || item.observaciones || '';
     
     // Si viene como JSON (unidades del carrito)
     try {
         const parsed = JSON.parse(details);
         if (Array.isArray(parsed) && parsed.length > 0) {
-            const unit = parsed[0]; 
-            const color = unit.color ? `COLOR: ${unit.color.toUpperCase()}` : '';
-            const def = (unit.defectos || unit.defect) ? `DEF: ${(unit.defectos || unit.defect).toUpperCase()}` : '';
-            const obs = (unit.details || unit.observaciones || unit.obs) ? `OBS: ${(unit.details || unit.observaciones || unit.obs).toUpperCase()}` : '';
-            return [color, def, obs].filter(Boolean).join(' - ');
+            return parsed.map((unit: any, idx: number) => {
+                const color = unit.color ? `COLOR: ${unit.color.toUpperCase()}` : '';
+                const def = (unit.defectos || unit.defect) ? `DEF: ${(unit.defectos || unit.defect).toUpperCase()}` : '';
+                const obs = (unit.details || unit.observaciones || unit.obs) ? `OBS: ${(unit.details || unit.observaciones || unit.obs).toUpperCase()}` : '';
+                const row = [color, def, obs].filter(Boolean).join(' - ');
+                return parsed.length > 1 ? `U${idx + 1}: ${row}` : row;
+            }).join(' | ');
         }
     } catch (e) {}
 
     // Si viene como objeto plano
     const color = item.color ? `COLOR: ${item.color.toUpperCase()}` : '';
     const def = item.defectos ? `DEF: ${item.defectos.toUpperCase()}` : '';
-    const obs = details ? `OBS: ${details.toUpperCase()}` : '';
+    const obs = details && !(details.startsWith('[') && details.endsWith(']')) ? `OBS: ${details.toUpperCase()}` : '';
     return [color, def, obs].filter(Boolean).join(' - ');
 };
 
@@ -555,7 +557,7 @@ export const sendInvoiceViaWhatsApp = async (
 
       console.log(`🚀 Solicitando envío de WA al servidor...`);
       
-      const response = await fetch('/api/whatsapp-send', {
+      const response = await fetch('/api/whatsapp/send', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -571,14 +573,20 @@ export const sendInvoiceViaWhatsApp = async (
 
       let result;
       const responseText = await response.text();
-      try {
-        result = JSON.parse(responseText);
-      } catch (e) {
-        console.error("Fallo al parsear respuesta JSON:", responseText);
-        result = { success: false, message: "Error en formato de respuesta del servidor" };
+      
+      if (!responseText) {
+        console.warn("⚠️ Servidor retornó respuesta vacía");
+        result = { success: false, message: "Respuesta vacía del servidor" };
+      } else {
+        try {
+          result = JSON.parse(responseText);
+        } catch (e) {
+          console.error("Fallo al parsear respuesta JSON:", responseText);
+          result = { success: false, message: "Error en formato de respuesta del servidor" };
+        }
       }
 
-      if (response.ok && result.success) {
+      if (response.ok && result?.success) {
           return { success: true, message: 'Link enviado con éxito' };
       } else {
           console.warn("⚠️ Fallo envío automático:", result.message || response.statusText);

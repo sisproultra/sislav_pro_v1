@@ -1333,7 +1333,7 @@ export const SuperAdmin: React.FC<{
     const handleSaveBranch = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
-        const branchData = { 
+        const branchData: any = { 
             empresaId: selectedCompany?.id,
             name: brName,
             razonSocial: brRazonSocial,
@@ -1384,8 +1384,22 @@ export const SuperAdmin: React.FC<{
 
         try {
             if (isEditingBranch && editingBranchId) {
+                const originalBranch = branches.find(b => b.id === editingBranchId);
+                const wasCobranza = originalBranch?.cobranza || false;
+                
+                if (brCobranza && !wasCobranza) {
+                    branchData.cobranza_activada_at = new Date().toISOString().replace('Z', '-05:00');
+                } else if (!brCobranza) {
+                    branchData.cobranza_activada_at = null;
+                } else {
+                    branchData.cobranza_activada_at = originalBranch?.cobranza_activada_at;
+                }
+                
                 await updateSaasBranch(editingBranchId, branchData);
             } else {
+                if (brCobranza) {
+                    branchData.cobranza_activada_at = new Date().toISOString().replace('Z', '-05:00');
+                }
                 const newBranch = await createSaasBranch(branchData);
                 
                 // Si se llenaron los datos del usuario inicial, crearlo

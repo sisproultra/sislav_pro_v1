@@ -489,6 +489,7 @@ export default function App() {
     const [activePickupForFastOrder, setActivePickupForFastOrder] = useState<PickupRequest | null>(null);
 
     const [showCobranzaModal, setShowCobranzaModal] = useState(false);
+    const [isCobranzaBlocking, setIsCobranzaBlocking] = useState(false);
     const [hasClosedCobranza, setHasClosedCobranza] = useState(false);
 
     const [waContacts, setWaContacts] = useState<Contact[]>([]);
@@ -804,8 +805,25 @@ export default function App() {
             root.style.setProperty('--primary-color', activeSucursal.primaryColor || '#0054A6');
             document.title = activeSucursal.razonSocial || 'SISLAV';
 
-            if (activeSucursal.cobranza && !hasClosedCobranza) {
-                setShowCobranzaModal(true);
+            if (activeSucursal.cobranza) {
+                if (activeSucursal.cobranza_activada_at) {
+                    const activatedAt = new Date(activeSucursal.cobranza_activada_at).getTime();
+                    const now = new Date().getTime();
+                    const diffHours = (now - activatedAt) / (1000 * 60 * 60);
+                    if (diffHours >= 24) {
+                        setIsCobranzaBlocking(true);
+                        setShowCobranzaModal(true);
+                    } else if (!hasClosedCobranza) {
+                        setShowCobranzaModal(true);
+                        setIsCobranzaBlocking(false);
+                    }
+                } else if (!hasClosedCobranza) {
+                    setShowCobranzaModal(true);
+                    setIsCobranzaBlocking(false);
+                }
+            } else {
+                setShowCobranzaModal(false);
+                setIsCobranzaBlocking(false);
             }
         }
     }, [activeSucursal, hasClosedCobranza]);
@@ -1551,10 +1569,12 @@ export default function App() {
             pickup_id: pickupOverride || initialPickupForPos?.id
         };
 
-        setCart([]);
-
         try {
             const savedVenta = await dbCreateInvoice(localInvoiceTemplate, finalCart, activeSucursal, customerPhotos, paymentsList);
+            
+            // Solo limpiamos el carrito si la venta se guardó con éxito en la DB
+            setCart([]);
+            
             const finalInvoiceForReceipt: Invoice = {
                 ...localInvoiceTemplate,
                 id: savedVenta.id,
@@ -2232,7 +2252,14 @@ export default function App() {
                             <p className="text-slate-600 font-bold text-sm text-center uppercase leading-relaxed max-w-md">
                                 Estimado administrador, se ha detectado un saldo pendiente en su facturación. Regularice su situación para evitar la suspensión.
                             </p>
-                            <button onClick={() => { setShowCobranzaModal(false); setHasClosedCobranza(true); }} className="px-12 py-4 bg-slate-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl">CERRAR AVISO</button>
+                            {!isCobranzaBlocking && (
+                                <button onClick={() => { setShowCobranzaModal(false); setHasClosedCobranza(true); }} className="px-12 py-4 bg-slate-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl">CERRAR AVISO</button>
+                            )}
+                            {isCobranzaBlocking && (
+                                <div className="px-12 py-4 bg-red-600 text-white rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] shadow-xl animate-pulse">
+                                    SISTEMA RESTRINGIDO POR PAGO PENDIENTE
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

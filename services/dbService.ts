@@ -542,6 +542,7 @@ export const normalizeSucursal = (s: any): any => {
         activo: s.activo ?? s.isActive,
         holding_name: holdingName,
         cobranza: s.cobranza ?? false,
+        cobranza_activada_at: s.cobranza_activada_at,
         porcentajeIgv: s.porcentaje_igv ?? 18.00,
         moneda_simbolo: s.moneda_simbolo ?? 'S/',
         currencySymbol: s.moneda_simbolo ?? 'S/',
@@ -1050,9 +1051,44 @@ export const dbCreateClient = async (client: any): Promise<Client> => {
     };
     
     if (client.id && !client.id.startsWith('temp-')) payload.id = client.id;
+    
+    console.log("💾 [dbCreateClient] Intentando Upsert de cliente:", payload.dni);
     const { data, error } = await supabase.from('clientes').upsert(payload).select().single();
-    if (error) throw error;
-    return { id: data.id, sucursal_id: data.sucursal_id, empresa_holding_id: data.empresa_holding_id, name: data.nombres, docType: data.tipo_documento, docNumber: data.dni, phone: data.telefono, email: data.email, address: data.direccion, points: data.puntos || 0, alertMessage: data.mensaje_alerta, alertColor: data.color_alerta, latitude: data.latitud, longitude: data.longitud, birthday: data.cumpleanos, gender: client.gender, googleMapsUrl: data.google_maps_url, ruc: data.ruc, razon_social: data.razon_social };
+    
+    if (error) {
+        console.error("❌ [dbCreateClient] Error de Supabase:", error);
+        if (error.message?.includes('violates row-level security policy')) {
+            throw new Error("ERROR DE PERMISOS: No tiene permiso para crear o actualizar clientes. Verifique las políticas de Supabase.");
+        }
+        throw error;
+    }
+    
+    console.log("✅ [dbCreateClient] Cliente guardado:", data.id);
+    
+    // Convertir de formato DB a formato Client (el esperado por la UI)
+    const mappedClient: Client = {
+        id: data.id,
+        sucursal_id: data.sucursal_id,
+        empresa_holding_id: data.empresa_holding_id,
+        docType: data.tipo_documento || (data.dni?.length === 11 ? 'RUC' : 'DNI'),
+        docNumber: data.dni || '00000000',
+        name: data.nombres.toUpperCase(),
+        ruc: data.ruc,
+        razon_social: data.razon_social,
+        phone: data.telefono || '',
+        email: data.email || '',
+        address: data.direccion || '-',
+        points: data.puntos || 0,
+        alertMessage: data.mensaje_alerta,
+        alertColor: data.color_alerta,
+        latitude: data.latitud,
+        longitude: data.longitud,
+        birthday: data.cumpleanos,
+        gender: data.genero,
+        googleMapsUrl: data.google_maps_url
+    };
+
+    return mappedClient;
 };
 
 export const dbDeleteClient = async (id: string) => {
@@ -3220,7 +3256,10 @@ export const dbConvertInvoice = async (invoiceId: string, targetType: InvoiceTyp
     });
 
     if (rpcError) {
-        console.error("Error al obtener correlativo via RPC:", rpcError);
+        console.error("❌ Error al obtener correlativo via RPC:", rpcError);
+        if (rpcError.message?.includes('violates row-level security policy')) {
+            throw new Error("ERROR DE PERMISOS: No se pudo asignar el correlativo. Asegúrese de que la serie esté configurada en la sucursal o contacte al administrador.");
+        }
         throw rpcError;
     }
 
@@ -3666,11 +3705,37 @@ export const dbGetTrackingInfo = async (id: string) => {
     }
 
     // 2. Si no es recojo, intentar con venta directa
-    const { data: v, error: iErr } = await supabase.from('ventas').select('*, items_venta(*)').eq('id', id).maybeSingle();
+    let vQuery = supabase.from('ventas').select('*, items_venta(*), clientes(*)').eq('id', id);
+    let { data: v } = await vQuery.maybeSingle();
+
+    // 2.1 Fallback: Buscar por codigo_orden o serie-correlativo
+    if (!v) {
+        // Intentar por codigo_orden directo
+        const { data: vByCode } = await supabase.from('ventas').select('*, items_venta(*), clientes(*)').eq('codigo_orden', id).maybeSingle();
+        v = vByCode;
+
+        // Si no se encontró, intentar parsear serie-correlativo (ej: B001-00000058)
+        if (!v && id.includes('-')) {
+            const parts = id.split('-');
+            if (parts.length === 2) {
+                const serieSearch = parts[0].toUpperCase();
+                const correlativoSearch = parseInt(parts[1], 10);
+                if (!isNaN(correlativoSearch)) {
+                    const { data: vByDoc } = await supabase.from('ventas')
+                        .select('*, items_venta(*), clientes(*)')
+                        .eq('serie', serieSearch)
+                        .eq('correlativo', correlativoSearch)
+                        .maybeSingle();
+                    v = vByDoc;
+                }
+            }
+        }
+    }
+
     if (v) {
         console.log("✅ Venta encontrada:", v.id);
         const { data: companyRaw } = await supabase.from('sucursales').select('*').eq('id', v.sucursal_id).maybeSingle();
-        const { data: clientRaw } = await supabase.from('clientes').select('*').eq('id', v.cliente_id).maybeSingle();
+        const clientRaw = v.clientes;
         
         // Fetch payments
         const { data: pagosVenta } = await supabase.from('pagos_venta').select('*, metodos_pago(nombre)').eq('venta_id', v.id);
@@ -3697,17 +3762,19 @@ export const dbGetTrackingInfo = async (id: string) => {
             correlativo: v.correlativo,
             type: v.tipo_documento_codigo as InvoiceType,
             items: (v.items_venta || []).map((it: any) => ({
-                id: it.item_id || it.id,
-                name: it.nombre,
-                quantity: Number(it.cantidad),
-                price: Number(it.precio_unitario),
-                subtotal: Number(it.subtotal),
+                id: it.id,
+                name: (it.descripcion || it.nombre || 'SERVICIO').toUpperCase(),
+                quantity: Number(it.cantidad || 0),
+                price: Number(it.precio_unitario || 0),
+                subtotal: Number(it.subtotal || 0),
                 category: it.categoria || '',
-                unitCode: it.codigo_unidad || UnitCode.ZZ,
+                unitCode: it.codigo_unidad || 'ZZ',
                 activo: true,
                 stock: 0,
                 cost: 0,
                 estado: it.estado || 'PENDIENTE',
+                status: it.estado as OrderStatus,
+                estado_id: it.estado_id,
                 color: it.color,
                 defectos: it.defectos,
                 details: it.observaciones,
@@ -3751,10 +3818,10 @@ export const dbGetTrackingInfo = async (id: string) => {
         };
     }
 
-    if (pErr || iErr) {
-        console.error("❌ Error en dbGetTrackingInfo:", pErr || iErr);
+    if (pErr) {
+        console.error("❌ Error en dbGetTrackingInfo:", pErr);
     } else {
-        console.warn("⚠️ No se encontró ninguna coincidencia para el ID proporcionado.");
+        console.warn("⚠️ No se encontró ninguna coincidencia para el ID proporcionado: " + id);
     }
     return null;
 };

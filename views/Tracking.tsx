@@ -212,9 +212,9 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
   };
 
   const itemProgress = useMemo(() => {
-    if (!data?.invoice?.items_venta) return { total: 0, strictlyAtLaundry: 0, strictlyAtReady: 0, strictlyAtDelivered: 0, reachedLaundry: 0, reachedReady: 0, reachedDelivered: 0 };
-    const allItems = data.invoice.items_venta;
-    const activeItems = allItems.filter((it: any) => !(it.estado_id === 9 || it.estado === 'ANULADO' || it.estado === 'CANCELADO'));
+    if (!data?.invoice?.items) return { total: 0, strictlyAtLaundry: 0, strictlyAtReady: 0, strictlyAtDelivered: 0, reachedLaundry: 0, reachedReady: 0, reachedDelivered: 0 };
+    const allItems = data.invoice.items;
+    const activeItems = allItems.filter((it: any) => !(it.estado_id === 9 || it.estado === 'ANULADO' || it.estado === 'CANCELADO' || it.activo === false));
     
     const total = activeItems.length;
     const inLaundry = activeItems.filter((it: any) => ['EN_LAVADO', 'EN_SECADO', 'RECIBIDO', 'PENDIENTE'].includes(it.estado || '')).length;
@@ -414,10 +414,10 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
               </div>
           </div>
 
-          {invoice?.items_venta && (
+          {invoice?.items && (
               <div className="animate-in fade-in duration-700">
                   <div className="flex items-center gap-2 mb-3"><List size={14} className="text-slate-400" /><h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">DETALLE DEL SERVICIO</h3></div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">{[...invoice.items_venta].sort((a: any, b: any) => {
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">{[...invoice.items].sort((a: any, b: any) => {
                       const isACanceled = a.estado_id === 9 || a.estado === 'ANULADO' || a.estado === 'CANCELADO';
                       const isBCanceled = b.estado_id === 9 || b.estado === 'ANULADO' || b.estado === 'CANCELADO';
                       return (isACanceled ? 1 : 0) - (isBCanceled ? 1 : 0);
@@ -425,7 +425,7 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
                       const isCanceled = item.estado_id === 9 || item.estado === 'ANULADO' || item.estado === 'CANCELADO';
                       return (
                       <div key={idx} className={`${isCanceled ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200 hover:bg-white'} border rounded-xl p-3 flex items-center justify-between group hover:shadow-md transition-all`}>
-                          <div className="flex items-center gap-2.5"><div className={`${isCanceled ? 'bg-red-100 text-red-500' : 'bg-white text-slate-400 group-hover:text-indigo-500'} w-8 h-8 rounded-lg flex items-center justify-center border border-slate-100 shadow-sm transition-colors`}><Shirt size={16} /></div><div className="min-w-0"><p className={`font-bold text-[10px] uppercase truncate leading-tight ${isCanceled ? 'text-red-700 strike-through' : 'text-slate-800'}`}>{item.cantidad} x {item.descripcion}</p></div></div>
+                          <div className="flex items-center gap-2.5"><div className={`${isCanceled ? 'bg-red-100 text-red-500' : 'bg-white text-slate-400 group-hover:text-indigo-500'} w-8 h-8 rounded-lg flex items-center justify-center border border-slate-100 shadow-sm transition-colors`}><Shirt size={16} /></div><div className="min-w-0"><p className={`font-bold text-[10px] uppercase truncate leading-tight ${isCanceled ? 'text-red-700 strike-through' : 'text-slate-800'}`}>{item.quantity} x {item.name}</p></div></div>
                           <div className="flex items-center gap-1.5">
                               {isCanceled ? <div className="flex items-center gap-1 bg-red-600 text-white px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase border border-red-700 shadow-sm"><X size={8} /> CANCELADO</div> :
                                ['EN_LAVADO', 'EN_SECADO', 'RECIBIDO', 'PENDIENTE'].includes(item.estado || '') ? <div className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase border border-blue-200 animate-pulse"><Waves size={8} /> LAVANDERÍA</div> :

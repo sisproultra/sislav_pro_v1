@@ -99,6 +99,7 @@ export interface Company extends BaseEntity {
     holding_name?: string;
     activo?: boolean;
     cobranza?: boolean;
+    cobranza_activada_at?: string;
     modulos_config?: Record<string, any>;
     mostrar_codigo_barras?: boolean;
     doc_enforce_enabled?: boolean;
@@ -201,6 +202,7 @@ export interface CartItem extends Product {
     color?: string;
     defectos?: string;
     details?: string;
+    observaciones?: string;
     status?: OrderStatus;
     images?: string[];
     audioNote?: string;
@@ -702,6 +704,7 @@ export interface SaasBranch {
     razonSocial?: string;
     createdAt: string;
     cobranza?: boolean;
+    cobranza_activada_at?: string;
     porcentajeIgv?: number;
     moneda_simbolo?: string;
     modo_sunat?: string;

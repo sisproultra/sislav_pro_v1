@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Invoice, InvoiceType, Company } from '../types';
-import { Loader2, Printer, X, FileText, Download } from 'lucide-react';
+import { Loader2, Printer, X, FileText, Download, Clock } from 'lucide-react';
 import { generateInternalPDFBlob } from '../services/whatsappService';
 import { dbGetTicketConfig } from '../services/dbService';
 import bwipjs from 'bwip-js';
@@ -107,7 +107,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
 
     const formatItemDetails = (item: any, hidePrefix = false, displayMeta: 'none' | 'icons' | 'all' = 'all') => {
         if (!item) return '';
-        const details = typeof item === 'string' ? item : (item.details || '');
+        const details = typeof item === 'string' ? item : (item.details || item.observaciones || '');
         
         try {
             const parsed = JSON.parse(details);
@@ -205,172 +205,160 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
               font-family: Arial, Helvetica, sans-serif; 
               width: 72mm; 
               font-size: 10pt; 
-              line-height: 1.2; 
+              line-height: 1.25; 
               color: #000;
               -webkit-print-color-adjust: exact;
+              text-transform: uppercase;
             }
             .text-center { text-align: center; }
             .bold { font-weight: bold; }
             .black { font-weight: 800; }
-            .divider { border-top: 2px solid #000; margin: 8px 0; }
-            .divider-dashed { border-top: 2px dashed #000; margin: 8px 0; }
+            .divider-thick { border-top: 2px solid #000; margin: 8px 0; }
+            .divider-thin { border-top: 1px solid #e5e7eb; margin: 4px 0; }
             table { width: 100%; border-collapse: collapse; margin: 6px 0; }
             td { padding: 3px 0; vertical-align: top; }
-            .qr-code { width: 40mm; height: 40mm; margin: 8px auto; display: block; }
-            .barcode { width: 55mm; height: auto; margin: 8px auto; display: block; }
-            .promo-banner { width: 100%; height: auto; margin-top: 5mm; border-top: 1px solid #000; padding-top: 2mm; }
-            .logo-ticket { max-width: ${logoSize}%; height: auto; margin: 0 auto 4mm auto; display: block; }
+            .qr-code { width: 40mm; height: 40mm; margin: 8px auto; display: block; filter: grayscale(100%); }
+            .barcode { width: 55mm; height: auto; margin: 8px auto; display: block; filter: grayscale(100%); }
+            .logo-ticket { max-width: ${logoSize}%; height: auto; margin: 0 auto 4mm auto; display: block; filter: grayscale(100%); }
             
             .politicas-container {
-                font-size: ${config?.politicas_font_size || 7}pt;
+                font-size: ${config?.politicas_font_size || 8}pt;
                 text-align: justify;
                 margin-top: 8px;
                 white-space: pre-line;
                 line-height: 1.2;
-            }
-
-            /* ESTILOS ESPECÍFICOS ORDEN DE TRABAJO (MODERNO) */
-            .work-order-container {
-                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            }
-            .order-number-giant { 
-                font-size: 32pt; 
-                font-weight: 900; 
-                margin: 5px 0; 
-                display: block; 
-                line-height: 1.1;
-                text-align: center;
-                letter-spacing: -2px;
-                word-break: break-all;
-            }
-            .page-break { page-break-after: always; }
-            .box-header { 
-                border-bottom: 5px solid #000; 
-                padding: 2px 20px; 
-                display: inline-block; 
-                margin-bottom: 12px; 
-                font-size: 11pt; 
+                font-style: italic;
                 font-weight: bold;
-                letter-spacing: 1px;
-            }
-            .flex-between { display: flex; justify-content: space-between; }
-            .pu-row { font-size: 10pt; color: #000; padding-left: 10px; font-weight: bold; }
-            .hash-text { font-size: 8pt; font-family: monospace; margin: 5px 0; word-break: break-all; }
-            .atendido-por { margin-top: 8px; font-size: 10pt; border-top: 2px solid #000; padding-top: 4px; }
-            .software-footer { 
-                margin-top: 18px; 
-                font-size: 9pt; 
-                font-weight: bold; 
-                border-top: 1px solid #000;
-                padding-top: 10px;
-                text-transform: uppercase;
-                text-align: center;
-                font-family: Arial, sans-serif;
             }
 
-            /* Quitar negrita de las etiquetas del ticket interno */
-            .work-order-container .black:not(.order-number-giant) {
-                font-weight: normal !important;
-            }
+            .flex-between { display: flex; justify-content: space-between; }
+            .item-total { font-weight: bold; text-align: right; }
+            .pu-row { font-size: 8.5pt; color: #444; font-style: italic; }
+            .hash-text { font-size: 8pt; font-family: monospace; margin: 5px 0; word-break: break-all; color: #666; }
+            .footer-text { font-size: 8.5pt; color: #999; font-weight: bold; margin-top: 15px; }
+
+            .page-break { page-break-after: always; }
           </style>
-          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
         </head>
         <body>
-          <!-- TICKET DEL CLIENTE (FORMATO ANTERIOR) -->
-          <div class="text-center">
+          <!-- TICKET DEL CLIENTE (FORMATO NUEVO) -->
+          <header class="text-center">
             ${logoUrl ? `<img src="${logoUrl}" class="logo-ticket" referrerPolicy="no-referrer" />` : ''}
-            <div class="bold" style="font-size: 12pt;">${company.razonSocial.toUpperCase()}</div>
-            <div class="bold">RUC: ${company.ruc}</div>
-            <div style="font-size: 8pt;">${company.address.toUpperCase()}</div>
+            <div class="black" style="font-size: 13pt;">${company.razonSocial.toUpperCase()}</div>
+            <div class="bold" style="font-size: 11pt;">RUC: ${company.ruc}</div>
+            <div style="font-size: 9pt;">${company.address.toUpperCase()}</div>
             ${horario ? `<div style="font-size: 8pt; font-style: italic; margin-top: 1mm;">${horario}</div>` : ''}
-            <div class="divider"></div>
-            <div class="bold" style="font-size: 10pt;">${docTitle}</div>
-            <div class="bold" style="font-size: 10pt;">${invoice.serie}-${String(invoice.correlativo).padStart(8, '0')}</div>
-            <div style="margin-top: 4px;">F. Venta: ${formattedDate}</div>
-            ${formattedEmissionDate ? `<div style="margin-top: 2px;">F. Emisión: ${formattedEmissionDate}</div>` : ''}
-            <div class="divider"></div>
-          </div>
+          </header>
 
-          <div style="margin: 8px 0; font-size: 10pt;" class="bold">
-            <div>CLIENTE: ${invoice.client.name.toUpperCase()}</div>
-            <div>${invoice.client.docType}: ${invoice.client.docNumber}</div>
-            <div>TEL: ${invoice.client.phone || '-'}</div>
-            <div>DIR: ${invoice.client.address || '-'}</div>
-            <div>MONEDA: SOLES</div>
-          </div>
+          <div class="divider-thick"></div>
 
-          <div class="divider"></div>
+          <section class="text-center">
+            <div class="bold" style="font-size: 11pt;">${docTitle}</div>
+            <div class="bold" style="font-size: 12pt;">${invoice.serie}-${String(invoice.correlativo).padStart(8, '0')}</div>
+            <div style="margin-top: 4px; font-size: 9pt;">EMISIÓN: ${formattedDate}</div>
+          </section>
+
+          <div class="divider-thick"></div>
+
+          <section style="font-size: 9.5pt;">
+            <div class="flex-between"><span>CLIENTE:</span> <span class="bold">${invoice.client.name.toUpperCase()}</span></div>
+            <div class="flex-between"><span>${invoice.client.docType}:</span> <span>${invoice.client.docNumber}</span></div>
+            <div class="flex-between"><span>TEL:</span> <span>${invoice.client.phone || '-'}</span></div>
+            <div class="flex-between"><span>DIR:</span> <span>${invoice.client.address || '-'}</span></div>
+            <div class="flex-between"><span>MONEDA:</span> <span>SOLES</span></div>
+          </section>
+
+          <div class="divider-thick"></div>
+
           <table>
             <thead>
-              <tr style="font-size: 8pt;">
+              <tr style="font-size: 9pt; border-bottom: 1px solid #000;">
                 <th align="left">CANT.</th>
                 <th align="left">DESCRIPCIÓN</th>
                 <th align="right">TOTAL</th>
               </tr>
             </thead>
             <tbody>
-              ${invoice.items.filter(item => !((item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO')).map(item => `
-                <tr style="font-size: 8.5pt;">
-                  <td width="15%">${item.quantity.toFixed(2)}</td>
-                  <td style="text-transform: uppercase">
-                    ${item.name}
-                    ${(item.details || item.color || item.defectos) ? `<div style="font-size: 7pt; font-style: italic; color: #444; margin-top: 2px; font-weight: 700;">${formatItemDetails(item, true, 'none')}</div>` : ''}
-                  </td>
-                  <td align="right" width="25%">${(item.price * item.quantity).toFixed(2)}</td>
+              ${invoice.items.filter(item => !((item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO')).map((item, idx, arr) => `
+                <tr style="font-size: 9.5pt;">
+                  <td width="15%" class="bold">${item.quantity.toFixed(2)}</td>
+                  <td class="bold">${item.name.toUpperCase()}</td>
+                  <td align="right" class="bold">${(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
                 <tr>
                   <td></td>
-                  <td colspan="2" class="pu-row" style="font-size: 7.5pt;">P.U: ${item.price.toFixed(2)}</td>
+                  <td colspan="2" class="pu-row">P.U: ${item.price.toFixed(2)}</td>
                 </tr>
+                ${(item.details || item.observaciones || item.color || item.defectos) ? `
+                  <tr>
+                    <td></td>
+                    <td colspan="2" style="font-size: 8.5pt; font-style: normal; font-weight: bold; padding-bottom: 4px;">
+                      ${formatItemDetails(item, true, 'none')}
+                    </td>
+                  </tr>
+                ` : ''}
+                ${idx < arr.length - 1 ? `<tr><td colspan="3"><div class="divider-thin"></div></td></tr>` : ''}
               `).join('')}
             </tbody>
           </table>
 
-          <div class="divider"></div>
-          <div style="margin: 4px 0;">
+          <div class="divider-thick"></div>
+
+          <section style="font-size: 10pt;">
             <div class="flex-between"><span>Op. Gravada:</span> <span>${invoice.totals.gravada.toFixed(2)}</span></div>
             <div class="flex-between"><span>IGV (${igvRate.toFixed(0)}%):</span> <span>${invoice.totals.igv.toFixed(2)}</span></div>
-            <div class="flex-between bold" style="font-size: 11pt; margin-top: 6px;">
+            <div class="flex-between black" style="font-size: 12pt; margin-top: 6px;">
                 <span>TOTAL A PAGAR:</span> 
                 <span>S/ ${invoice.totals.total.toFixed(2)}</span>
             </div>
-          </div>
+            <div style="margin-top: 8px; font-size: 9pt;" class="bold">
+              ${montoLetras}
+            </div>
+          </section>
 
-          <div style="margin-top: 10px; font-size: 8pt;" class="bold">
-            ${montoLetras}
-          </div>
+          <div class="divider-thick"></div>
 
-          <div class="divider"></div>
-          <div style="font-size: 8.5pt;">
-            <div class="flex-between"><span>FORMA DE PAGO:</span> <span class="bold">${((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'CONTADO')}</span></div>
+          <footer class="text-center">
+            <div class="flex-between bold" style="font-size: 9pt;">
+              <span>FORMA DE PAGO:</span> 
+              <span>${((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'CONTADO')}</span>
+            </div>
+
             ${invoice.prePaymentAmount ? `
-            <div class="flex-between bold"><span>PAGADO (ADELANTO):</span> <span>S/ ${invoice.prePaymentAmount.toFixed(2)}</span></div>
-            <div class="flex-between bold"><span>SALDO PENDIENTE:</span> <span>S/ ${(invoice.totals.total - invoice.prePaymentAmount).toFixed(2)}</span></div>
+              <div class="flex-between bold" style="font-size: 11pt; margin-top: 4px;"><span>PAGADO (ADELANTO):</span> <span>S/ ${invoice.prePaymentAmount.toFixed(2)}</span></div>
+              <div class="flex-between bold" style="font-size: 11pt;"><span>SALDO PENDIENTE:</span> <span>S/ ${(invoice.totals.total - invoice.prePaymentAmount).toFixed(2)}</span></div>
             ` : ''}
-          </div>
 
-          ${isElectronic ? `
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(invoice.qrCodeData || '')}" class="qr-code" referrerPolicy="no-referrer" />
-            <div class="text-center hash-text">HASH: ${invoice.sunatResponse?.hash || '---'}</div>
-            <div class="text-center" style="font-size: 7.5pt;">Representación impresa de la ${docTitle}.<br/>Autorizado mediante Resolución de Intendencia Nro. 034-005-0005315</div>
-          ` : ''}
+            ${invoice.notes ? `
+            <div style="margin-top: 8px; border: 1.5px solid #000; padding: 4px; font-size: 9pt; text-align: left;">
+              <div style="font-weight: bold; text-decoration: underline;">OBSERVACIONES:</div>
+              <div style="font-style: italic;">${invoice.notes}</div>
+            </div>
+            ` : ''}
 
-          <div class="divider"></div>
-          <div class="politicas-container">
-            <div style="font-weight: 900; font-size: 11pt; margin-bottom: 1mm; text-align: center;">ORDEN: ${invoice.ordenNumber || '---'}</div>
-            <div style="font-weight: 700; font-size: 9.5pt; margin-bottom: 2mm; text-align: center; border: 1px solid #000; padding: 2px;">ENTREGA ESTIMADA: ${fullDeliveryInfo}</div>
-            ${politicas}
-          </div>
+            ${isElectronic ? `
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(invoice.qrCodeData || '')}" class="qr-code" referrerPolicy="no-referrer" />
+              <div class="hash-text">HASH: ${invoice.sunatResponse?.hash || '---'}</div>
+              <div style="font-size: 8pt; margin-top: 4px;">Representación impresa de la ${docTitle}.<br/>Autorizado mediante Resolución de Intendencia Nro. 034-005-0005315</div>
+            ` : ''}
 
-          ${activeBarcodeUrl ? `<img src="${activeBarcodeUrl}" class="barcode" referrerPolicy="no-referrer" />` : ''}
+            <div class="divider-thick"></div>
 
-          ${promoImg ? `<img src="${promoImg}" class="promo-banner" referrerPolicy="no-referrer" />` : ''}
+            <div style="border: 2px solid #000; padding: 4px; margin: 8px 0;">
+              <div style="font-size: 8pt; font-weight: bold; color: #666;">ENTREGA ESTIMADA</div>
+              <div style="font-size: 12pt; font-weight: 800;">${fullDeliveryInfo}</div>
+            </div>
 
-          <div class="text-center bold" style="margin-top: 15px; font-size: 10pt;">¡VUELVA PRONTO!</div>
-          
-          <div class="software-footer">
-            SISLAV: software para lavanderia 931200353
-          </div>
+            <div class="politicas-container">
+              ${politicas}
+            </div>
+
+            ${activeBarcodeUrl ? `<img src="${activeBarcodeUrl}" class="barcode" referrerPolicy="no-referrer" />` : ''}
+
+            <div class="footer-text">
+              SISLAV: SOFTWARE PARA LAVANDERIA 931200353
+            </div>
+          </footer>
         `;
 
         if (!hideInternalOrder) {
@@ -544,143 +532,193 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                         <X size={20} />
                     </button>
 
-                    <div className="bg-white shadow-[0_0_20px_rgba(0,0,0,0.05)] border border-slate-200 flex flex-col min-h-screen sm:min-h-0 sm:rounded-lg">
-                        <div className="p-6 font-mono text-[12px] leading-relaxed text-black">
-                            {/* Header exacto como la imagen */}
-                            <div className="text-center mb-4">
-                                {ticketConfig?.url_logo_ticket && (
-                                    <div className="flex justify-center mb-4">
-                                        <img 
-                                            src={ticketConfig.url_logo_ticket} 
-                                            className="max-w-[140px] h-auto" 
-                                            referrerPolicy="no-referrer" 
-                                        />
-                                    </div>
-                                )}
-                                <div className="font-bold text-base mb-1 tracking-tight leading-tight">{company.razonSocial.toUpperCase()}</div>
-                                <div className="font-bold text-[11px] mb-0.5">RUC: {company.ruc}</div>
-                                <div className="text-[10px] text-slate-700 leading-tight mb-0.5 uppercase">{company.address.toUpperCase()}</div>
-                                {ticketConfig?.horario_atencion && (
-                                    <div className="text-[9px] italic text-slate-600 mb-1 leading-tight uppercase font-bold">
-                                        {ticketConfig.horario_atencion}
-                                    </div>
-                                )}
-                                
-                                <div className="border-t-[1.5px] border-black my-3"></div>
-                                
-                                <div className="font-black text-[13px] tracking-normal mb-0.5 uppercase">{docTitle}</div>
-                                <div className="font-black text-[14px] mb-1">{invoice.serie}-{String(invoice.correlativo).padStart(8, '0')}</div>
-                                <div className="text-[10px] uppercase">Emisión: {formattedDate}</div>
-                                
-                                <div className="border-t-[1.5px] border-black my-3"></div>
-                            </div>
-
-                            {/* Info Cliente */}
-                            <div className="mb-4 space-y-0.5 text-[10.5px]">
-                                <div className="flex justify-start gap-2"><span>CLIENTE:</span> <span className="font-bold uppercase">{invoice.client.name.toUpperCase()}</span></div>
-                                <div className="flex justify-start gap-2"><span>{invoice.client.docType === 'DNI' ? '<' : invoice.client.docType}:</span> <span className="font-bold">{invoice.client.docNumber}</span></div>
-                                <div className="flex justify-start gap-2"><span>TEL:</span> <span className="font-bold">{invoice.client.phone || '-'}</span></div>
-                                <div className="flex justify-start gap-2"><span>DIR:</span> <span className="font-bold uppercase">{invoice.client.address || '-'}</span></div>
-                                <div className="flex justify-start gap-2"><span>MONEDA:</span> <span className="font-bold">SOLES</span></div>
-                            </div>
-
-                            {/* Tabla de Items */}
-                            <div className="border-t-[1.5px] border-black mb-1"></div>
-                            <table className="w-full mb-2">
-                                <thead>
-                                    <tr className="text-[10.5px] font-bold border-b border-black">
-                                        <th className="text-left py-1 w-[15%]">CANT.</th>
-                                        <th className="text-left py-1">DESCRIPCIÓN</th>
-                                        <th className="text-right py-1 w-[20%]">TOTAL</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="">
-                                    {invoice.items.filter(item => !((item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO')).map((item, idx) => (
-                                        <React.Fragment key={idx}>
-                                            <tr className="align-top text-[11px] font-medium">
-                                                <td className="py-1 pr-1">{item.quantity.toFixed(2)}</td>
-                                                <td className="py-1 uppercase leading-tight font-black tracking-tight">
-                                                    {item.name}
-                                                </td>
-                                                <td className="py-1 text-right">{(item.price * item.quantity).toFixed(2)}</td>
-                                            </tr>
-                                            <tr>
-                                                <td></td>
-                                                <td colSpan={2} className="text-[9.5px] italic pb-1 pl-4 font-bold">
-                                                    P.U: {item.price.toFixed(2)}
-                                                    {(item.details || item.color || item.defectos) && (
-                                                        <div className="text-[8.5px] mt-0.5 text-slate-700 leading-tight not-italic font-bold">
-                                                            {formatItemDetails(item, true, 'none')}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        </React.Fragment>
-                                    ))}
-                                </tbody>
-                            </table>
-
-                            {/* Totales */}
-                            <div className="border-t-[1.5px] border-black my-2 pt-1">
-                                <div className="flex justify-between text-[11px]"><span>Op. Gravada:</span> <span className="font-bold">{invoice.totals.gravada.toFixed(2)}</span></div>
-                                <div className="flex justify-between text-[11px]"><span>IGV (18%):</span> <span className="font-bold">{invoice.totals.igv.toFixed(2)}</span></div>
-                                <div className="flex justify-between text-[14px] font-black mt-1">
-                                    <span>TOTAL A PAGAR:</span> 
-                                    <span>S/ {invoice.totals.total.toFixed(2)}</span>
+                    <div className="bg-white shadow-xl border border-slate-200 flex flex-col min-h-screen sm:min-h-0 sm:rounded-lg overflow-hidden">
+                        <main className="w-full bg-white p-[15px] text-[#000] text-[11px] leading-tight">
+                            {/* BEGIN: MainHeader */}
+                            <header className="text-center mb-4">
+                                {/* Logo Section */}
+                                <div className="flex flex-col items-center mb-2">
+                                    {(ticketConfig?.url_logo_ticket || company.logoUrl) && (
+                                        <div className="w-16 h-16 mb-1">
+                                            <img 
+                                                alt="Laundry Logo" 
+                                                className="w-full h-full object-contain grayscale" 
+                                                src={ticketConfig?.url_logo_ticket || company.logoUrl} 
+                                                referrerPolicy="no-referrer"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
+                                {/* Business Info */}
+                                <div className="uppercase space-y-0.5">
+                                    <h1 className="text-sm font-extrabold tracking-tight">{company.razonSocial.toUpperCase()}</h1>
+                                    <p className="font-bold">RUC: {company.ruc}</p>
+                                    <p>{company.address.toUpperCase()}</p>
+                                    {ticketConfig?.horario_atencion && (
+                                        <p className="italic text-[9px] mt-1">{ticketConfig.horario_atencion}</p>
+                                    )}
+                                </div>
+                            </header>
+                            
+                            <div className="border-t-2 border-black my-2"></div>
+                            
+                            {/* BEGIN: DocumentInfo */}
+                            <section className="text-center py-1 uppercase">
+                                <h2 className="font-bold text-[13px]">{docTitle}</h2>
+                                <p className="font-bold text-[12px]">{invoice.serie}-{String(invoice.correlativo).padStart(8, '0')}</p>
+                                <p className="mt-1">Emisión: {formattedDate}</p>
+                            </section>
+                            
+                            <div className="border-t-2 border-black my-2"></div>
+                            
+                            {/* BEGIN: CustomerInfo */}
+                            <section className="space-y-0.5 py-1 uppercase">
+                                <div className="flex">
+                                    <span className="w-16">CLIENTE:</span>
+                                    <span className="font-semibold">{invoice.client.name.toUpperCase()}</span>
+                                </div>
+                                <div className="flex">
+                                    <span className="w-16">{invoice.client.docType === 'DNI' ? 'DNI' : invoice.client.docType}:</span>
+                                    <span>{invoice.client.docNumber}</span>
+                                </div>
+                                <div className="flex">
+                                    <span className="w-16">TEL:</span>
+                                    <span>{invoice.client.phone || '-'}</span>
+                                </div>
+                                <div className="flex">
+                                    <span className="w-16">DIR:</span>
+                                    <span>{invoice.client.address || '-'}</span>
+                                </div>
+                                <div className="flex">
+                                    <span className="w-16">MONEDA:</span>
+                                    <span>SOLES</span>
+                                </div>
+                            </section>
+                            
+                            <div className="border-t-2 border-black my-2"></div>
+                            
+                            {/* BEGIN: ItemsTable */}
+                            <section>
+                                <table className="w-full text-left border-collapse uppercase">
+                                    <thead>
+                                        <tr className="font-bold border-b border-black">
+                                            <th className="py-1 w-12 text-[11px]">CANT.</th>
+                                            <th className="py-1 text-[11px]">DESCRIPCIÓN</th>
+                                            <th className="py-1 text-right text-[11px]">TOTAL</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="text-[11px]">
+                                        {invoice.items.filter(item => {
+                                            const isCanceled = (item as any).estado_id === 9 || 
+                                                               (item as any).estado === 'CANCELADO' ||
+                                                               (item as any).estado === 'ANULADO';
+                                            return !isCanceled;
+                                        }).map((item, idx) => (
+                                            <React.Fragment key={idx}>
+                                                <tr>
+                                                    <td className="pt-2 align-top">{item.quantity.toFixed(2)}</td>
+                                                    <td className="pt-2 font-bold leading-none">
+                                                        {item.name}
+                                                    </td>
+                                                    <td className="pt-2 align-top text-right">{(item.price * item.quantity).toFixed(2)}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td></td>
+                                                    <td className="pb-2 italic text-[9px] text-gray-700" colSpan={2}>
+                                                        P.U: {item.price.toFixed(2)}
+                                                        {(item.details || item.color || item.defectos) && (
+                                                            <div className="mt-0.5 not-italic text-black font-semibold">
+                                                                {formatItemDetails(item, true, 'none')}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                                {idx < invoice.items.length - 1 && (
+                                                    <tr><td colSpan={3}><div className="border-t border-gray-200 my-1"></div></td></tr>
+                                                )}
+                                            </React.Fragment>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </section>
+                            
+                            <div className="border-t-2 border-black my-2"></div>
+                            
+                            {/* BEGIN: Totals */}
+                            <section className="space-y-1 py-1">
+                                <div className="flex justify-between">
+                                    <span>Op. Gravada:</span>
+                                    <span>{invoice.totals.gravada.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>IGV ({igvRate.toFixed(0)}%):</span>
+                                    <span>{invoice.totals.igv.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between items-end mt-2">
+                                    <span className="font-extrabold text-[14px]">TOTAL A PAGAR:</span>
+                                    <span className="font-extrabold text-[14px]">S/ {invoice.totals.total.toFixed(2)}</span>
+                                </div>
+                                <div className="mt-2 font-bold uppercase text-[10px]">
+                                    {montoLetras}
+                                </div>
+                            </section>
+                            
+                            <div className="border-t-2 border-black my-2"></div>
+                            
+                            {/* BEGIN: Footer */}
+                            <footer className="text-center mt-2 space-y-3">
+                                <div className="flex justify-between uppercase font-bold text-[10px]">
+                                    <span>FORMA DE PAGO:</span>
+                                    <span className="uppercase">{((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : 'MÚLTIPLE'}</span>
+                                </div>
 
-                            <div className="mt-4 font-black text-[10px] leading-tight uppercase">{montoLetras}</div>
-                            
-                            <div className="border-t-[1.5px] border-black my-3"></div>
-                            
-                            {/* Métodos de Pago */}
-                            <div className="space-y-0.5 text-[10.5px]">
-                                <div className="flex justify-between"><span>FORMA DE PAGO:</span> <span className="font-bold uppercase">MÚLTIPLE</span></div>
                                 {invoice.prePaymentAmount ? (
-                                    <>
-                                        <div className="flex justify-between font-bold"><span>PAGADO (ADELANTO):</span> <span>S/ {invoice.prePaymentAmount.toFixed(2)}</span></div>
-                                        <div className="flex justify-between font-bold"><span>SALDO PENDIENTE:</span> <span>S/ {(invoice.totals.total - invoice.prePaymentAmount).toFixed(2)}</span></div>
-                                    </>
-                                ) : (
-                                    <div className="flex justify-between font-bold"><span>PAGADO:</span> <span>S/ {invoice.totals.total.toFixed(2)}</span></div>
-                                )}
-                            </div>
-
-                            {/* QR y HASH como en la imagen */}
-                            {invoice.qrCodeData && (
-                                <div className="mt-4 flex flex-col items-center">
-                                    <img 
-                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(invoice.qrCodeData)}`} 
-                                        className="w-[140px] h-[140px]" 
-                                        alt="Sunat QR" 
-                                        referrerPolicy="no-referrer"
-                                    />
-                                    <div className="text-[8.5px] font-black mt-1 text-center font-mono">HASH: {invoice.sunatResponse?.hash || '---'}</div>
-                                    
-                                    <div className="text-center text-[8.5px] mt-4 leading-tight font-medium max-w-[280px] mx-auto uppercase">
-                                        Representación impresa de la {docTitle}.<br/>
-                                        Autorizado mediante Resolución de Intendencia Nro. 034-005-0005315
+                                    <div className="space-y-1 py-1 border-y border-gray-100">
+                                        <div className="flex justify-between text-[11px] font-bold"><span>PAGADO (ADELANTO):</span> <span>S/ {invoice.prePaymentAmount.toFixed(2)}</span></div>
+                                        <div className="flex justify-between text-[11px] font-bold"><span>SALDO PENDIENTE:</span> <span>S/ {(invoice.totals.total - invoice.prePaymentAmount).toFixed(2)}</span></div>
                                     </div>
+                                ) : null}
+
+                                {/* QR Code Section */}
+                                {isElectronic && invoice.qrCodeData && (
+                                    <div className="py-2">
+                                        <div className="flex justify-center">
+                                            <img 
+                                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(invoice.qrCodeData)}`} 
+                                                className="w-[150px] h-[150px] grayscale" 
+                                                alt="Sunat QR" 
+                                                referrerPolicy="no-referrer"
+                                            />
+                                        </div>
+                                        <p className="text-[8px] mt-1 text-gray-500 uppercase">HASH: {invoice.sunatResponse?.hash || '---'}</p>
+                                    </div>
+                                )}
+                                
+                                {/* Legal Text */}
+                                <div className="text-[9px] px-2 leading-tight uppercase font-medium">
+                                    Representación impresa de la {docTitle}. <br/>
+                                    Autorizado mediante Resolución de Intendencia Nro. 034-005-0005315
                                 </div>
-                            )}
 
-                            <div className="border-t-[1.5px] border-black my-4"></div>
+                                <div className="border-t-2 border-black my-2"></div>
 
-                            {/* Otras políticas o info */}
-                            <div className="text-center mb-4 p-2 border border-slate-200">
-                                <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Entrega Estimada</div>
-                                <div className="text-[12px] font-black tracking-tight">{fullDeliveryInfo}</div>
-                            </div>
+                                {/* Entrega info */}
+                                <div className="text-center bg-gray-50 p-2 rounded border border-gray-200">
+                                    <div className="text-[9px] font-bold text-gray-500 uppercase mb-0.5">Entrega Estimada</div>
+                                    <div className="text-[13px] font-extrabold tracking-tight">{fullDeliveryInfo}</div>
+                                </div>
 
-                            <div className="text-[9.5px] text-center leading-tight italic font-bold">
-                                {ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.'}
-                            </div>
+                                <div className="text-[10px] text-center leading-tight italic font-bold">
+                                    {ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.'}
+                                </div>
+
+                                <div className="text-[9px] font-bold text-gray-400 mt-4 uppercase">
+                                    SISLAV: software para lavanderia 931200353
+                                </div>
+                            </footer>
                             
-                            <div className="text-center font-black mt-8 text-slate-300 text-[10px] tracking-[0.2em] uppercase">
-                                SISLAV: software para lavanderia 931200353
-                            </div>
-                        </div>
+                            <div className="border-t-2 border-black my-2 mt-4"></div>
+                        </main>
                     </div>
 
                     {/* Botón de Descarga Persistente */}
@@ -688,7 +726,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                         <button 
                             onClick={handleDownloadPDF}
                             disabled={isGeneratingPDF}
-                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-3 shadow-xl"
+                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-3 shadow-xl shadow-indigo-100"
                         >
                             {isGeneratingPDF ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} 
                             {isGeneratingPDF ? 'Generando PDF...' : 'Descargar en PDF'}
@@ -714,78 +752,197 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 md:p-10 bg-slate-100/50 flex justify-center items-start">
-                    <div className="bg-white p-8 shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-slate-200 rounded-2xl w-full max-w-[380px] font-mono text-[12px] leading-relaxed text-black relative">
-                        {/* Decorative ticket edge */}
-                        <div className="absolute -top-2 left-4 right-4 h-4 bg-white rounded-full blur-sm opacity-50"></div>
-                        
-                        <div className="text-center mb-6">
-                            {ticketConfig?.url_logo_ticket && <img src={ticketConfig.url_logo_ticket} className="max-w-[120px] mx-auto mb-4" />}
-                            <div className="font-bold text-base mb-1">{company.razonSocial.toUpperCase()}</div>
-                            <div className="text-[10px] text-slate-600 mb-1">RUC: {company.ruc}</div>
-                            <div className="text-[10px] text-slate-500 leading-tight">{company.address.toUpperCase()}</div>
-                            <div className="border-t-2 border-black border-dashed my-4"></div>
-                            <div className="font-bold text-sm tracking-widest">{docTitle}</div>
-                            <div className="font-bold text-base">{invoice.serie}-{String(invoice.correlativo).padStart(8, '0')}</div>
-                            <div className="text-[10px] mt-1">FECHA: {formattedDate}</div>
-                            <div className="border-t-2 border-black border-dashed my-4"></div>
-                        </div>
+                    <div className="bg-white p-0 shadow-[0_10px_40px_rgba(0,0,0,0.12)] border border-slate-200 rounded-2xl w-full max-w-[380px] font-mono text-[11px] leading-relaxed text-black relative">
+                        <main className="receipt-container w-full bg-white p-[15px] text-[#000] text-[11px] leading-tight rounded-2xl">
+                            {/* BEGIN: MainHeader */}
+                            <header className="text-center mb-4">
+                                {/* Logo Section */}
+                                <div className="flex flex-col items-center mb-2">
+                                    {(ticketConfig?.url_logo_ticket || company.logoUrl) && (
+                                        <div className="w-16 h-16 mb-1">
+                                            <img 
+                                                alt="Laundry Logo" 
+                                                className="w-full h-full object-contain grayscale" 
+                                                src={ticketConfig?.url_logo_ticket || company.logoUrl} 
+                                                referrerPolicy="no-referrer"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                                {/* Business Info */}
+                                <div className="uppercase space-y-0.5">
+                                    <h1 className="text-sm font-extrabold tracking-tight">{company.razonSocial.toUpperCase()}</h1>
+                                    <p className="font-bold">RUC: {company.ruc}</p>
+                                    <p>{company.address.toUpperCase()}</p>
+                                    {ticketConfig?.horario_atencion && (
+                                        <p className="italic text-[9px] mt-1">{ticketConfig.horario_atencion}</p>
+                                    )}
+                                </div>
+                            </header>
+                            
+                            <div className="border-t-2 border-black my-2"></div>
+                            
+                            {/* BEGIN: DocumentInfo */}
+                            <section className="text-center py-1 uppercase">
+                                <h2 className="font-bold text-[13px]">{docTitle}</h2>
+                                <p className="font-bold text-[12px]">{invoice.serie}-{String(invoice.correlativo).padStart(8, '0')}</p>
+                                <p className="mt-1">Emisión: {formattedDate}</p>
+                            </section>
+                            
+                            <div className="border-t-2 border-black my-2"></div>
+                            
+                            {/* BEGIN: CustomerInfo */}
+                            <section className="space-y-0.5 py-1 uppercase">
+                                <div className="flex">
+                                    <span className="w-16 shrink-0 text-gray-500 font-bold">CLIENTE:</span>
+                                    <span className="font-bold">{invoice.client.name.toUpperCase()}</span>
+                                </div>
+                                <div className="flex">
+                                    <span className="w-16 shrink-0 text-gray-500 font-bold">{invoice.client.docType === 'DNI' ? 'DNI' : invoice.client.docType}:</span>
+                                    <span className="font-bold">{invoice.client.docNumber}</span>
+                                </div>
+                                <div className="flex">
+                                    <span className="w-16 shrink-0 text-gray-500 font-bold">TEL:</span>
+                                    <span>{invoice.client.phone || '-'}</span>
+                                </div>
+                                <div className="flex">
+                                    <span className="w-16 shrink-0 text-gray-500 font-bold">DIR:</span>
+                                    <span>{invoice.client.address || '-'}</span>
+                                </div>
+                                <div className="flex">
+                                    <span className="w-16 shrink-0 text-gray-500 font-bold">MONEDA:</span>
+                                    <span>SOLES</span>
+                                </div>
+                            </section>
+                            
+                            <div className="border-t-2 border-black my-2"></div>
+                            
+                            {/* BEGIN: ItemsTable */}
+                            <section>
+                                <table className="w-full text-left border-collapse uppercase">
+                                    <thead>
+                                        <tr className="font-bold border-b border-black">
+                                            <th className="py-1 w-12">CANT.</th>
+                                            <th className="py-1">DESCRIPCIÓN</th>
+                                            <th className="py-1 text-right">TOTAL</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="text-[11px]">
+                                        {invoice.items.filter(item => {
+                                            const isCanceled = (item as any).estado_id === 9 || 
+                                                               (item as any).status === 'ANULADO' || 
+                                                               item.status === 'CANCELADO';
+                                            return !isCanceled;
+                                        }).map((item, idx) => (
+                                            <React.Fragment key={idx}>
+                                                <tr>
+                                                    <td className="pt-2 align-top">{item.quantity.toFixed(2)}</td>
+                                                    <td className="pt-2 font-bold leading-none">
+                                                        {item.name}
+                                                    </td>
+                                                    <td className="pt-2 align-top text-right">{(item.price * item.quantity).toFixed(2)}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td></td>
+                                                    <td className="pb-2 italic text-[9px] text-gray-700" colSpan={2}>
+                                                        P.U: {item.price.toFixed(2)}
+                                                        {(item.details || item.color || item.defectos) && (
+                                                            <div className="mt-0.5 not-italic text-black font-semibold">
+                                                                {formatItemDetails(item, true, 'none')}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                                {idx < invoice.items.length - 1 && (
+                                                    <tr><td colSpan={3}><div className="border-t border-gray-200 my-1"></div></td></tr>
+                                                )}
+                                            </React.Fragment>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </section>
+                            
+                            <div className="border-t-2 border-black my-2"></div>
+                            
+                            {/* BEGIN: Totals */}
+                            <section className="space-y-1 py-1">
+                                <div className="flex justify-between">
+                                    <span>Op. Gravada:</span>
+                                    <span>{invoice.totals.gravada.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>IGV ({igvRate.toFixed(0)}%):</span>
+                                    <span>{invoice.totals.igv.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between items-end mt-2">
+                                    <span className="font-extrabold text-[14px]">TOTAL A PAGAR:</span>
+                                    <span className="font-extrabold text-[14px]">S/ {invoice.totals.total.toFixed(2)}</span>
+                                </div>
+                                <div className="mt-2 font-bold uppercase text-[10px]">
+                                    {montoLetras}
+                                </div>
+                            </section>
+                            
+                            <div className="border-t-2 border-black my-2"></div>
+                            
+                            {/* BEGIN: Footer */}
+                            <footer className="text-center mt-2 space-y-3">
+                                <div className="flex justify-between uppercase font-bold text-[10px]">
+                                    <span>FORMA DE PAGO:</span>
+                                    <span className="uppercase">{((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'CONTADO')}</span>
+                                </div>
 
-                        <div className="mb-6 space-y-1">
-                            <div className="flex justify-between"><span>CLIENTE:</span> <span className="font-bold">{invoice.client.name.toUpperCase()}</span></div>
-                            <div className="flex justify-between"><span>{invoice.client.docType}:</span> <span className="font-bold">{invoice.client.docNumber}</span></div>
-                            <div className="flex justify-between"><span>TEL:</span> <span className="font-bold">{invoice.client.phone || '-'}</span></div>
-                        </div>
+                                {invoice.prePaymentAmount ? (
+                                    <div className="space-y-1 py-1 border-y border-gray-100">
+                                        <div className="flex justify-between text-[11px] font-bold"><span>PAGADO (ADELANTO):</span> <span>S/ {invoice.prePaymentAmount.toFixed(2)}</span></div>
+                                        <div className="flex justify-between text-[11px] font-bold"><span>SALDO PENDIENTE:</span> <span>S/ {(invoice.totals.total - invoice.prePaymentAmount).toFixed(2)}</span></div>
+                                    </div>
+                                ) : null}
 
-                        <div className="border-t border-black my-2"></div>
-                        <table className="w-full mb-4">
-                            <thead>
-                                <tr className="border-b-2 border-black text-[10px]">
-                                    <th className="text-left py-1">CANT</th>
-                                    <th className="text-left py-1">DESCRIPCIÓN</th>
-                                    <th className="text-right py-1">TOTAL</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {invoice.items.filter(item => !((item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO')).map((item, idx) => (
-                                    <tr key={idx} className="align-top">
-                                        <td className="py-2 pr-2 font-bold">{item.quantity.toFixed(1)}</td>
-                                        <td className="py-2 uppercase text-[11px] leading-tight">
-                                            {item.name}
-                                            {(item.details || item.color || item.defectos) && <div className="text-[9px] text-slate-500 mt-1 italic leading-none">{formatItemDetails(item, true, 'none')}</div>}
-                                        </td>
-                                        <td className="py-2 text-right font-bold">{(item.price * item.quantity).toFixed(2)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                {/* QR Code Section */}
+                                {isElectronic && invoice.qrCodeData && (
+                                    <div className="py-2">
+                                        <div className="flex justify-center">
+                                            <img 
+                                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(invoice.qrCodeData)}`} 
+                                                className="w-[150px] h-[150px] grayscale" 
+                                                alt="Sunat QR" 
+                                                referrerPolicy="no-referrer"
+                                            />
+                                        </div>
+                                        <p className="text-[8px] mt-1 text-gray-500 uppercase font-mono">HASH: {invoice.sunatResponse?.hash || '---'}</p>
+                                    </div>
+                                )}
+                                
+                                {/* Legal Text */}
+                                <div className="text-[9px] px-2 leading-tight uppercase font-medium">
+                                    Representación impresa de la {docTitle}. <br/>
+                                    Autorizado mediante Resolución de Intendencia Nro. 034-005-0005315
+                                </div>
 
-                        <div className="border-t-2 border-black border-dashed my-4"></div>
-                        <div className="space-y-1.5">
-                            <div className="flex justify-between text-slate-600"><span>Op. Gravada:</span> <span>{invoice.totals.gravada.toFixed(2)}</span></div>
-                            <div className="flex justify-between text-slate-600"><span>IGV ({igvRate}%):</span> <span>{invoice.totals.igv.toFixed(2)}</span></div>
-                            <div className="flex justify-between font-bold text-lg pt-2 border-t border-slate-100"><span>TOTAL:</span> <span>S/ {invoice.totals.total.toFixed(2)}</span></div>
-                        </div>
+                                <div className="border-t-2 border-black my-2"></div>
 
-                        <div className="mt-6 font-bold text-[10px] leading-tight text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">{montoLetras}</div>
-                        
-                        <div className="border-t-2 border-black border-dashed my-6"></div>
-                        
-                        <div className="text-center mb-4 border-2 border-black p-2 rounded-lg bg-slate-50">
-                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Entrega Estimada</div>
-                            <div className="text-sm font-black text-slate-900">{fullDeliveryInfo}</div>
-                        </div>
+                                {/* Entrega info */}
+                                <div className="text-center bg-gray-50 p-3 rounded-lg border border-gray-100 mb-4 mt-2">
+                                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Entrega Estimada</div>
+                                    <div className="text-sm font-black text-slate-900">{fullDeliveryInfo}</div>
+                                </div>
 
-                        <div className="text-left text-justify text-[10px] italic leading-relaxed text-slate-600 whitespace-pre-line px-1" style={{ textAlign: 'justify' }}>
-                            {ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.'}
-                        </div>
-                        
-                        {barcodeUrl && (
-                            <div className="mt-4 flex flex-col items-center">
-                                <img src={barcodeUrl} className="max-w-[200px] h-auto" alt="Barcode" />
-                            </div>
-                        )}
+                                <div className="text-[10px] text-center leading-tight italic font-bold">
+                                    {ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.'}
+                                </div>
 
-                        <div className="text-center font-bold mt-6 tracking-[0.3em] text-slate-400">¡VUELVA PRONTO!</div>
+                                {barcodeUrl && (
+                                    <div className="mt-4 flex flex-col items-center">
+                                        <img src={barcodeUrl} className="max-w-[200px] h-auto grayscale" alt="Barcode" />
+                                    </div>
+                                )}
+
+                                <div className="text-[9px] font-black text-slate-300 mt-4 tracking-[0.3em] uppercase">
+                                    SISLAV: software para lavanderia 931200353
+                                </div>
+                            </footer>
+                        </main>
                     </div>
                 </div>
 
