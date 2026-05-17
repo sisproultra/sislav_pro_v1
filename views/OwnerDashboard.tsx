@@ -195,8 +195,113 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
   const textSecondary = isDarkMode ? 'text-text2' : 'text-gray-500';
 
   return (
-    <div className={`h-screen flex flex-col transition-colors duration-300 font-sans overflow-hidden ${themeClass}`}>
-      {/* MOBILE SIDEBAR */}
+    <div className={`h-screen flex transition-colors duration-300 font-sans overflow-hidden ${themeClass}`}>
+      {/* DESKTOP SIDEBAR */}
+      <aside className={`hidden xl:flex flex-col w-72 shrink-0 border-r ${isDarkMode ? 'bg-surface border-white/5 shadow-2xl' : 'bg-white border-gray-200 shadow-xl'}`}>
+        <div className="p-6 border-b border-white/5">
+          <div className="flex items-center gap-3">
+            {holdingInfo?.url_favicon ? (
+              <img src={holdingInfo.url_favicon} className="w-10 h-10 object-contain rounded-xl" alt="Favicon" />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-accent/20">
+                {session.user.holding_name?.charAt(0) || 'S'}
+              </div>
+            )}
+            <div>
+              <p className="font-bold text-sm leading-tight">Panel Corporativo</p>
+              <p className={`text-[10px] uppercase tracking-widest font-black ${textSecondary}`}>SISLAV Intelligence</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-8 custom-scrollbar">
+          <div className="space-y-2">
+            <p className="text-[10px] font-black text-text3 uppercase tracking-[0.2em] px-3 mb-4">Navegación Central</p>
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`w-full px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-3 group ${
+                activeTab === 'dashboard' ? 'bg-accent text-white shadow-xl shadow-accent/30 scale-[1.02]' : 'text-text2 hover:bg-white/5'
+              }`}
+            >
+              <LayoutDashboard className={`w-5 h-5 transition-transform group-hover:scale-110 ${activeTab === 'dashboard' ? 'text-white' : 'text-accent'}`} />
+              Dashboard Ejecutivo
+            </button>
+            <button
+              onClick={() => setActiveTab('logistics')}
+              className={`w-full px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-3 group ${
+                activeTab === 'logistics' ? 'bg-accent text-white shadow-xl shadow-accent/30 scale-[1.02]' : 'text-text2 hover:bg-white/5'
+              }`}
+            >
+              <Truck className={`w-5 h-5 transition-transform group-hover:scale-110 ${activeTab === 'logistics' ? 'text-white' : 'text-amber-500'}`} />
+              Logística Hub
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-[10px] font-black text-text3 uppercase tracking-[0.2em] px-3 mb-4">Mis Sucursales</p>
+            <div className="space-y-2">
+              {branches.map(branch => (
+                <button
+                  key={branch.id}
+                  onClick={() => onSelectBranch(branch)}
+                  className={`w-full p-3 rounded-2xl border transition-all flex items-center gap-3 group/btn ${
+                    isDarkMode 
+                      ? 'bg-bg/40 border-white/5 hover:border-accent/40 hover:bg-accent/5' 
+                      : 'bg-gray-50 border-gray-100 hover:border-accent/40 hover:bg-accent/5'
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-all group-hover/btn:scale-110 group-hover/btn:rotate-3 ${isDarkMode ? 'bg-white/5' : 'bg-white border border-gray-100'}`}
+                       style={{ borderColor: !isDarkMode && branch.color_primario ? `${branch.color_primario}40` : undefined }}>
+                    {branch.url_favicon ? (
+                      <img src={branch.url_favicon} className="w-5 h-5 object-contain" alt="Sucursal" />
+                    ) : (
+                      <Store className="w-4 h-4 text-accent" />
+                    )}
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className={`text-xs font-bold truncate group-hover/btn:text-accent transition-colors ${isDarkMode ? 'text-text2' : 'text-gray-700'}`}>{branch.nombre_sucursal}</p>
+                    <p className="text-[8px] font-black text-text3 uppercase tracking-widest">{branch.tipo_sucursal || 'Tienda'}</p>
+                  </div>
+                  <ChevronRight className="w-3 h-3 text-text3 opacity-0 group-hover/btn:opacity-100 transition-all translate-x-[-4px] group-hover/btn:translate-x-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-white/5 space-y-2">
+          {session.user.isMasterBypass && (
+            <button 
+              onClick={() => {
+                const masterSession = {
+                  user: {
+                    id: 'admin',
+                    username: 'admin',
+                    name: UserRole.ADMIN,
+                    role: UserRole.SAAS_MASTER
+                  }
+                };
+                localStorage.setItem('sislav_auth_session', JSON.stringify(masterSession));
+                window.location.reload();
+              }}
+              className="w-full px-4 py-3 rounded-xl bg-indigo-600/5 text-indigo-400 font-bold text-xs flex items-center gap-3 hover:bg-indigo-600 hover:text-white transition-all group"
+            >
+              <ShieldCheck className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+              Modo Master
+            </button>
+          )}
+          <button 
+            onClick={onLogout}
+            className="w-full px-4 py-3 rounded-xl bg-red-500/5 text-red-500 font-bold text-xs flex items-center gap-3 hover:bg-red-500 hover:text-white transition-all group"
+          >
+            <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            Cerrar Sesión
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* MOBILE SIDEBAR */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -806,6 +911,7 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
       )}
         </div>
       </main>
+      </div>
     </div>
   );
 }
@@ -1414,7 +1520,7 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
                     <ArrowDownLeft className="w-4 h-4 text-accent" />
                     Destinos Permitidos
                   </h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3">
                     {branches.filter((b: any) => b.id !== selectedSourceBranch.id).map((branch: any) => {
                       const isConnected = connections.some(c => c.sucursal_origen_id === selectedSourceBranch.id && c.sucursal_destino_id === branch.id);
                       return (

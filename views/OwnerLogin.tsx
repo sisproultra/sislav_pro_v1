@@ -99,74 +99,108 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
 
   return (
     <div 
-      className={`min-h-screen flex items-center justify-center p-4 font-sans transition-colors duration-300 ${isDarkMode ? 'bg-[#0d0f14] text-white' : 'bg-gray-50 text-gray-900'}`}
+      className={`min-h-screen flex items-center justify-center p-4 font-sans transition-colors duration-500 overflow-hidden relative ${isDarkMode ? 'bg-[#0d0f14]' : 'bg-slate-50'}`}
       style={{ 
         '--brand-primary': primaryColor,
         '--brand-secondary': secondaryColor
       } as React.CSSProperties}
     >
-      <div className="absolute top-8 right-8">
+      {/* Background Orbs */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div 
+          className="absolute -top-24 -left-24 w-96 h-96 rounded-full blur-[120px] opacity-20 animate-pulse"
+          style={{ backgroundColor: primaryColor }}
+        />
+        <div 
+          className="absolute -bottom-24 -right-24 w-96 h-96 rounded-full blur-[120px] opacity-10"
+          style={{ backgroundColor: primaryColor }}
+        />
+      </div>
+
+      <div className="absolute top-8 right-8 z-10">
         <button 
           onClick={toggleTheme}
-          className={`p-3 rounded-2xl border transition-all ${isDarkMode ? 'bg-surface border-white/5 text-yellow-400' : 'bg-white border-gray-200 text-gray-600 shadow-sm'}`}
+          className={`p-3 rounded-2xl border transition-all hover:scale-110 active:scale-95 ${isDarkMode ? 'bg-surface border-white/5 text-yellow-400 shadow-xl shadow-black/20' : 'bg-white border-gray-200 text-gray-600 shadow-lg shadow-gray-200/50'}`}
         >
           {isDarkMode ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
         </button>
       </div>
 
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-md relative z-10"
       >
-        <div className="text-center mb-8">
-          <div 
-            className={`inline-flex items-center justify-center w-28 h-28 rounded-[2rem] border mb-6 shadow-2xl overflow-hidden transition-all ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-100'}`}
+        <div className="text-center mb-10">
+          <motion.div 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className={`inline-flex items-center justify-center w-32 h-32 rounded-[2.5rem] border mb-8 shadow-2xl overflow-hidden transition-all relative group ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-100'}`}
             style={{ borderColor: companyInfo?.color_primario ? `${companyInfo.color_primario}40` : undefined }}
           >
+            <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             {companyInfo?.url_favicon ? (
-              <img src={companyInfo.url_favicon} className="w-full h-full object-contain p-6" alt="Favicon" />
+              <img src={companyInfo.url_favicon} className="w-full h-full object-contain p-7 transition-transform group-hover:scale-110 duration-500" alt="Favicon" />
             ) : companyInfo?.url_logo ? (
-              <img src={companyInfo.url_logo} className="w-full h-full object-contain p-4" alt="Logo" />
+              <img src={companyInfo.url_logo} className="w-full h-full object-contain p-5 transition-transform group-hover:scale-110 duration-500" alt="Logo" />
             ) : (
-              <ShieldCheck className="w-14 h-14 text-brand-primary" />
+              <ShieldCheck className="w-16 h-16 text-brand-primary" />
             )}
-          </div>
-          <h1 className={`text-3xl md:text-4xl font-heading font-black mb-2 uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-            {companyInfo?.nombre_empresa || 'Panel de Propietario'}
-          </h1>
-          <p className={`text-sm font-medium ${isDarkMode ? 'text-text2' : 'text-gray-500'} uppercase tracking-widest opacity-80`}>
-            {companyInfo ? `Acceso Corporativo` : 'Ingresa tus credenciales corporativas'}
-          </p>
+          </motion.div>
+          
+          <motion.h1 
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className={`text-3xl md:text-5xl font-heading font-black mb-3 tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}
+          >
+            {companyInfo?.nombre_empresa || 'SISLAV Corporativo'}
+          </motion.h1>
+          
+          <motion.p 
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className={`text-[10px] font-black ${isDarkMode ? 'text-text3' : 'text-slate-400'} uppercase tracking-[0.3em]`}
+          >
+            {companyInfo ? `Panel de Gestión Ejecutiva` : 'Acceso Restringido a Propietarios'}
+          </motion.p>
         </div>
 
-        <div className={`rounded-3xl p-8 shadow-2xl border ${isDarkMode ? 'bg-surface border-white/5 shadow-black/50' : 'bg-white border-gray-100 shadow-gray-200/50'}`}>
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-text2' : 'text-gray-600'}`}>Usuario Corporativo</label>
+        <motion.div 
+          initial={{ y: 30, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.4, duration: 0.6 }}
+          className={`rounded-[2.5rem] p-10 shadow-3xl border backdrop-blur-xl ${isDarkMode ? 'bg-surface/80 border-white/5 shadow-black/80' : 'bg-white/90 border-slate-100 shadow-slate-200/50'}`}
+        >
+          <form onSubmit={handleLogin} className="space-y-8">
+            <div className="space-y-2">
+              <label className={`block text-[10px] font-black uppercase tracking-widest ml-1 ${isDarkMode ? 'text-text3' : 'text-slate-500'}`}>Usuario</label>
               <div className="relative group">
-                <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${isDarkMode ? 'text-text3 group-focus-within:text-brand-primary' : 'text-gray-400 group-focus-within:text-brand-primary'}`} />
+                <User className={`absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${isDarkMode ? 'text-text3 group-focus-within:text-brand-primary' : 'text-slate-400 group-focus-within:text-brand-primary'}`} />
                 <input
                   type="text"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className={`w-full border rounded-xl py-4 pl-12 pr-4 outline-none transition-all font-medium ${isDarkMode ? 'bg-bg border-white/5 text-white focus:border-brand-primary focus:ring-1 focus:ring-brand-primary' : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-brand-primary focus:ring-1 focus:ring-brand-primary'}`}
-                  placeholder="usuario"
+                  className={`w-full border-2 rounded-2xl py-4.5 pl-14 pr-6 outline-none transition-all font-bold text-sm ${isDarkMode ? 'bg-black/20 border-white/5 text-white focus:border-brand-primary/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-brand-primary/30'}`}
+                  placeholder="ID de Usuario"
                 />
               </div>
             </div>
 
-            <div>
-              <label className={`block text-xs font-bold uppercase tracking-widest mb-2 ${isDarkMode ? 'text-text2' : 'text-gray-600'}`}>Contraseña</label>
+            <div className="space-y-2">
+              <label className={`block text-[10px] font-black uppercase tracking-widest ml-1 ${isDarkMode ? 'text-text3' : 'text-slate-500'}`}>Contraseña Maestra</label>
               <div className="relative group">
-                <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${isDarkMode ? 'text-text3 group-focus-within:text-brand-primary' : 'text-gray-400 group-focus-within:text-brand-primary'}`} />
+                <Lock className={`absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${isDarkMode ? 'text-text3 group-focus-within:text-brand-primary' : 'text-slate-400 group-focus-within:text-brand-primary'}`} />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={`w-full border rounded-xl py-4 pl-12 pr-4 outline-none transition-all font-medium ${isDarkMode ? 'bg-bg border-white/5 text-white focus:border-brand-primary focus:ring-1 focus:ring-brand-primary' : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-brand-primary focus:ring-1 focus:ring-brand-primary'}`}
+                  className={`w-full border-2 rounded-2xl py-4.5 pl-14 pr-6 outline-none transition-all font-bold text-sm ${isDarkMode ? 'bg-black/20 border-white/5 text-white focus:border-brand-primary/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-brand-primary/30'}`}
                   placeholder="••••••••"
                 />
               </div>
@@ -174,10 +208,11 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
 
             {error && (
               <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
+                initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className={`p-4 rounded-xl text-sm border ${isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-500' : 'bg-red-50 border-red-100 text-red-600'}`}
+                className={`p-4 rounded-2xl text-xs font-bold border flex items-center gap-3 ${isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-100 text-red-600'}`}
               >
+                <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
                 {error}
               </motion.div>
             )}
@@ -185,37 +220,47 @@ export default function OwnerLogin({ onLogin, isDarkMode, toggleTheme }: OwnerLo
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-brand-primary hover:brightness-110 disabled:opacity-50 text-white font-black py-4 rounded-xl flex items-center justify-center gap-2 transition-all group shadow-lg shadow-brand-primary/20 uppercase tracking-widest text-xs"
+              className="w-full bg-brand-primary hover:brightness-110 disabled:opacity-50 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all group shadow-2xl shadow-brand-primary/30 uppercase tracking-[0.2em] text-[10px] active:scale-[0.98]"
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
-                  Ingresar al Dashboard
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  Verificar Identidad
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
                 </>
               )}
             </button>
           </form>
-        </div>
+        </motion.div>
 
-        <div className="mt-8 text-center flex flex-col items-center gap-3">
-          <p className={`text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-text3' : 'text-gray-400'}`}>
-            SISLAV - +51931200353
-          </p>
-          <p className={`text-[9px] font-black uppercase tracking-widest opacity-20 -mt-2 ${isDarkMode ? 'text-text3' : 'text-gray-400'}`}>
-            Versión {APP_VERSION}
-          </p>
-          <a 
-            href="https://wa.me/51931200353" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className={`flex items-center gap-2 px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${isDarkMode ? 'bg-white/5 border-white/10 text-text2 hover:bg-white/10 hover:text-white' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
-          >
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            Enviar Mensaje
-          </a>
-        </div>
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+          className="mt-12 text-center flex flex-col items-center gap-5"
+        >
+          <div className="flex flex-col gap-1">
+            <p className={`text-[9px] font-black uppercase tracking-[0.4em] ${isDarkMode ? 'text-text3' : 'text-slate-400'}`}>
+              SISLAV ECOSYSTEM SECURITY
+            </p>
+            <p className={`text-[8px] font-black uppercase tracking-widest opacity-30 ${isDarkMode ? 'text-text3' : 'text-slate-400'}`}>
+              BUILD {APP_VERSION}
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <a 
+              href="https://wa.me/51931200353" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className={`flex items-center gap-3 px-6 py-2.5 rounded-full border text-[9px] font-black uppercase tracking-[0.2em] transition-all hover:scale-105 active:scale-95 ${isDarkMode ? 'bg-white/5 border-white/10 text-text2 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900 shadow-sm'}`}
+            >
+              <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
+              Soporte VIP
+            </a>
+          </div>
+        </motion.div>
       </motion.div>
     </div>
   );

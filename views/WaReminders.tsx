@@ -37,8 +37,15 @@ const WaReminders: React.FC<WaRemindersProps> = ({
   const [currentSendingId, setCurrentSendingId] = useState<string | null>(null);
 
   // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [flyingMessages, setFlyingMessages] = useState<{ id: number, x: number, y: number }[]>([]);
+
+  const addFlyingMessage = (e: React.MouseEvent | { clientX: number, clientY: number }) => {
+    const id = Date.now();
+    setFlyingMessages(prev => [...prev, { id, x: e.clientX, y: e.clientY }]);
+    setTimeout(() => {
+      setFlyingMessages(prev => prev.filter(m => m.id !== id));
+    }, 1000);
+  };
 
   // WA Campaign Config (Delays and Pauses)
   const [waTemplates, setWaTemplates] = useState<WaTemplate[]>([]);
@@ -248,6 +255,15 @@ const WaReminders: React.FC<WaRemindersProps> = ({
     alert(`Campaña finalizada. Enviados: ${sentCount}, Fallidos: ${failedCount}`);
   };
 
+  useEffect(() => {
+    if (isSendingGlobal && currentSendingId) {
+      // Simulate flying messages during mass send occasionally
+      if (Math.random() > 0.5) {
+         addFlyingMessage({ clientX: window.innerWidth / 2, clientY: 200 });
+      }
+    }
+  }, [isSendingGlobal, currentSendingId]);
+
   const sendSingleReminder = async (order: Invoice) => {
     if (!company.whatsapp_instance || !company.whatsapp_token) {
         alert("WhatsApp no configurado.");
@@ -296,7 +312,27 @@ const WaReminders: React.FC<WaRemindersProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col space-y-4 p-4 sm:p-6 overflow-hidden">
+    <div className="h-full flex flex-col space-y-4 p-4 sm:p-6 overflow-hidden relative">
+      <AnimatePresence>
+        {flyingMessages.map(msg => (
+          <motion.div
+            key={msg.id}
+            initial={{ opacity: 1, x: msg.x, y: msg.y, scale: 1 }}
+            animate={{ 
+              opacity: 0, 
+              x: msg.x + (Math.random() - 0.5) * 400, 
+              y: msg.y - 600, 
+              rotate: 360,
+              scale: 2
+            }}
+            transition={{ duration: 1, ease: "easeOut" }}
+            className="fixed z-[9999] pointer-events-none"
+          >
+            <MessageCircle className="text-emerald-500 w-8 h-8 fill-emerald-500/20" />
+          </motion.div>
+        ))}
+      </AnimatePresence>
+
       {/* Header Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0">
         <motion.div 
@@ -377,24 +413,25 @@ const WaReminders: React.FC<WaRemindersProps> = ({
               exit={{ height: 0 }}
               className="px-4 py-3 bg-bg3 border-b border-border overflow-hidden"
             >
-              <div className="flex justify-between items-center mb-2">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="animate-spin text-accent" size={14} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Enviando Recordatorios</span>
-                </div>
-                <div className="flex gap-4">
-                  <span className="text-[10px] font-bold text-emerald-500">{metricsGlobal.sent} ENVIADOS</span>
-                  <span className="text-[10px] font-bold text-rose-500">{metricsGlobal.failed} FALLIDOS</span>
-                  <span className="text-[10px] font-bold text-text3">{progressGlobal}%</span>
-                </div>
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-3">
+                <Loader2 className="animate-spin text-accent" size={18} />
+                <span className="text-xs font-black uppercase tracking-widest text-text">Procesando Campaña</span>
               </div>
-              <div className="h-1.5 bg-bg rounded-full overflow-hidden">
-                <motion.div 
-                  className="h-full bg-accent"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progressGlobal}%` }}
-                />
+              <div className="flex gap-6">
+                <span className="text-xs font-bold text-emerald-500">{metricsGlobal.sent} ENVIADOS</span>
+                <span className="text-xs font-bold text-rose-500">{metricsGlobal.failed} FALLIDOS</span>
+                <span className="text-xs font-bold text-accent">{progressGlobal}%</span>
               </div>
+            </div>
+            <div className="h-3 bg-bg rounded-full overflow-hidden border border-white/5 shadow-inner">
+              <motion.div 
+                className="h-full bg-gradient-to-r from-accent to-emerald-500 shadow-[0_0_15px_rgba(26,110,245,0.5)]"
+                initial={{ width: 0 }}
+                animate={{ width: `${progressGlobal}%` }}
+                transition={{ duration: 0.5 }}
+              />
+            </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -413,12 +450,11 @@ const WaReminders: React.FC<WaRemindersProps> = ({
                       className="rounded border-slate-300 text-brand-primary focus:ring-brand-primary"
                     />
                   </th>
-                  <th className="p-4 text-[10px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Num. Interno</th>
-                  <th className="p-4 text-[10px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Fecha Rec.</th>
-                  <th className="p-4 text-[10px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Cliente</th>
-                  <th className="p-4 text-[10px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Teléfono</th>
-                  <th className="p-4 text-[10px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Deuda</th>
-                  <th className="p-4 text-[10px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Proceso de Lavado</th>
+                  <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Nexo Orden</th>
+                  <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Recepción</th>
+                  <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Cliente</th>
+                  <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest text-right">Saldo Deudor</th>
+                  <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Estado Lavado</th>
                   <th className="p-4 text-[10px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest text-center">Acción</th>
                 </tr>
               </thead>
@@ -456,45 +492,48 @@ const WaReminders: React.FC<WaRemindersProps> = ({
                           />
                         </td>
                         <td className="p-4">
-                          <span className="text-xs font-black dark:text-white tracking-widest">{order.ordenNumber || '#---'}</span>
+                          <span className="text-sm font-black dark:text-white tracking-widest">{order.ordenNumber || '#---'}</span>
                         </td>
                         <td className="p-4">
                           <div className="flex flex-col">
-                            <span className="text-xs font-bold dark:text-white uppercase">{new Date(order.date).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
-                            <span className="text-[10px] text-slate-400 dark:text-text3">{new Date(order.date).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                            <span className="text-sm font-bold dark:text-white uppercase leading-none">{new Date(order.date).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })}</span>
+                            <span className="text-[10px] text-slate-400 dark:text-text3 mt-1 font-medium">{new Date(order.date).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
                           </div>
                         </td>
                         <td className="p-4">
                           <div className="flex flex-col">
-                            <span className="text-xs font-bold dark:text-white uppercase truncate max-w-[150px]">{order.client.name}</span>
+                            <span className="text-sm font-black dark:text-white uppercase truncate max-w-[180px]">{order.client.name}</span>
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-brand-primary mt-1">
+                              <Phone size={10} />
+                              {order.client.phone || 'S/T'}
+                            </div>
                           </div>
                         </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-2 text-xs font-medium dark:text-text2">
-                            <Phone size={12} className="text-slate-400" />
-                            {order.client.phone || 'S/T'}
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <span className={`text-xs font-black ${debt > 0.01 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                        <td className="p-4 text-right">
+                          <span className={`text-sm font-black px-3 py-1 rounded-full ${debt > 0.01 ? 'bg-rose-500/10 text-rose-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
                             {company.moneda_simbolo} {debt.toFixed(2)}
                           </span>
                         </td>
                         <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-1.5 bg-slate-100 dark:bg-bg3 rounded-full overflow-hidden">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] font-black text-blue-500">{processPct}%</span>
+                            </div>
+                            <div className="w-24 h-2 bg-slate-100 dark:bg-bg3 rounded-full overflow-hidden shadow-inner">
                               <div 
-                                className="h-full bg-blue-500 transition-all duration-500" 
+                                className="h-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-500" 
                                 style={{ width: `${processPct}%` }}
                               />
                             </div>
-                            <span className="text-[10px] font-bold text-blue-500">{processPct}%</span>
                           </div>
                         </td>
                         <td className="p-4 text-center">
                           <div className="relative inline-block group">
                             <button 
-                              onClick={() => sendSingleReminder(order)}
+                              onClick={(e) => {
+                                addFlyingMessage(e);
+                                sendSingleReminder(order);
+                              }}
                               disabled={isSentRecently || isSendingGlobal}
                               className={`p-2 rounded-lg transition-all ${
                                 isSentRecently 
