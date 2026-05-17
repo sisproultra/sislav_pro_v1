@@ -8,7 +8,7 @@ import {
     Company, Supply, InvoiceType, UnitCode, IgvType, CartItem,
     CashClosing, MachineImage, StockMovement, StoreItem, Coupon, Purchase, PausedSale,
     ORDER_STATUS_MAP, Employee, GlobalColor, PromoBanner, ItemDetalle, SunatResponse, CampaignTemplate,
-    InventoryCount, GuiaRemision
+    InventoryCount, GuiaRemision, WaTemplate, WaTemplateCategory
 } from '../types';
 import { formatOrderNumber, getNextLetter } from '../utils/calculations';
 import { fixEncoding } from '../utils/stringUtils';
@@ -3678,6 +3678,53 @@ export const dbSaveWaCampaignImage = async (url: string) => {
     await supabase.from('sucursal_wa_config').upsert({ sucursal_id: branchId, url_imagen_campania: url }, { onConflict: 'sucursal_id' });
 };
 
+// --- MÓDULO DE MENSAJES (WA TEMPLATES) ---
+
+export const dbGetWaTemplates = async (category?: WaTemplateCategory): Promise<WaTemplate[]> => {
+    const branchId = getActiveBranchId();
+    if (!branchId) return [];
+
+    // Incluimos tanto las de la sucursal como las globales (sucursal_id null)
+    let query = supabase.from('wa_templates').select('*').or(`sucursal_id.eq.${branchId},sucursal_id.is.null`);
+    if (category) query = query.eq('category', category);
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) {
+        console.error('Error fetching WA templates:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const dbSaveWaTemplate = async (template: Partial<WaTemplate>): Promise<WaTemplate | null> => {
+    const branchId = getActiveBranchId();
+    if (!branchId) return null;
+
+    const templateData = {
+        ...template,
+        sucursal_id: branchId,
+        is_active: template.is_active ?? true,
+        created_at: template.created_at || new Date().toISOString()
+    };
+
+    const { data, error } = await supabase.from('wa_templates').upsert(templateData).select().single();
+    if (error) {
+        console.error('Error saving WA template:', error);
+        throw error;
+    }
+    return data;
+};
+
+export const dbDeleteWaTemplate = async (id: string) => {
+    const { error } = await supabase.from('wa_templates').delete().eq('id', id);
+    if (error) throw error;
+};
+
+export const dbToggleWaTemplate = async (id: string, active: boolean) => {
+    const { error } = await supabase.from('wa_templates').update({ is_active: active }).eq('id', id);
+    if (error) throw error;
+};
+
 export const dbGetTrackingInfo = async (id: string) => {
     console.log(`🔍 [dbGetTrackingInfo] Buscando ID: ${id}`);
     
@@ -4176,6 +4223,113 @@ export const dbGetItemsPendientesLogistica = async (sucursalId: string, tipoSucu
 
 export const dbDeleteSupply = async (id: string) => {
     const { error } = await supabase.from('insumos').update({ activo: false }).eq('id', id);
+    if (error) throw error;
+};
+
+// --- WHATSAPP REMINDERS ---
+
+export const dbGetUndeliveredOrdersForReminders = async (): Promise<Invoice[]> => {
+    const branchId = getActiveBranchId();
+    if (!branchId) return [];
+
+    try {
+        const { data: ventas, error } = await supabase
+            .from('ventas')
+            .select(`
+                *,
+                clientes (*),
+                items_venta (*)
+            `)
+            .eq('sucursal_id', branchId)
+            .not('estado', 'in', '("ENTREGADO","CANCELADO")')
+            .order('fecha_recepcion', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching undelivered orders:', error);
+            return [];
+        }
+
+        if (!ventas || ventas.length === 0) return [];
+
+        const ventaIds = ventas.map(v => v.id);
+        const { data: todosLosPagos } = await supabase
+            .from('pagos_venta')
+            .select('venta_id, monto')
+            .in('venta_id', ventaIds);
+
+        return ventas.map(v => {
+            const pagosVenta = (todosLosPagos || []).filter(p => p.venta_id === v.id);
+            const totalPagado = pagosVenta.reduce((sum, p) => sum + Number(p.monto), 0);
+
+            return {
+                id: v.id,
+                sucursal_id: v.sucursal_id,
+                empresa_holding_id: v.empresa_holding_id,
+                cliente_id: v.cliente_id,
+                client: {
+                    id: v.clientes?.id,
+                    sucursal_id: v.sucursal_id,
+                    empresa_holding_id: v.empresa_holding_id,
+                    name: fixEncoding(v.clientes?.nombres || 'CLIENTE').toUpperCase(),
+                    phone: v.clientes?.telefono || '',
+                    docNumber: v.clientes?.dni || '',
+                    docType: v.clientes?.tipo_documento || 'DNI',
+                    address: v.clientes?.direccion || '',
+                    points: Number(v.clientes?.puntos) || 0
+                },
+                ordenNumber: v.codigo_orden,
+                serie: v.serie_comprobante,
+                correlativo: Number(v.correlativo_comprobante),
+                type: v.tipo_comprobante as InvoiceType,
+                orderStatus: v.estado as OrderStatus,
+                totals: {
+                    gravada: Number(v.total_gravada) || 0,
+                    exonerada: Number(v.total_exonerada) || 0,
+                    inafecta: Number(v.total_inafecta) || 0,
+                    igv: Number(v.total_igv || v.monto_igv) || 0,
+                    total: Number(v.total || v.total_venta) || 0
+                },
+                date: v.fecha_recepcion,
+                items: (v.items_venta || []).map((it: any) => ({
+                    id: it.id,
+                    name: fixEncoding(it.descripcion),
+                    quantity: Number(it.cantidad),
+                    price: Number(it.precio_unitario),
+                    subtotal: Number(it.subtotal),
+                    status: it.estado as OrderStatus,
+                    estado_id: it.estado_id
+                })),
+                notes: v.notes,
+                descuento: Number(v.descuento) || 0,
+                prePaymentAmount: totalPagado,
+                sunatStatus: v.sunat_status || 'INTERNAL',
+                ultimo_whatsapp_recuerdo_at: v.ultimo_whatsapp_recuerdo_at,
+                reminderCount: Number(v.tracking_generado_count) || 0
+            };
+        });
+    } catch (e) {
+        console.error('Exception in dbGetUndeliveredOrdersForReminders:', e);
+        return [];
+    }
+};
+
+export const dbUpdateLastReminderSent = async (orderId: string) => {
+    // Fetch current count to increment
+    const { data } = await supabase
+        .from('ventas')
+        .select('tracking_generado_count')
+        .eq('id', orderId)
+        .single();
+    
+    const nextCount = (Number(data?.tracking_generado_count) || 0) + 1;
+
+    const { error } = await supabase
+        .from('ventas')
+        .update({ 
+            ultimo_whatsapp_recuerdo_at: new Date().toISOString(),
+            tracking_generado_count: nextCount
+        })
+        .eq('id', orderId);
     if (error) throw error;
 };
 

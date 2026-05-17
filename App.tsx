@@ -90,6 +90,7 @@ import SalesHistory from './views/SalesHistory';
 import MyReports from './views/MyReports';
 import YapeMonitor from './views/YapeMonitor';
 import DevConfig from './views/DevConfig';
+import WaReminders from './views/WaReminders';
 import { SuperAdmin } from './views/SuperAdmin';
 import { Loader2, X, ShieldAlert, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -500,7 +501,11 @@ export default function App() {
     const [waReminderMessage, setWaReminderMessage] = useState("Estimado usuario somos de la lavandería, su prenda esta lista no se olvide de recogerla.");
     const [waReminderTemplates, setWaReminderTemplates] = useState<CampaignTemplate[]>([]);
     const [waReminderMessageState, setWaReminderMessageState] = useState(waReminderMessage);
-    const [waActiveTab, setWaActiveTab] = useState<'campaign' | 'reminder'>('campaign');
+    const [waActiveTab, setWaActiveTab] = useState<'campaign' | 'reminder' | 'templates'>('campaign');
+
+    const [waRemindersProgress, setWaRemindersProgress] = useState(0);
+    const [waRemindersMetrics, setWaRemindersMetrics] = useState({ sent: 0, failed: 0, total: 0 });
+    const [isWaRemindersSending, setIsWaRemindersSending] = useState(false);
 
     const [editingClient, setEditingClient] = useState<Client | null>(null);
 
@@ -2001,6 +2006,15 @@ export default function App() {
             />;
             case 'view:payment_methods': return <PaymentMethods methods={paymentMethods} globalPaymentCatalog={globalConfig?.defaultPaymentImages} onSave={async (pm) => { await dbSavePaymentMethod(pm); refreshData(true); }} onUpdate={async (id, pm) => { await dbUpdatePaymentMethod(id, pm); refreshData(true); }} canManage={canManageApp} />;
             case 'view:wa_campaign': return <WaCampaign clients={clients} company={activeSucursal} globalContacts={waContacts} setGlobalContacts={setWaContacts} globalStatus={waStatus} setGlobalStatus={setWaStatus} globalTemplates={waTemplates} setGlobalTemplates={setWaTemplates} globalDelay={waDelay} setGlobalDelay={setWaDelay} globalImage={waGlobalImage} setGlobalImage={setWaGlobalImage} globalReminderMsg={waReminderMessageState} setGlobalReminderMsg={setWaReminderMessageState} globalReminderTemplates={waReminderTemplates} setGlobalReminderTemplates={setWaReminderTemplates} globalActiveTab={waActiveTab} setGlobalActiveTab={setWaActiveTab} />;
+            case 'view:wa_reminders': return <WaReminders 
+                company={activeSucursal} 
+                isSendingGlobal={isWaRemindersSending}
+                setIsSendingGlobal={setIsWaRemindersSending}
+                progressGlobal={waRemindersProgress}
+                setProgressGlobal={setWaRemindersProgress}
+                metricsGlobal={waRemindersMetrics}
+                setMetricsGlobal={setWaRemindersMetrics}
+            />;
             case 'view:reports': return <Reports expenses={expenses} invoices={invoices} clients={clients} company={activeSucursal} />;
             case 'view:my_reports': return <MyReports invoices={invoices} paymentMethods={paymentMethods} company={activeSucursal} />;
             case 'view:accounting': return <Accounting invoices={invoices} paymentMethods={paymentMethods} company={activeSucursal} />;
@@ -2237,6 +2251,9 @@ export default function App() {
             toggleTheme={toggleDarkMode}
             currentUser={authSession?.user}
             isCashOpen={!!activeCashSession}
+            waRemindersProgress={waRemindersProgress}
+            isWaRemindersSending={isWaRemindersSending}
+            waRemindersMetrics={waRemindersMetrics}
         >
             {isLoadingData && <div className="absolute top-2 right-6 z-[100] flex items-center gap-2 bg-indigo-600 text-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest shadow-lg animate-pulse"><RefreshCw size={10} className="animate-spin" /> Sincronizando</div>}
             

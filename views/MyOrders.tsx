@@ -750,7 +750,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                         <th className="px-6 py-6">Documento</th>
                                         <th className="px-6 py-6">Cliente</th>
                                         <th className="px-6 py-6">Finanzas</th>
-                                        <th className="px-6 py-6 text-center">Progreso</th>
+                                        <th className="px-6 py-6 text-center">Progreso de Lavado</th>
                                         <th className="px-6 py-6 text-center">Entregas</th>
                                         <th className="px-6 py-6 text-center">Acciones</th>
                                     </tr>
@@ -895,6 +895,10 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                             )}
                                                         </button>
 
+                                                    <div className="flex flex-col items-center gap-1.5">
+                                                        <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${balance > 0.01 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                            {balance > 0.01 ? 'DEBE' : 'PAGADO'}
+                                                        </span>
                                                         {(!isFullyDelivered || balance > 0) ? (
                                                             <button 
                                                                 onClick={() => canManage && handleOpenUnifiedModal(inv)} 
@@ -915,6 +919,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                                 <CheckCircle2 size={12} /> FINALIZADO
                                                             </div>
                                                         )}
+                                                    </div>
 
                                                         <div className="relative">
                                                             <button 
@@ -1025,13 +1030,18 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                 <img src="https://iili.io/fXXft0Q.png" className="w-5 h-5 object-contain" alt="WA" />
                                             </button>
 
-                                            <button 
-                                                onClick={() => canManage && handleOpenUnifiedModal(inv)}
-                                                style={{ backgroundColor: balance > 0 ? '#f59e0b' : '#10b981' }}
-                                                className="flex-1 h-10 rounded-full text-[9px] font-bold text-white uppercase tracking-[0.1em] shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
-                                            >
-                                                {balance > 0 ? <><DollarSign size={14} /> COBRAR Y ENTREGAR</> : <><PackageCheck size={14} /> ENTREGAR PEDIDO</>}
-                                            </button>
+                                            <div className="flex-1 flex flex-col items-center gap-1">
+                                                <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${balance > 0.01 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                    {balance > 0.01 ? 'DEBE' : 'PAGADO'}
+                                                </span>
+                                                <button 
+                                                    onClick={() => canManage && handleOpenUnifiedModal(inv)}
+                                                    style={{ backgroundColor: balance > 0 ? '#f59e0b' : '#10b981' }}
+                                                    className="w-full h-10 rounded-full text-[9px] font-bold text-white uppercase tracking-[0.1em] shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    {balance > 0 ? <><DollarSign size={14} /> COBRAR Y ENTREGAR</> : <><PackageCheck size={14} /> ENTREGAR PEDIDO</>}
+                                                </button>
+                                            </div>
 
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === inv.id ? null : inv.id); }}

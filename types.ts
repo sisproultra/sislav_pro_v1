@@ -287,6 +287,8 @@ export interface Invoice extends BaseEntity {
     url_foto_cliente_1?: string;
     url_foto_cliente_2?: string;
     url_foto_cliente_3?: string;
+    ultimo_whatsapp_recuerdo_at?: string;
+    reminderCount?: number;
 }
 
 export interface InvoiceTotals { gravada: number; exonerada: number; inafecta: number; igv: number; total: number; }
@@ -559,6 +561,7 @@ export const SYSTEM_MODULES: PermissionDefinition[] = [
     { id: 'view:bonus_points', label: 'Puntos Bonus', description: 'Gestión de puntos y canjes', category: 'MARKETING' },
     { id: 'view:promotions', label: 'Promociones', description: 'Ofertas, packs y descuentos', category: 'MARKETING' },
     { id: 'view:wa_campaign', label: 'Campaña WA', description: 'Marketing masivo por WhatsApp', category: 'MARKETING' },
+    { id: 'view:wa_reminders', label: 'Recordatorio', description: 'Recordatorios de recojo de prendas', category: 'PRINCIPAL' },
     
     { id: 'view:modificaciones', label: 'Modificar', description: 'Edición de tickets y boletas', category: 'ADMINISTRACIÓN' },
     { id: 'view:categories', label: 'Categorías', description: 'Clasificación de familias de servicios', category: 'ADMINISTRACIÓN' },
@@ -815,6 +818,17 @@ export interface Contact {
 
 export interface CampaignTemplate {
     text: string;
+}
+
+export type WaTemplateCategory = 'RECOJO' | 'PROMOCION' | 'CUMPLEANOS' | 'RECORDATORIO' | 'BIENVENIDA' | 'PAGO';
+
+export interface WaTemplate extends BaseEntity {
+    category: WaTemplateCategory;
+    content: string;
+    image_url?: string;
+    is_active: boolean;
+    name?: string;
+    created_at?: string;
 }
 
 export enum CampaignStatus {

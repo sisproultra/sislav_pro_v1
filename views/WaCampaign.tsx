@@ -4,13 +4,17 @@ import {
     CheckCircle2, XCircle, Clock, LayoutDashboard, PlusCircle, Check, Download, AlertCircle,
     RefreshCcw, Code, CheckCheck, Zap, Paperclip, Trash2, ExternalLink, X, Bell, Calendar,
     ChevronDown, Filter, UserCheck, Timer, MessageSquare, Link, Smartphone, Info, AlertTriangle,
-    Loader2, Save, Trash
+    Loader2, Save, Trash, ShieldAlert
 } from 'lucide-react';
 import {
-    Contact, CampaignTemplate, CampaignStatus, CampaignMetrics, Client, Company, Invoice
+    Contact, CampaignTemplate, CampaignStatus, CampaignMetrics, Client, Company, Invoice,
+    WaTemplate, WaTemplateCategory
 } from '../types';
 import { EvolutionService } from '../services/evolutionService';
-import { dbGetInvoices, dbSaveWaCampaignTemplates, dbSaveWaCampaignImage, dbUploadImage } from '../services/dbService';
+import {
+    dbGetInvoices, dbSaveWaCampaignTemplates, dbSaveWaCampaignImage, dbUploadImage,
+    dbGetWaTemplates, dbSaveWaTemplate, dbDeleteWaTemplate, dbToggleWaTemplate
+} from '../services/dbService';
 import * as XLSX from 'xlsx';
 
 interface WaCampaignProps {
@@ -31,8 +35,8 @@ interface WaCampaignProps {
     setGlobalReminderMsg: React.Dispatch<React.SetStateAction<string>>;
     globalReminderTemplates: CampaignTemplate[];
     setGlobalReminderTemplates: React.Dispatch<React.SetStateAction<CampaignTemplate[]>>;
-    globalActiveTab: 'campaign' | 'reminder';
-    setGlobalActiveTab: React.Dispatch<React.SetStateAction<'campaign' | 'reminder'>>;
+    globalActiveTab: 'campaign' | 'reminder' | 'templates';
+    setGlobalActiveTab: React.Dispatch<React.SetStateAction<'campaign' | 'reminder' | 'templates'>>;
 }
 
 const WaCampaign: React.FC<WaCampaignProps> = ({ 
@@ -54,6 +58,32 @@ const WaCampaign: React.FC<WaCampaignProps> = ({
     const [isConnected, setIsConnected] = useState<boolean | null>(null);
     const [showSummary, setShowSummary] = useState(false);
     const [isDbLoading, setIsDbLoading] = useState(false);
+    const [waTemplatesList, setWaTemplatesList] = useState<WaTemplate[]>([]);
+    const [editingTemplate, setEditingTemplate] = useState<Partial<WaTemplate> | null>(null);
+    const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
+    const [sendPausedInfo, setSendPausedInfo] = useState<string | null>(null);
+    const [nextSendTime, setNextSendTime] = useState<Date | null>(null);
+
+    const templateImageRef = useRef<HTMLInputElement>(null);
+
+    const handleUploadTemplateImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !company) return;
+
+        setIsUploadingImage(true);
+        try {
+            const fileName = `template_${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+            const path = `holding_${company.holding_name || 'default'}/sucursal_${company.id}/wa_templates/${fileName}`;
+            const url = await dbUploadImage('fotos_app', file, path);
+            setEditingTemplate(prev => prev ? { ...prev, image_url: url } : null);
+        } catch (err) {
+            console.error("Error uploading template image:", err);
+            alert("Error al subir imagen");
+        } finally {
+            setIsUploadingImage(false);
+        }
+    };
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -65,17 +95,45 @@ const WaCampaign: React.FC<WaCampaignProps> = ({
 
     // --- MOTOR DE ENVÍO (WORKER) ---
     useEffect(() => {
-        if (globalStatus !== CampaignStatus.RUNNING) return;
+        if (globalStatus !== CampaignStatus.RUNNING) {
+            setSendPausedInfo(null);
+            setNextSendTime(null);
+            return;
+        }
 
         // Buscamos el siguiente contacto pendiente
         const nextContact = globalContacts.find(c => c.status === 'pending');
 
         if (!nextContact) {
             setGlobalStatus(CampaignStatus.COMPLETED);
+            setSendPausedInfo(null);
+            setNextSendTime(null);
             return;
         }
 
-        // Iniciamos el proceso con el delay configurado
+        // --- CÁLCULO DE DELAY HUMANIZADO ---
+        const sentCount = globalContacts.filter(c => c.status === 'sent').length;
+        
+        let delayMs = Math.floor(Math.random() * (45 - 15 + 1) + 15) * 1000;
+        let pausedReason = null;
+
+        if (sentCount > 0) {
+            if (sentCount % 40 === 0) {
+                // Cada 40 mensajes: pausa aleatoria entre 10 y 20 minutos
+                const pauseMin = Math.floor(Math.random() * (20 - 10 + 1) + 10);
+                delayMs = pauseMin * 60 * 1000;
+                pausedReason = `Pausa Humana (Cada 40 msg): ${pauseMin} min`;
+            } else if (sentCount % 15 === 0) {
+                // Cada 15 mensajes: pausa aleatoria entre 3 y 8 minutos
+                const pauseMin = Math.floor(Math.random() * (8 - 3 + 1) + 3);
+                delayMs = pauseMin * 60 * 1000;
+                pausedReason = `Pausa Humana (Cada 15 msg): ${pauseMin} min`;
+            }
+        }
+
+        setSendPausedInfo(pausedReason);
+        setNextSendTime(new Date(Date.now() + delayMs));
+
         const timer = setTimeout(async () => {
             // 1. Marcamos contacto como procesando
             setGlobalContacts(prev => prev.map(c => 
@@ -87,27 +145,46 @@ const WaCampaign: React.FC<WaCampaignProps> = ({
                 
                 // 2. Preparar el mensaje (Rotación aleatoria)
                 let text = '';
+                let templateImage = '';
+
                 if (globalActiveTab === 'reminder') {
-                    if (globalReminderTemplates && globalReminderTemplates.length > 0) {
+                    // Primero intentamos de la nueva tabla mensajes
+                    const dbTemplates = waTemplatesList.filter(t => t.category === 'RECOJO' && t.is_active);
+                    
+                    if (dbTemplates.length > 0) {
+                        const randomTpl = dbTemplates[Math.floor(Math.random() * dbTemplates.length)];
+                        text = randomTpl.content.replace(/-nombre-/g, nextContact.name);
+                        templateImage = randomTpl.image_url || '';
+                    } else if (globalReminderTemplates && globalReminderTemplates.length > 0) {
                         const template = globalReminderTemplates[Math.floor(Math.random() * globalReminderTemplates.length)]?.text || '';
                         text = template.replace(/-nombre-/g, nextContact.name);
                     } else {
-                        text = globalReminderMsg.replace(/-nombre-/g, nextContact.name);
+                        const template = DEFAULT_REMINDERS[Math.floor(Math.random() * DEFAULT_REMINDERS.length)];
+                        text = template.replace(/-nombre-/g, nextContact.name);
                     }
                 } else {
-                    if (globalTemplates && globalTemplates.length > 0) {
+                    // Modo Campaña / Promociones
+                    const dbTemplates = waTemplatesList.filter(t => t.category === 'PROMOCION' && t.is_active);
+
+                    if (dbTemplates.length > 0) {
+                        const randomTpl = dbTemplates[Math.floor(Math.random() * dbTemplates.length)];
+                        text = randomTpl.content.replace(/-nombre-/g, nextContact.name);
+                        templateImage = randomTpl.image_url || '';
+                    } else if (globalTemplates && globalTemplates.length > 0) {
                         const template = globalTemplates[Math.floor(Math.random() * globalTemplates.length)]?.text || '';
                         text = template.replace(/-nombre-/g, nextContact.name);
-                    } else {
+                    } else if (globalActiveTab === 'campaign') {
                         text = "Hola -nombre-".replace(/-nombre-/g, nextContact.name);
                     }
                 }
 
                 if (!text) throw new Error("Mensaje vacío");
 
-                // 3. Ejecutar el envío
-                if (globalActiveTab === 'campaign' && globalImage) {
-                    await service.sendMedia(nextContact.phone, globalImage, text);
+                // 3. Ejecutar el envío (Prioridad: Imagen de plantilla > Imagen global de campaña)
+                const finalImage = templateImage || (globalActiveTab === 'campaign' ? globalImage : '');
+
+                if (finalImage) {
+                    await service.sendMedia(nextContact.phone, finalImage, text);
                 } else {
                     await service.sendText(nextContact.phone, text);
                 }
@@ -116,6 +193,7 @@ const WaCampaign: React.FC<WaCampaignProps> = ({
                 setGlobalContacts(prev => prev.map(c => 
                     c.id === nextContact.id ? { ...c, status: 'sent', sentAt: new Date() } : c
                 ));
+                setSendPausedInfo(null);
 
             } catch (err: any) {
                 console.error("Error enviando mensaje a:", nextContact.phone, err);
@@ -124,10 +202,10 @@ const WaCampaign: React.FC<WaCampaignProps> = ({
                     c.id === nextContact.id ? { ...c, status: 'failed', error: err.message || 'Error API' } : c
                 ));
             }
-        }, globalDelay * 1000);
+        }, delayMs);
 
         return () => clearTimeout(timer);
-    }, [globalStatus, globalContacts, globalDelay, globalActiveTab, globalTemplates, globalReminderMsg, globalImage]);
+    }, [globalStatus, globalContacts, globalActiveTab, globalTemplates, globalReminderMsg, globalImage]);
 
     const cleanNameForPath = (name: string) => {
         return name.trim().toLowerCase()
@@ -166,10 +244,96 @@ const WaCampaign: React.FC<WaCampaignProps> = ({
         if (company) {
             checkConnection();
             loadInvoices();
+            loadWaTemplates();
             const interval = setInterval(checkConnection, 15000);
             return () => clearInterval(interval);
         }
     }, [company?.id]);
+
+    const loadWaTemplates = async () => {
+        const templates = await dbGetWaTemplates();
+        setWaTemplatesList(templates);
+    };
+
+    const handleSaveWaTemplate = async () => {
+        if (!editingTemplate?.content || !editingTemplate?.category) return;
+        setIsDbLoading(true);
+        try {
+            await dbSaveWaTemplate(editingTemplate);
+            await loadWaTemplates();
+            setIsTemplateModalOpen(false);
+            setEditingTemplate(null);
+        } catch (e) {
+            alert("Error al guardar mensaje");
+        } finally {
+            setIsDbLoading(false);
+        }
+    };
+
+    const handleDeleteWaTemplate = async (id: string) => {
+        if (!confirm("¿Eliminar este mensaje?")) return;
+        setIsDbLoading(true);
+        try {
+            await dbDeleteWaTemplate(id);
+            await loadWaTemplates();
+        } catch (e) {
+            alert("Error al eliminar");
+        } finally {
+            setIsDbLoading(false);
+        }
+    };
+
+    const handleToggleWaTemplate = async (id: string, active: boolean) => {
+        try {
+            await dbToggleWaTemplate(id, active);
+            setWaTemplatesList(prev => prev.map(t => t.id === id ? { ...t, is_active: active } : t));
+        } catch (e) {
+            alert("Error");
+        }
+    };
+
+    const handleLoadSuggestions = async () => {
+        if (!confirm("Se cargarán 20 variantes de mensajes para recojo de ropa. ¿Desea continuar?")) return;
+        setIsDbLoading(true);
+        try {
+            const suggestions = [
+                "Hola 👋 Tus prendas ya están listas. Puedes pasar a recogerlas cuando gustes 😊",
+                "Buenas tardes 😊 Te avisamos que tu pedido ya se encuentra listo para entrega.",
+                "¡Hola! Ya terminamos tu servicio de lavandería 👍 Puedes acercarte a recogerlo.",
+                "Estimad@, tus prendas ya quedaron listas ✨ Te esperamos.",
+                "Hola 😊! Te informamos que tu ropa ya está lista para recoger 👌",
+                "Hola 😊 Ya puedes pasar por tus prendas, las tenemos listas.",
+                "¡Tu servicio quedó listo! Puedes recogerlo en el horario habitual 🙌",
+                "Estimad@ 👋 Solo para avisarte que tus prendas ya están listas para entrega.",
+                "Estimad@ usuario, ya contamos con tus prendas listas 😊 Puedes pasar a recogerlo cuando desees.",
+                "Hola, tu ropa ya se encuentra lista 👍 Gracias por confiar en nosotros.",
+                "¡Listo! Tus prendas ya están disponibles para recoger ✨",
+                "Te avisamos que tu servicio quedó listo y puedes acercarte por él 😊",
+                "Hola 👋 Tus prendas quedaron listas desde hoy. Te esperamos.",
+                "Buen día. Ya puedes pasar a recoger tu prendas, ya se encuentran listas 🙂",
+                "Estimad@, tu pedido ya está listo para entrega 🙌",
+                "Hola 😊 Queríamos avisarte que tu ropa ya se encuentra lista.",
+                "Tu servicio ya fue finalizado correctamente 👍 Puedes pasar a recogerlo.",
+                "¡Hola! Ya tenemos listas tus prendas ✨",
+                "Estimad@ usuario 😊 Tus prendas ya están disponibles para entrega, puedes recogerlo en el horario habitual.",
+                "Hola, ya puedes acercarte a recoger tu pedido cuando gustes 👌"
+            ];
+
+            for (const text of suggestions) {
+                await dbSaveWaTemplate({
+                    category: 'RECOJO',
+                    content: text,
+                    is_active: true
+                });
+            }
+            await loadWaTemplates();
+            alert("Sugerencias cargadas con éxito");
+        } catch (e) {
+            alert("Error al cargar sugerencias");
+        } finally {
+            setIsDbLoading(false);
+        }
+    };
 
     const loadInvoices = async () => {
         const { invoices: data } = await dbGetInvoices();
@@ -232,16 +396,26 @@ const WaCampaign: React.FC<WaCampaignProps> = ({
     };
 
     const DEFAULT_REMINDERS = [
-        "Hola -nombre-, le recordamos que tiene prendas listas en la lavandería. ¡Le esperamos!",
-        "Estimado(a) -nombre-, su pedido ya está disponible para recojo. Gracias por su preferencia.",
-        "Buen día -nombre-, pase a recoger sus prendas de la lavandería cuando guste. ¡Saludos!",
-        "Hola -nombre-, solo queríamos recordarle que sus prendas ya están limpias y listas.",
-        "¡Buenas noticias -nombre-! Ya puede pasar por su ropa a la lavandería. ¡Buen día!",
-        "Recordatorio de -nombre-: sus prendas están listas para ser recogidas. ¡Gracias!",
-        "Estimado(a) -nombre-, no olvide pasar por la lavandería por su pedido pendiente. Estamos atendiendo.",
-        "Hola -nombre-, tenemos su ropa lista y empacada. ¡Le esperamos pronto!",
-        "Buen día -nombre-, sus prendas ya pasaron por control de calidad y están listas. ¡Saludos!",
-        "Hola -nombre-, le enviamos este recordatorio porque su pedido ya está listo en local."
+        "Hola -nombre-, te escribimos de la lavandería para avisarte que tu ropa ya está lista.",
+        "Buen día -nombre-, somos de la lavandería. Queremos informarte que tu pedido está listo.",
+        "Hola -nombre-, tu ropa ya se encuentra lista para recoger en la lavandería.",
+        "Te saludamos -nombre- de la lavandería para avisarte que tu ropa está lista.",
+        "Buenas -nombre-, desde la lavandería te informamos que tu ropa ya está lista.",
+        "Hola -nombre-, solo para comentarte que tu ropa ya está lista en la lavandería.",
+        "Estimado cliente -nombre-, le informamos que su ropa ya está lista para recojo.",
+        "Hola -nombre-, te avisamos que tu pedido en la lavandería ya está terminado.",
+        "Buenas tardes -nombre-, tu ropa ya está lista en la lavandería.",
+        "Hola -nombre-, desde la lavandería te confirmamos que tu ropa está lista.",
+        "Te informamos -nombre- que tu ropa ya ha sido procesada y está lista para entrega.",
+        "Hola -nombre-, tu ropa ya está preparada y lista para ser recogida.",
+        "Buen día -nombre-, le comunicamos que su ropa ya está lista en la lavandería.",
+        "Hola -nombre-, queríamos avisarte que tu ropa ya está lista para retiro.",
+        "-nombre-, desde la lavandería te informamos que tu ropa ya puede ser recogida.",
+        "Hola -nombre-, tu servicio de lavandería ya finalizó y tu ropa está lista.",
+        "Buenas -nombre-, te confirmamos que tu ropa ya está lista para entrega.",
+        "Hola -nombre-, ya terminamos con tu ropa y está lista para recoger.",
+        "Estimado -nombre-, su ropa ya está lista para ser retirada de la lavandería.",
+        "Hola -nombre-, te avisamos que tu ropa ya está lista y disponible para recojo."
     ];
 
     const loadFilteredReminders = () => {
@@ -332,6 +506,7 @@ const WaCampaign: React.FC<WaCampaignProps> = ({
                 <nav className="flex-1 p-3 space-y-1 mt-4">
                     <button onClick={() => setGlobalActiveTab('campaign')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${globalActiveTab === 'campaign' ? 'bg-[#128C7E] shadow-md' : 'hover:bg-white/5'}`}><Send size={16}/> Campañas</button>
                     <button onClick={() => setGlobalActiveTab('reminder')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${globalActiveTab === 'reminder' ? 'bg-[#128C7E] shadow-md' : 'hover:bg-white/5'}`}><Bell size={16}/> Recordatorio</button>
+                    <button onClick={() => setGlobalActiveTab('templates')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${globalActiveTab === 'templates' ? 'bg-[#128C7E] shadow-md' : 'hover:bg-white/5'}`}><MessageSquare size={16}/> Tabla Mensajes</button>
                 </nav>
                 <div className="p-4 border-t border-[#128C7E]/20">
                     <div className={`p-3 rounded-xl text-[9px] font-bold uppercase ${isConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
@@ -353,14 +528,27 @@ const WaCampaign: React.FC<WaCampaignProps> = ({
                     </div>
                 )}
 
+                {globalStatus === CampaignStatus.RUNNING && (
+                    <div className="bg-indigo-600 text-white px-8 py-2 flex items-center justify-center gap-3 animate-in slide-in-from-top duration-300 shadow-lg z-[40]">
+                        <ShieldAlert size={16} className="animate-pulse" />
+                        <span className="font-bold text-[9px] uppercase tracking-[0.2em] text-center">
+                            Modo Anti-Bloqueo Activado: Rotación de Mensajes, Delay Aleatorio (15-45s) y Pausas Humanas
+                        </span>
+                    </div>
+                )}
+
                 <header className="bg-white border-b border-slate-200 px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-6 sticky top-0 z-30 shadow-sm">
                     <div className="flex items-center gap-4">
                         <div className="bg-slate-900 p-2.5 rounded-2xl text-white shadow-lg">
-                            {globalStatus === CampaignStatus.RUNNING ? <Loader2 className="animate-spin text-emerald-400" size={24} /> : <Send size={24} />}
+                            {globalStatus === CampaignStatus.RUNNING ? <Loader2 className="animate-spin text-emerald-400" size={24} /> : (globalActiveTab === 'templates' ? <MessageSquare size={24} /> : <Send size={24} />)}
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold uppercase tracking-tight">{globalActiveTab === 'reminder' ? 'Motor de Recordatorios' : 'Envío Masivo'}</h2>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">{metrics.total} Contactos • {metrics.sent} Enviados</p>
+                            <h2 className="text-xl font-bold uppercase tracking-tight">
+                                {globalActiveTab === 'reminder' ? 'Motor de Recordatorios' : globalActiveTab === 'templates' ? 'Gestión de Mensajes' : 'Envío Masivo'}
+                            </h2>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">
+                                {globalActiveTab === 'templates' ? `${waTemplatesList.length} Mensajes configurados` : `${metrics.total} Contactos • ${metrics.sent} Enviados`}
+                            </p>
                         </div>
                     </div>
 
@@ -420,7 +608,148 @@ const WaCampaign: React.FC<WaCampaignProps> = ({
                 </header>
 
                 <div className="p-8 flex-1">
-                    <div className="animate-in slide-in-from-right-8 duration-500">
+                    {globalActiveTab !== 'templates' && (
+                        <>
+                            {/* Metrics Bar */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Contactos</div>
+                                    <div className="text-2xl font-black text-slate-900">{metrics.total}</div>
+                                </div>
+                                <div className="bg-white p-4 rounded-3xl border border-emerald-100 shadow-sm bg-emerald-50/30">
+                                    <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Enviados OK</div>
+                                    <div className="text-2xl font-black text-emerald-600">{metrics.sent}</div>
+                                </div>
+                                <div className="bg-white p-4 rounded-3xl border border-red-100 shadow-sm bg-red-50/30">
+                                    <div className="text-[10px] font-bold text-red-600 uppercase tracking-widest mb-1">Fallidos</div>
+                                    <div className="text-2xl font-black text-red-600">{metrics.failed}</div>
+                                </div>
+                                <div className="bg-white p-4 rounded-3xl border border-indigo-100 shadow-sm">
+                                    <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-1">Pendientes</div>
+                                    <div className="text-2xl font-black text-indigo-900">{metrics.pending}</div>
+                                </div>
+                            </div>
+
+                            {/* Sending Status Banner */}
+                            {(globalStatus === CampaignStatus.RUNNING || sendPausedInfo) && (
+                                <div className="mb-6 animate-in slide-in-from-top duration-500">
+                                    <div className={`p-4 rounded-[2rem] border-2 border-dashed flex flex-col md:flex-row items-center justify-between gap-4 ${sendPausedInfo ? 'bg-amber-50 border-amber-200 shadow-amber-100/50' : 'bg-emerald-50 border-emerald-200'}`}>
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${sendPausedInfo ? 'bg-amber-500 text-white animate-pulse' : 'bg-emerald-500 text-white'}`}>
+                                                {sendPausedInfo ? <Clock size={24} /> : <Zap size={24} className="animate-bounce" />}
+                                            </div>
+                                            <div>
+                                                <h4 className={`text-sm font-black uppercase tracking-tight ${sendPausedInfo ? 'text-amber-900' : 'text-emerald-900'}`}>
+                                                    {sendPausedInfo ? 'Pausa Humanizada Activa' : 'Motor Anti-Bloqueo Activo'}
+                                                </h4>
+                                                <p className={`text-[10px] font-bold uppercase tracking-widest ${sendPausedInfo ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                                    {sendPausedInfo || 'Simulando comportamiento humano...'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-6">
+                                            {nextSendTime && (
+                                                <div className="text-right">
+                                                    <span className="block text-[8px] font-bold text-slate-400 uppercase">Próximo envío aprox.</span>
+                                                    <span className="text-lg font-mono font-black text-slate-700">
+                                                        {nextSendTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            <div className="flex flex-col items-center">
+                                                <div className="flex gap-1 mb-1">
+                                                    {[...Array(5)].map((_, i) => (
+                                                        <div key={i} className={`w-1.5 h-3 rounded-full ${i < (metrics.sent % 5 + 1) ? (sendPausedInfo ? 'bg-amber-400' : 'bg-emerald-400') : 'bg-slate-200'}`} />
+                                                    ))}
+                                                </div>
+                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">CADENCIA</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+                    {globalActiveTab === 'templates' ? (
+                        <div className="max-w-5xl mx-auto space-y-6 animate-in slide-in-from-bottom-8 duration-500">
+                            <div className="flex justify-between items-center bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                                <div>
+                                    <h3 className="font-bold text-lg uppercase tracking-tight">Catálogo de Mensajes Anti-Bloqueo</h3>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Crea variantes para que Google/Meta no detecten patrones de automatización.</p>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button 
+                                        onClick={handleLoadSuggestions}
+                                        disabled={isDbLoading}
+                                        className="bg-indigo-50 text-indigo-600 px-6 py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest flex items-center gap-2 border border-indigo-100 hover:bg-indigo-100 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                                    >
+                                        <Zap size={14} className="fill-current" /> Cargar Sugerencias (Anti-Block)
+                                    </button>
+                                    <button 
+                                        onClick={() => { setEditingTemplate({ category: 'RECOJO', is_active: true, content: '' }); setIsTemplateModalOpen(true); }}
+                                        className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-black transition-all shadow-md active:scale-95"
+                                    >
+                                        <PlusCircle size={18} /> Nuevo Mensaje
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {['RECOJO', 'PROMOCION', 'CUMPLEANOS', 'RECORDATORIO', 'BIENVENIDA', 'PAGO'].map(cat => {
+                                    const catTemplates = waTemplatesList.filter(t => t.category === cat);
+                                    if (catTemplates.length === 0) return null;
+                                    return (
+                                        <div key={cat} className="space-y-4">
+                                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center justify-between">
+                                                {cat === 'RECOJO' ? '🔔 RECOJO DE ROPA' : 
+                                                 cat === 'PROMOCION' ? '🎁 PROMOCIONES' : 
+                                                 cat === 'CUMPLEANOS' ? '🎂 CUMPLEAÑOS' :
+                                                 cat === 'RECORDATORIO' ? '📢 RECORDATORIOS' :
+                                                 cat === 'BIENVENIDA' ? '👋 BIENVENIDA' : '💰 COBRANZA'}
+                                                <span className="bg-slate-200 text-slate-600 px-2 rounded-full">{catTemplates.length}</span>
+                                            </h4>
+                                            <div className="space-y-3">
+                                                {catTemplates.map(t => (
+                                                    <div key={t.id} className={`bg-white p-5 rounded-3xl border transition-all hover:shadow-md ${t.is_active ? 'border-slate-200' : 'border-slate-100 opacity-60'}`}>
+                                                        <div className="flex justify-between items-start mb-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <button 
+                                                                    onClick={() => handleToggleWaTemplate(t.id, !t.is_active)}
+                                                                    className={`w-10 h-5 rounded-full relative transition-colors ${t.is_active ? 'bg-green-500' : 'bg-slate-300'}`}
+                                                                >
+                                                                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${t.is_active ? 'left-6' : 'left-1'}`} />
+                                                                </button>
+                                                                {t.image_url && (
+                                                                    <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                                                                        <img src={t.image_url} className="w-full h-full object-cover" alt="Tpl" referrerPolicy="no-referrer" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-1">
+                                                                <button onClick={() => { setEditingTemplate(t); setIsTemplateModalOpen(true); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><Code size={16}/></button>
+                                                                <button onClick={() => handleDeleteWaTemplate(t.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={16}/></button>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-[11px] font-medium text-slate-600 leading-relaxed italic">"{t.content}"</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {waTemplatesList.length === 0 && (
+                                <div className="py-24 text-center">
+                                    <MessageSquare size={64} className="mx-auto text-slate-200 mb-4" />
+                                    <p className="text-sm font-bold text-slate-300 uppercase tracking-widest">Aún no hay mensajes en la tabla</p>
+                                    <p className="text-[10px] text-slate-400 mt-2">Empieza creando variantes para tus envíos automáticos.</p>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="animate-in slide-in-from-right-8 duration-500">
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                             <div className="lg:col-span-8 space-y-6">
                                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
@@ -541,8 +870,104 @@ const WaCampaign: React.FC<WaCampaignProps> = ({
                             </div>
                         </div>
                     </div>
+                )}
                 </div>
             </main>
+
+            {isTemplateModalOpen && editingTemplate && (
+                <div className="fixed inset-0 bg-black/80 z-[110] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
+                        <div className="p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-3"><MessageSquare size={24}/><h3 className="font-bold text-xl uppercase tracking-tight">{editingTemplate.id ? 'Editar Mensaje' : 'Nuevo Mensaje'}</h3></div>
+                            <button onClick={() => setIsTemplateModalOpen(false)} className="hover:bg-white/10 p-1.5 rounded-full transition-colors"><X size={24}/></button>
+                        </div>
+                        <div className="p-8 space-y-6 bg-slate-50">
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Categoría de Mensaje</label>
+                                <select 
+                                    value={editingTemplate.category} 
+                                    onChange={e => setEditingTemplate({ ...editingTemplate, category: e.target.value as WaTemplateCategory })}
+                                    className="w-full py-3 px-4 bg-white border border-slate-200 rounded-xl font-bold text-xs outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                >
+                                    <option value="RECOJO">🔔 RECOJO DE ROPA (RECUERDO)</option>
+                                    <option value="PROMOCION">🎁 PROMOCIONES / CAMPAÑA</option>
+                                    <option value="CUMPLEANOS">🎂 SALUDO CUMPLEAÑOS</option>
+                                    <option value="RECORDATORIO">📢 RECORDATORIO GENERAL</option>
+                                    <option value="BIENVENIDA">👋 BIENVENIDA</option>
+                                    <option value="PAGO">💰 COBRANZA</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Imagen Promocional (Opcional)</label>
+                                <div className="flex items-center gap-4">
+                                    <input 
+                                        type="file" 
+                                        ref={templateImageRef} 
+                                        className="hidden" 
+                                        accept="image/*" 
+                                        onChange={handleUploadTemplateImage} 
+                                    />
+                                    <button 
+                                        type="button"
+                                        onClick={() => templateImageRef.current?.click()}
+                                        className="flex-1 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center hover:border-indigo-500 hover:bg-indigo-50 transition-all group overflow-hidden relative"
+                                    >
+                                        {isUploadingImage ? (
+                                            <Loader2 className="animate-spin text-indigo-500" size={24} />
+                                        ) : editingTemplate.image_url ? (
+                                            <div className="relative w-full h-24">
+                                                <img src={editingTemplate.image_url} className="w-full h-full object-contain" alt="Preview" referrerPolicy="no-referrer" />
+                                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <RefreshCcw className="text-white" size={18} />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <Paperclip className="mb-2 text-slate-400 group-hover:text-indigo-500" size={24} />
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Subir Imagen</span>
+                                            </>
+                                        )}
+                                    </button>
+                                    {editingTemplate.image_url && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => setEditingTemplate({...editingTemplate, image_url: ''})}
+                                            className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-all border border-red-100"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    )}
+                                </div>
+                                <p className="mt-2 text-[9px] font-bold text-slate-400 uppercase leading-tight italic">
+                                    Si subes una imagen, se enviará junto con el texto. Ideal para ofertas visuales.
+                                </p>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Contenido del Mensaje</label>
+                                <textarea 
+                                    value={editingTemplate.content}
+                                    onChange={e => setEditingTemplate({ ...editingTemplate, content: e.target.value })}
+                                    placeholder="Use -nombre- para personalizar..."
+                                    rows={6}
+                                    className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-all resize-none shadow-inner"
+                                />
+                                <div className="mt-2 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                                    <p className="text-[9px] font-bold text-indigo-400 uppercase flex items-center gap-2"><Info size={12}/> TIP: Usa variables como -nombre- o -empresa-</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-8 bg-white border-t flex justify-end">
+                            <button 
+                                onClick={handleSaveWaTemplate}
+                                disabled={isDbLoading || !editingTemplate.content}
+                                className="bg-slate-900 text-white px-12 py-4 rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-xl hover:bg-black active:scale-95 flex items-center gap-2"
+                            >
+                                {isDbLoading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} Guardar Mensaje
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {showSummary && (
                 <div className="fixed inset-0 bg-black/80 z-[200] flex items-center justify-center p-4 backdrop-blur-md">

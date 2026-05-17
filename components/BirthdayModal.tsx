@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { X, Cake, MessageCircle, Crown, Calendar, Bell, Send, Loader2 } from 'lucide-react';
-import { Client, Company } from '../types';
+import React, { useState, useEffect } from 'react';
+import { X, Cake, MessageCircle, Crown, Calendar, Bell, Send, Loader2, RefreshCcw } from 'lucide-react';
+import { Client, Company, WaTemplate } from '../types';
 import { EvolutionService } from '../services/evolutionService';
 import { getFriendlyName } from '../utils/nameUtils';
+import { dbGetWaTemplates } from '../services/dbService';
 
 interface BirthdayModalProps {
   isOpen: boolean;
@@ -49,8 +50,16 @@ const BirthdayItem: React.FC<BirthdayItemProps> = ({ client, isToday, onWish }) 
 const BirthdayModal: React.FC<BirthdayModalProps> = ({ isOpen, onClose, clients, company }) => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [message, setMessage] = useState('');
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
+  const [birthdayTemplates, setBirthdayTemplates] = useState<WaTemplate[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+        dbGetWaTemplates('CUMPLEANOS').then(setBirthdayTemplates);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -75,12 +84,29 @@ const BirthdayModal: React.FC<BirthdayModalProps> = ({ isOpen, onClose, clients,
 
   const handleWhatsApp = (client: Client, isToday: boolean) => {
     const friendlyName = getFriendlyName(client.name, client.docType);
-    const defaultMessage = isToday 
-        ? `¡Hola ${friendlyName}! 🎉 De parte de ${company.razonSocial} te deseamos un muy Feliz Cumpleaños. ¡Pasa un día increíble! 🎂✨`
-        : `¡Hola ${friendlyName}! 👋 En ${company.razonSocial} sabemos que mañana es tu cumpleaños y queremos ser los primeros en saludarte. ¡Que tengas un gran día! 🎉🎂`;
+    
+    let baseMessage = '';
+    let imageUrl = null;
+    const activeTemplates = birthdayTemplates.filter(t => t.is_active);
+    
+    if (activeTemplates.length > 0) {
+        // Rotación aleatoria
+        const randomTpl = activeTemplates[Math.floor(Math.random() * activeTemplates.length)];
+        baseMessage = randomTpl.content;
+        imageUrl = randomTpl.image_url || null;
+    } else {
+        baseMessage = isToday 
+            ? `¡Hola -nombre-! 🎉 De parte de -empresa- te deseamos un muy Feliz Cumpleaños. ¡Pasa un día increíble! 🎂✨`
+            : `¡Hola -nombre-! 👋 En -empresa- sabemos que mañana es tu cumpleaños y queremos ser los primeros en saludarte. ¡Que tengas un gran día! 🎉🎂`;
+    }
+    
+    const finalMessage = baseMessage
+        .replace(/-nombre-/g, friendlyName)
+        .replace(/-empresa-/g, company.razonSocial || 'la lavandería');
     
     setSelectedClient(client);
-    setMessage(defaultMessage);
+    setMessage(finalMessage);
+    setSelectedImageUrl(imageUrl);
     setShowEditor(true);
   };
 
@@ -104,7 +130,11 @@ const BirthdayModal: React.FC<BirthdayModalProps> = ({ isOpen, onClose, clients,
         const isActive = await evolution.checkInstance();
         
         if (isActive) {
-          await evolution.sendText(phone, message);
+          if (selectedImageUrl) {
+            await evolution.sendMedia(phone, selectedImageUrl, message);
+          } else {
+            await evolution.sendText(phone, message);
+          }
           alert('Mensaje enviado con éxito');
           setShowEditor(false);
           setIsSending(false);

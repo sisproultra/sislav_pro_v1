@@ -5,7 +5,7 @@ import {
   Headset, Waves, WashingMachine, Shield, Layers, Ticket, Calculator,
   Megaphone, MessageSquareText, HelpCircle, Cake, MessageCircle, WifiOff, Loader2,
   Terminal, Code2, Star, Sparkles, X, Check, Calendar, Search, Sun, Moon, Wifi, ShieldAlert,
-  Smartphone, FileBarChart, ArrowRight, Phone, Beaker, ShieldCheck, RotateCw, PencilLine, TrendingUp
+  Smartphone, FileBarChart, ArrowRight, Phone, Beaker, ShieldCheck, RotateCw, PencilLine, TrendingUp, Send
 } from 'lucide-react';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -38,6 +38,9 @@ interface LayoutProps {
   toggleTheme?: () => void;
   currentUser?: AuthSession['user'];
   isCashOpen?: boolean;
+  waRemindersProgress?: number;
+  isWaRemindersSending?: boolean;
+  waRemindersMetrics?: { sent: number; failed: number; total: number };
 }
 
 interface SidebarItemProps {
@@ -87,7 +90,10 @@ const Layout: React.FC<LayoutProps> = ({
   globalModules = {}, sucursalModules = {},
   isDarkMode: propIsDarkMode, toggleTheme: propToggleTheme,
   currentUser,
-  isCashOpen = false
+  isCashOpen = false,
+  waRemindersProgress = 0,
+  isWaRemindersSending = false,
+  waRemindersMetrics = { sent: 0, failed: 0, total: 0 }
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [internalIsDarkMode, setInternalIsDarkMode] = useState(() => localStorage.getItem('sislav_theme') === 'dark');
@@ -399,6 +405,7 @@ const Layout: React.FC<LayoutProps> = ({
             <SidebarItem id="view:agenda" icon={Calendar} label="Mi Tarea del Día" isVisible={getModuleConfig('view:agenda').isVisible} badge={getModuleConfig('view:agenda').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:pos" icon={ShoppingCart} label="Nueva Venta" isVisible={getModuleConfig('view:pos').isVisible} badge={getModuleConfig('view:pos').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:orders" icon={ClipboardList} label="Mis Órdenes" isVisible={getModuleConfig('view:orders').isVisible} badge={getModuleConfig('view:orders').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
+            <SidebarItem id="view:wa_reminders" icon={MessageSquareText} label="Recordatorio" isVisible={getModuleConfig('view:wa_reminders').isVisible} badge={getModuleConfig('view:wa_reminders').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:operations" icon={Waves} label="Operación Lavado" isVisible={getModuleConfig('view:operations').isVisible} badge={getModuleConfig('view:operations').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:cash_closing" icon={Calculator} label="Cierre de Caja" isVisible={getModuleConfig('view:cash_closing').isVisible} badge={getModuleConfig('view:cash_closing').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:history" icon={FileText} label="Documentos Elec." isVisible={getModuleConfig('view:history').isVisible} badge={getModuleConfig('view:history').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
@@ -550,6 +557,49 @@ const Layout: React.FC<LayoutProps> = ({
                   <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-rose-600 text-white text-[8px] font-black border border-rose-500 uppercase shadow-sm scale-95 opacity-90">
                     <div className="w-1.5 h-1.5 bg-white rounded-full" />
                     CAJA CERRADA
+                  </div>
+                )}
+                
+                {isWaRemindersSending && (
+                  <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-indigo-500/5 border border-indigo-500/10 backdrop-blur-sm animate-in fade-in zoom-in slide-in-from-top-1">
+                    <div className="relative w-24 sm:w-32 h-2.5 bg-slate-200 dark:bg-bg3 rounded-full overflow-hidden">
+                      <div 
+                        className="absolute top-0 left-0 h-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.6)] transition-all duration-1000 ease-out"
+                        style={{ width: `${waRemindersProgress}%` }}
+                      />
+                    </div>
+                    <div className="flex flex-col items-end min-w-[70px]">
+                      {waRemindersMetrics && (
+                        <div className="flex gap-2 text-[8px] font-black uppercase tracking-tight tabular-nums leading-none mb-1">
+                          <span className="text-emerald-500">OK: {waRemindersMetrics.sent}</span>
+                          <span className="text-rose-500">ERR: {waRemindersMetrics.failed}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5 leading-none">
+                        <img src="https://iili.io/BWIGQGs.png" className="w-3.5 h-3.5 object-contain" alt="Sending" />
+                        <span className="text-sm font-black text-indigo-600 tabular-nums">{Math.round(waRemindersProgress)}%</span>
+                      </div>
+                    </div>
+                    <div className="relative w-8 h-8">
+                       <img 
+                        src="https://iili.io/BWIGQGs.png" 
+                        className="w-5 h-5 object-contain absolute opacity-0 animate-wa-flying" 
+                        style={{ animationDelay: '0s', left: '0', top: '0' }}
+                        alt="Message flying 1" 
+                       />
+                       <img 
+                        src="https://iili.io/BWIGQGs.png" 
+                        className="w-4 h-4 object-contain absolute opacity-0 animate-wa-flying" 
+                        style={{ animationDelay: '0.7s', left: '10px', top: '5px' }}
+                        alt="Message flying 2" 
+                       />
+                       <img 
+                        src="https://iili.io/BWIGQGs.png" 
+                        className="w-6 h-6 object-contain absolute opacity-0 animate-wa-flying" 
+                        style={{ animationDelay: '1.4s', left: '-5px', top: '-5px' }}
+                        alt="Message flying 3" 
+                       />
+                    </div>
                   </div>
                 )}
              </div>
