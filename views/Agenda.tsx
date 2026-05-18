@@ -435,28 +435,27 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                             initial={{ opacity: 0, scale: 0.9, y: 100 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.9, y: 100 }}
-                            className="bg-white/80 backdrop-blur-3xl rounded-[3rem] lg:rounded-[5rem] w-full lg:w-[95vw] max-w-[1500px] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] flex flex-col border border-white/50 min-h-[90vh] max-h-fit lg:max-h-[95vh] relative overflow-hidden"
+                            className="bg-white/80 backdrop-blur-3xl rounded-[2rem] w-full lg:w-[90vw] max-w-[1400px] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] flex flex-col border border-white/50 min-h-[85vh] lg:h-[90vh] relative overflow-hidden"
                         >
                             {/* Cabecera del Modal */}
-                            <div className="p-8 lg:p-12 border-b border-black/5 flex justify-between items-center sticky top-0 z-50 shrink-0 bg-white/40 backdrop-blur-md">
-                                <div className="flex items-center gap-8">
+                            <div className="p-6 lg:p-10 border-b border-black/5 flex justify-between items-center sticky top-0 z-50 shrink-0 bg-white/40 backdrop-blur-md">
+                                <div className="flex items-center gap-6">
                                     <motion.div 
-                                        animate={{ rotate: [0, -10, 10, 0] }}
-                                        transition={{ repeat: Infinity, duration: 4 }}
-                                        className="p-6 rounded-[2.5rem] text-white shadow-2xl hidden sm:flex" 
+                                        whileHover={{ rotate: 10, scale: 1.1 }}
+                                        className="p-4 rounded-xl text-white shadow-xl hidden sm:flex" 
                                         style={{ backgroundColor: primaryColor }}
                                     >
-                                        <CalendarIcon size={32} />
+                                        <CalendarIcon size={24} />
                                     </motion.div>
                                     <div>
-                                        <h3 className="font-black text-3xl lg:text-5xl text-slate-900 uppercase tracking-tighter leading-none tracking-[-0.04em]">Hoja de Ruta</h3>
+                                        <h3 className="font-black text-2xl lg:text-4xl text-slate-900 uppercase tracking-tighter leading-none tracking-[-0.04em]">Hoja de Ruta</h3>
                                         <div className="flex flex-wrap items-center gap-4 mt-4">
                                             <div className="bg-slate-900 text-white px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-slate-900/20">
                                                 <CalendarIcon size={12} className="text-indigo-400" />
                                                 {daySummary.date}
                                             </div>
                                             <div className="bg-white/50 px-5 py-1.5 rounded-full text-[11px] font-black text-slate-500 uppercase tracking-widest border border-white flex items-center gap-2">
-                                                <Shirt size={12} className="text-indigo-500" />
+                                                <Shirt size={12} style={{ color: primaryColor }} />
                                                 {daySummary.orders.length} ÓRDENES PROGRAMADAS
                                             </div>
                                         </div>
@@ -472,23 +471,24 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
 
                             <div className="flex-1 overflow-y-auto custom-scrollbar p-8 lg:p-14 space-y-16">
                                 {/* TARJETAS DE RESUMEN TÉCNICO */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                     <motion.div 
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: 0.1 }}
-                                        className="bg-white p-10 rounded-[3rem] border border-white shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] flex items-center justify-between group hover:shadow-2xl transition-all"
+                                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-all"
                                     >
                                         <div>
-                                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Prendas Totales</p>
-                                            <p className="text-6xl font-black text-slate-900 day-number tracking-tighter tabular-nums">{daySummary.total}</p>
-                                            <div className="flex items-center gap-2 mt-3">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                                                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Registros de Hoy</p>
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Prendas Totales</p>
+                                            <p className="text-2xl font-black text-slate-900 day-number tracking-tighter tabular-nums" style={{ color: primaryColor }}>{Number(daySummary.total.toFixed(2))}</p>
+                                            <div className="flex items-center gap-2 mt-1.5">
+                                                <div className="w-1 h-1 rounded-full" style={{ backgroundColor: primaryColor }} />
+                                                <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">Registros de Hoy</p>
                                             </div>
                                         </div>
-                                        <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-[2rem] flex items-center justify-center shrink-0 border border-indigo-100 group-hover:rotate-12 transition-transform">
-                                            <Shirt size={40} />
+                                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all" 
+                                             style={{ backgroundColor: `${primaryColor}10`, color: primaryColor, borderColor: `${primaryColor}20` }}>
+                                            <Shirt size={28} />
                                         </div>
                                     </motion.div>
 
@@ -496,18 +496,18 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: 0.2 }}
-                                        className="bg-white p-10 rounded-[3rem] border border-white shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] flex items-center justify-between group hover:shadow-2xl transition-all"
+                                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-all"
                                     >
                                         <div>
-                                            <p className="text-[11px] font-black text-amber-500 uppercase tracking-[0.2em] mb-2">Por Procesar</p>
-                                            <p className="text-6xl font-black text-amber-600 day-number tracking-tighter tabular-nums">{daySummary.pending}</p>
-                                            <div className="flex items-center gap-2 mt-3">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                                <p className="text-[10px] font-black text-amber-300 uppercase tracking-widest">En cola de trabajo</p>
+                                            <p className="text-[9px] font-black text-amber-500 uppercase tracking-[0.2em] mb-1">Por Procesar</p>
+                                            <p className="text-2xl font-black text-amber-600 day-number tracking-tighter tabular-nums">{Number(daySummary.pending.toFixed(2))}</p>
+                                            <div className="flex items-center gap-2 mt-1.5">
+                                                <div className="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
+                                                <p className="text-[9px] font-bold text-amber-300 uppercase tracking-widest">En cola de trabajo</p>
                                             </div>
                                         </div>
-                                        <div className="w-20 h-20 bg-amber-50 text-amber-600 rounded-[2rem] flex items-center justify-center shrink-0 border border-amber-100 group-hover:rotate-12 transition-transform">
-                                            <WashingMachine size={40} />
+                                        <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shrink-0 border border-amber-100">
+                                            <WashingMachine size={28} />
                                         </div>
                                     </motion.div>
 
@@ -515,33 +515,33 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: 0.3 }}
-                                        className="bg-slate-900 p-10 rounded-[3rem] border border-slate-800 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.3)] flex items-center justify-between group hover:shadow-2xl transition-all sm:col-span-2 lg:col-span-1"
+                                        className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-lg flex items-center justify-between group transition-all sm:col-span-2 lg:col-span-1"
                                     >
                                         <div>
-                                            <p className="text-[11px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-2">Para Entrega</p>
-                                            <p className="text-6xl font-black text-white day-number tracking-tighter tabular-nums">{daySummary.ready}</p>
-                                            <div className="flex items-center gap-2 mt-3">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)]" />
-                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Listo para el cliente</p>
+                                            <p className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-1">Para Entrega</p>
+                                            <p className="text-2xl font-black text-white day-number tracking-tighter tabular-nums">{Number(daySummary.ready.toFixed(2))}</p>
+                                            <div className="flex items-center gap-2 mt-1.5">
+                                                <div className="w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)]" />
+                                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Listo para el cliente</p>
                                             </div>
                                         </div>
-                                        <div className="w-20 h-20 bg-white/10 text-emerald-400 rounded-[2rem] flex items-center justify-center shrink-0 border border-white/10 group-hover:bg-emerald-500 group-hover:text-white transition-all">
-                                            <CheckCircle2 size={40} />
+                                        <div className="w-14 h-14 bg-white/10 text-emerald-400 rounded-2xl flex items-center justify-center shrink-0 border border-white/10 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+                                            <CheckCircle2 size={28} />
                                         </div>
                                     </motion.div>
                                 </div>
 
                                 {/* LISTADO DE ÓRDENES */}
-                                <div className="space-y-10">
-                                    <div className="flex items-center justify-between mb-8 px-6">
+                                <div className="space-y-8">
+                                    <div className="flex items-center justify-between mb-6 px-6">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-2 h-10 rounded-full bg-indigo-600 shadow-[0_0_20px_rgba(79,70,229,0.5)]" />
+                                            <div className="w-1.5 h-8 rounded-full shadow-[0_0_15px_rgba(0,0,0,0.1)]" style={{ backgroundColor: primaryColor }} />
                                             <div>
-                                                <h4 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Detalle Operativo</h4>
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Listado de tickets y clientes del día</p>
+                                                <h4 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Detalle Operativo</h4>
+                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">Listado de tickets y clientes del día</p>
                                             </div>
                                         </div>
-                                        <div className="text-[11px] font-black tracking-widest text-slate-400 uppercase bg-slate-100 px-6 py-2 rounded-full border border-slate-200">{daySummary.orders.length} TICKETS</div>
+                                        <div className="text-[10px] font-black tracking-widest text-slate-400 uppercase bg-slate-100 px-5 py-1.5 rounded-full border border-slate-200">{daySummary.orders.length} TICKETS</div>
                                     </div>
 
                                     {daySummary.orders.map(({ invoice, items }) => {
@@ -572,7 +572,7 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                                                             </div>
                                                             <div className="flex items-center gap-4 mt-1 flex-wrap">
                                                                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Shirt size={10} /> {items.length} ITEMS</span>
-                                                                <span className="text-[9px] font-black text-indigo-600 uppercase border-b border-indigo-100">DEUDA: {currency} {(Number(invoice.totals?.total) || 0).toFixed(2)}</span>
+                                                                <span className="text-[9px] font-black uppercase border-b" style={{ color: primaryColor, borderColor: `${primaryColor}20` }}>DEUDA: {currency} {(Number(invoice.totals?.total) || 0).toFixed(2)}</span>
                                                                 <div className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-[0.1em] flex items-center gap-1 ${invoice.orderStatus === 'LISTO' ? 'bg-emerald-500 text-white shadow-sm' : (isCancelled ? 'bg-slate-200 text-slate-500' : 'bg-amber-100 text-amber-600 border border-amber-200')}`}>
                                                                     {isCancelled ? <Ban size={8}/> : (invoice.orderStatus === 'LISTO' ? <CheckCircle2 size={8}/> : <Clock size={8}/>)}
                                                                     {invoice.orderStatus}
@@ -631,7 +631,7 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                                                                                         {item.details && <span className="text-[9px] text-slate-500 italic flex items-center gap-1"><Info size={10} /> {item.details}</span>}
                                                                                     </div>
                                                                                 </td>
-                                                                                <td className="px-6 py-4 text-center font-black text-slate-900 text-lg tabular-nums">{item.quantity}</td>
+                                                                                <td className="px-6 py-4 text-center font-black text-slate-900 text-lg tabular-nums">{Number(item.quantity).toLocaleString()}</td>
                                                                                 <td className="px-6 py-4">
                                                                                     <div className="flex items-center justify-center gap-3">
                                                                                         {item.images && item.images.length > 0 ? (
@@ -653,10 +653,11 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                                                                                         {item.audioNote ? (
                                                                                             <button 
                                                                                                 onClick={() => {
-                                                                                                    const audio = new Audio(item.audioNote);
+                                                                                                    const audio = new Audio(item.audioNote!);
                                                                                                     audio.play();
                                                                                                 }}
-                                                                                                className="w-8 h-8 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-lg shadow-sm active:scale-90 transition-all hover:bg-indigo-100"
+                                                                                                className="w-8 h-8 flex items-center justify-center rounded-lg shadow-sm active:scale-90 transition-all"
+                                                                                                style={{ backgroundColor: `${primaryColor}10`, color: primaryColor }}
                                                                                             >
                                                                                                 <Mic size={14} />
                                                                                             </button>
@@ -686,7 +687,7 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                             </div>
 
                             {/* Footer del Modal Premium */}
-                            <div className="p-10 border-t border-black/5 bg-slate-50/50 backdrop-blur-md flex flex-col sm:flex-row justify-between items-center gap-8 shrink-0 rounded-b-[4rem] mt-auto">
+                            <div className="p-8 border-t border-black/5 bg-slate-50/50 backdrop-blur-md flex flex-col sm:flex-row justify-between items-center gap-8 shrink-0 rounded-b-[4rem] mt-auto">
                                 <div className="flex items-center gap-12">
                                     <div className="flex items-center gap-4">
                                         <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
@@ -709,9 +710,10 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                                 </div>
                                 <button 
                                     onClick={() => setSelectedDate(null)}
-                                    className="w-full sm:w-auto px-16 h-16 bg-slate-900 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all hover:bg-black group flex items-center justify-center gap-6 border-b-8 border-slate-950"
+                                    className="w-full sm:w-auto px-12 h-14 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all hover:opacity-90 group flex items-center justify-center gap-6 border-b-4"
+                                    style={{ backgroundColor: primaryColor, borderColor: 'rgba(0,0,0,0.2)' }}
                                 >
-                                    Cerrar Reporte <CheckCircle2 size={24} className="group-hover:translate-x-2 transition-transform duration-300" />
+                                    Cerrar Reporte <CheckCircle2 size={20} className="group-hover:translate-x-2 transition-transform duration-300" />
                                 </button>
                             </div>
                         </motion.div>

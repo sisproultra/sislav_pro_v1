@@ -4,14 +4,14 @@ import {
     Truck, Package, MapPin, User, Calendar, Clock, CheckCircle2, 
     XCircle, Loader2, Search, Filter, ArrowRight, ChevronDown, 
     ChevronUp, AlertTriangle, RefreshCw, Eye, Download, Printer,
-    ArrowDownLeft, ArrowUpRight, Box, Plus, Send, History
+    ArrowDownLeft, ArrowUpRight, Box, Plus, Send, History, BellRing
 } from 'lucide-react';
-import { GuiaRemision, OrderStatus } from '../types';
+import { GuiaRemision, OrderStatus, UserRole } from '../types';
 import { 
     dbGetGuiasRemision, dbGetGuiaDetails, dbUpdateGuiaEstado, 
     getActiveBranchId, dbGetItemsPendientesLogistica, 
     dbGetSucursalById, dbUpdateGuiaItemStatus, dbGetItemLogisticsHistory,
-    dbGetItemsEnPlanta, dbUpdateItemVentaStatus, getActiveUserId, getActiveUserName
+    dbGetItemsEnPlanta, dbUpdateMultipleItemsStatus, getActiveUserId, getActiveUserName
 } from '../services/dbService';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -20,21 +20,52 @@ import { printGuiaRemision } from '../utils/printUtils';
 
 interface LogisticsHubProps {
     onOpenDriverView?: () => void;
+    currentUser?: any;
 }
 
-const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
+const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView, currentUser }) => {
     const [guias, setGuias] = useState<GuiaRemision[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'INCOMING' | 'OUTGOING' | 'HISTORY' | 'PLANTA'>('INCOMING');
+    
+    // Search states
+    const [plantaSearch, setPlantaSearch] = useState('');
+    const [historySearch, setHistorySearch] = useState('');
+    
+    const isMaster = (currentUser?.role === UserRole.SAAS_MASTER) || (localStorage.getItem('sislav_current_user_role') === UserRole.SAAS_MASTER);
     const [selectedGuia, setSelectedGuia] = useState<GuiaRemision | null>(null);
     const [guiaItems, setGuiaItems] = useState<any[]>([]);
     const [plantaItems, setPlantaItems] = useState<any[]>([]);
+    const [selectedPlantaItems, setSelectedPlantaItems] = useState<Record<string, boolean>>({});
     const [isLoadingPlanta, setIsLoadingPlanta] = useState(false);
     const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
     const [missingItems, setMissingItems] = useState<Record<string, boolean>>({});
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
     const [summary, setSummary] = useState({ incoming: 0, outgoing: 0, pending: 0 });
+
+    // Custom Confirm/Message Modal
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm?: () => void;
+        type: 'CONFIRM' | 'ALERT';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'ALERT'
+    });
+
+    const showAlert = (message: string, title: string = "Atención") => {
+        setConfirmModal({
+            isOpen: true,
+            title,
+            message,
+            type: 'ALERT'
+        });
+    };
     
     const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
     const [pendingItems, setPendingItems] = useState<any[]>([]);
@@ -134,15 +165,61 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
 
     const handleUpdatePlantaStatus = async (itemId: string, newStatus: string) => {
         if (!currentBranchId) return;
+        setIsUpdating(true);
         try {
             const userId = getActiveUserId();
             const userName = getActiveUserName() || 'SISTEMA';
-            await dbUpdateItemVentaStatus(itemId, newStatus, currentBranchId, userId, userName);
+            await dbUpdateMultipleItemsStatus([itemId], newStatus, currentBranchId, userId, userName);
             loadPlantaItems();
         } catch (error) {
             console.error("Error updating planta item status:", error);
-            alert("Error al actualizar estado.");
+            showAlert("Error al actualizar estado.");
+        } finally {
+            setIsUpdating(false);
         }
+    };
+
+    const handleBulkUpdatePlantaStatus = async (newStatus: string) => {
+        if (!currentBranchId) return;
+        const itemIds = Object.keys(selectedPlantaItems).filter(id => selectedPlantaItems[id]);
+        if (itemIds.length === 0) return;
+
+        setIsUpdating(true);
+        try {
+            const userId = getActiveUserId();
+            const userName = getActiveUserName() || 'SISTEMA';
+            await dbUpdateMultipleItemsStatus(itemIds, newStatus, currentBranchId, userId, userName);
+            setSelectedPlantaItems({});
+            loadPlantaItems();
+            showAlert(`Se han marcado ${itemIds.length} prendas como LISTAS.`, "Éxito");
+        } catch (error) {
+            console.error("Error updating multiple planta items:", error);
+            showAlert("Error al actualizar las prendas masivamente.");
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const togglePlantaItemSelection = (itemId: string) => {
+        setSelectedPlantaItems(prev => ({ ...prev, [itemId]: !prev[itemId] }));
+    };
+
+    const toggleSelectAllPlanta = (sucursalOrders: any) => {
+        const allItemIds: string[] = [];
+        Object.values(sucursalOrders).forEach((order: any) => {
+            order.items.forEach((item: any) => {
+                if (item.estado === 'RECIBIDO_CENTRAL') {
+                    allItemIds.push(item.id);
+                }
+            });
+        });
+
+        const allSelected = allItemIds.every(id => selectedPlantaItems[id]);
+        const newSelection = { ...selectedPlantaItems };
+        allItemIds.forEach(id => {
+            newSelection[id] = !allSelected;
+        });
+        setSelectedPlantaItems(newSelection);
     };
 
     const handleOpenDispatch = async () => {
@@ -166,7 +243,7 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
             setIsDispatchModalOpen(true);
         } catch (error) {
             console.error("Error loading pending items:", error);
-            alert("Error al cargar prendas pendientes.");
+            showAlert("Error al cargar prendas pendientes.");
         } finally {
             setIsLoadingPending(false);
         }
@@ -279,8 +356,18 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
 
     const handleReceiveGuia = async () => {
         if (!selectedGuia) return;
-        if (!window.confirm("¿Confirmas que has recibido las prendas marcadas en esta guía?")) return;
+        
+        setConfirmModal({
+            isOpen: true,
+            title: "Confirmar Recepción",
+            message: "¿Confirmas que has recibido las prendas marcadas en esta guía?",
+            type: 'CONFIRM',
+            onConfirm: () => executeReceiveGuia()
+        });
+    };
 
+    const executeReceiveGuia = async () => {
+        if (!selectedGuia) return;
         setIsUpdating(true);
         try {
             const itemsToProcess = Object.keys(checkedItems).filter(id => checkedItems[id]);
@@ -306,7 +393,7 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
             loadGuias();
         } catch (error) {
             console.error("Error updating guia status:", error);
-            alert("Error al recibir la guía.");
+            showAlert("Error al recibir la guía.");
         } finally {
             setIsUpdating(false);
         }
@@ -319,7 +406,7 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
             printGuiaRemision(guia, items || [], sucursalInfo);
         } catch (error) {
             console.error("Error printing guia:", error);
-            alert("Error al preparar la impresión de la guía.");
+            showAlert("Error al preparar la impresión de la guía.");
         } finally {
             setIsLoadingDetails(false);
         }
@@ -335,6 +422,46 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
         acc[orderId].items.push(item);
         return acc;
     }, {});
+
+    const filteredPlantaItems = (plantaItems || []).filter(item => {
+        const query = plantaSearch.toLowerCase();
+        return (
+            item.descripcion?.toLowerCase().includes(query) ||
+            item.ventas?.codigo_orden?.toLowerCase().includes(query) ||
+            item.ventas?.clientes?.nombre_completo?.toLowerCase().includes(query) ||
+            item.ventas?.clientes?.nombres?.toLowerCase().includes(query) ||
+            item.ventas?.sucursales?.nombre_sucursal?.toLowerCase().includes(query)
+        );
+    });
+
+    // Agrupar items de planta por SUCURSAL de ORIGEN y luego por ORDEN
+    const consolidatedPlanta = filteredPlantaItems.reduce((acc: any, item: any) => {
+        const sucursalId = item.ventas?.sucursal_id || 'no-sucursal';
+        const sucursalNombre = item.ventas?.sucursales?.nombre_sucursal || 'Origen Desconocido';
+        const orderId = item.ventas?.id || 'no-order';
+        
+        if (!acc[sucursalId]) acc[sucursalId] = { nombre: sucursalNombre, orders: {} };
+        if (!acc[sucursalId].orders[orderId]) {
+            acc[sucursalId].orders[orderId] = {
+                codigo_orden: item.ventas?.codigo_orden || '---',
+                cliente: item.ventas?.clientes?.nombre_completo || item.ventas?.clientes?.nombres || 'Cliente',
+                items: []
+            };
+        }
+        acc[sucursalId].orders[orderId].items.push(item);
+        return acc;
+    }, {});
+
+    const filteredGuias = guias.filter(guia => {
+        if (activeTab !== 'HISTORY') return true;
+        const query = historySearch.toLowerCase();
+        return (
+            guia.codigo_guia.toLowerCase().includes(query) ||
+            guia.sucursal_origen?.nombre_sucursal?.toLowerCase().includes(query) ||
+            guia.sucursal_destino?.nombre_sucursal?.toLowerCase().includes(query) ||
+            guia.chofer?.nombre_completo?.toLowerCase().includes(query)
+        );
+    });
 
     return (
         <div className="flex flex-col h-full bg-slate-50">
@@ -352,14 +479,6 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {onOpenDriverView && (
-                            <button 
-                                onClick={onOpenDriverView}
-                                className="px-4 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg"
-                            >
-                                <User size={16} /> VISTA CHOFER
-                            </button>
-                        )}
                         <button 
                             onClick={handleOpenDispatch}
                             disabled={isLoadingPending}
@@ -382,7 +501,7 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
                         >
                             <ArrowUpRight size={14} /> SALIENTES
                         </button>
-                        {(sucursalInfo?.tipo_sucursal === 'CENTRAL' || sucursalInfo?.tipo_sucursal === 'PLANTA' || sucursalInfo?.modulos_config?.control_planta === true) && (
+                        {(isMaster || sucursalInfo?.tipo_sucursal === 'CENTRAL' || sucursalInfo?.tipo_sucursal === 'PLANTA' || sucursalInfo?.modulos_config?.control_planta === true) && (
                             <button 
                                 onClick={() => setActiveTab('PLANTA')}
                                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'PLANTA' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -436,88 +555,165 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
                 
                 {/* LIST OF GUIAS & PLANTA CONTROL */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4">
+                    {activeTab === 'PLANTA' && (
+                        <div className="mb-4 sticky top-0 z-10 bg-slate-50 pb-2 space-y-3">
+                            <div className="relative">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                <input 
+                                    type="text" 
+                                    placeholder="BUSCAR TICKET, PRENDA O CLIENTE EN PLANTA..." 
+                                    value={plantaSearch}
+                                    onChange={(e) => setPlantaSearch(e.target.value)}
+                                    className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-[2rem] text-xs font-black uppercase tracking-widest placeholder:text-slate-300 shadow-sm focus:ring-4 focus:ring-accent/5 focus:border-accent transition-all"
+                                />
+                            </div>
+
+                            {Object.values(selectedPlantaItems).filter(Boolean).length > 0 && (
+                                <div className="flex items-center justify-between p-4 bg-emerald-600 rounded-3xl shadow-xl shadow-emerald-100 animate-in slide-in-from-top-4 duration-300">
+                                    <div className="flex items-center gap-3 text-white">
+                                        <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                                            <CheckCircle2 size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase tracking-widest">Selección Masiva</p>
+                                            <p className="text-xs font-bold">{Object.values(selectedPlantaItems).filter(Boolean).length} prendas seleccionadas</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => handleBulkUpdatePlantaStatus('EMPAQUETADO')}
+                                        disabled={isUpdating}
+                                        className="px-6 py-3 bg-white text-emerald-600 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-sm hover:scale-105 transition-all active:scale-95 disabled:opacity-50"
+                                    >
+                                        {isUpdating ? <Loader2 className="animate-spin" size={16} /> : 'MARCAR COMO LISTO'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === 'HISTORY' && (
+                        <div className="mb-4 sticky top-0 z-10 bg-slate-50 pb-2">
+                            <div className="relative">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                <input 
+                                    type="text" 
+                                    placeholder="BUSCAR EN EL HISTORIAL DE GUÍAS..." 
+                                    value={historySearch}
+                                    onChange={(e) => setHistorySearch(e.target.value)}
+                                    className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-[2rem] text-xs font-black uppercase tracking-widest placeholder:text-slate-300 shadow-sm focus:ring-4 focus:ring-accent/5 focus:border-accent transition-all"
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     {activeTab === 'PLANTA' ? (
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                             {isLoadingPlanta ? (
                                 <div className="flex flex-col items-center justify-center py-20 gap-4">
                                     <Loader2 className="animate-spin text-emerald-500" size={40} />
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Consultando cola de producción...</p>
                                 </div>
-                            ) : plantaItems.length === 0 ? (
+                            ) : Object.keys(consolidatedPlanta).length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-20 bg-white rounded-[2rem] border-2 border-dashed border-slate-200">
                                     <CheckCircle2 size={48} className="text-emerald-100 mb-4" />
                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No hay prendas en procesamiento hoy</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 gap-3">
-                                    {plantaItems.map((item) => (
-                                        <div 
-                                            key={item.id}
-                                            className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between group"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                                                    item.estado === 'RECIBIDO_CENTRAL' ? 'bg-blue-50 text-blue-500' :
-                                                    item.estado === 'EN_LAVADO' ? 'bg-cyan-50 text-cyan-500' :
-                                                    item.estado === 'EN_SECADO' ? 'bg-amber-50 text-amber-500' :
-                                                    'bg-emerald-50 text-emerald-500'
-                                                }`}>
-                                                    {item.estado === 'RECIBIDO_CENTRAL' ? <Box size={24} /> :
-                                                     item.estado === 'EN_LAVADO' ? <RefreshCw className="animate-spin-slow" size={24} /> :
-                                                     item.estado === 'EN_SECADO' ? <Clock size={24} /> :
-                                                     <CheckCircle2 size={24} />}
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <h4 className="font-black text-slate-800 text-sm">{item.descripcion}</h4>
-                                                        <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase">
-                                                            {item.ventas?.codigo_orden}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                                                        {item.ventas?.clientes?.nombre_completo || item.ventas?.clientes?.nombres}
-                                                    </p>
-                                                </div>
-                                            </div>
-
+                                Object.entries(consolidatedPlanta).map(([sucursalId, sucursalData]: [string, any]) => (
+                                    <div key={sucursalId} className="space-y-3">
+                                        <div className="flex items-center justify-between px-4 py-2">
                                             <div className="flex items-center gap-2">
-                                                {/* PROCESS BUTTONS */}
-                                                {item.estado === 'RECIBIDO_CENTRAL' && (
-                                                    <button 
-                                                        onClick={() => handleUpdatePlantaStatus(item.id, 'EN_LAVADO')}
-                                                        className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md"
-                                                    >
-                                                        INICIAR LAVADO
-                                                    </button>
-                                                )}
-                                                {item.estado === 'EN_LAVADO' && (
-                                                    <button 
-                                                        onClick={() => handleUpdatePlantaStatus(item.id, 'EN_SECADO')}
-                                                        className="px-3 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md"
-                                                    >
-                                                        PASAR A SECADO
-                                                    </button>
-                                                )}
-                                                {item.estado === 'EN_SECADO' && (
-                                                    <button 
-                                                        onClick={() => handleUpdatePlantaStatus(item.id, 'EMPAQUETADO')}
-                                                        className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md"
-                                                    >
-                                                        EMPAQUETAR
-                                                    </button>
-                                                )}
-                                                {item.estado === 'EMPAQUETADO' && (
-                                                    <div className="flex flex-col items-end">
-                                                        <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                                            <CheckCircle2 size={10} /> LISTO PARA RETORNO
-                                                        </span>
-                                                        <p className="text-[8px] font-bold text-slate-400 uppercase italic">Aparecerá en "Nuevo Envío"</p>
-                                                    </div>
-                                                )}
+                                                <MapPin size={14} className="text-emerald-500" />
+                                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">ORIGEN: {sucursalData.nombre}</h3>
                                             </div>
+                                            <button 
+                                                onClick={() => toggleSelectAllPlanta(sucursalData.orders)}
+                                                className="text-[9px] font-black text-accent uppercase tracking-widest hover:underline"
+                                            >
+                                                SELECCIONAR TODO EL ORIGEN
+                                            </button>
                                         </div>
-                                    ))}
-                                </div>
+                                        
+                                        <div className="grid grid-cols-1 gap-4">
+                                            {Object.entries(sucursalData.orders).map(([orderId, order]: [string, any]) => (
+                                                <div key={orderId} className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+                                                    <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-2 bg-white rounded-xl shadow-sm text-slate-400">
+                                                                <Package size={16} />
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="text-xs font-black text-slate-800">TICKET #{order.codigo_orden}</h4>
+                                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{order.cliente}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-[8px] font-black bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full uppercase tracking-widest">
+                                                            PAGADO
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-2 space-y-2">
+                                                        {order.items.map((item: any) => (
+                                                            <div 
+                                                                key={item.id}
+                                                                onClick={() => item.estado === 'RECIBIDO_CENTRAL' && togglePlantaItemSelection(item.id)}
+                                                                className={`p-4 rounded-2xl flex items-center justify-between group hover:bg-slate-50/50 transition-colors cursor-pointer ${selectedPlantaItems[item.id] ? 'bg-emerald-50 ring-1 ring-emerald-200' : ''}`}
+                                                            >
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                                                        item.estado === 'RECIBIDO_CENTRAL' ? (selectedPlantaItems[item.id] ? 'bg-emerald-500 text-white' : 'bg-blue-50 text-blue-500') :
+                                                                        'bg-emerald-50 text-emerald-500'
+                                                                    }`}>
+                                                                        {item.estado === 'RECIBIDO_CENTRAL' ? (selectedPlantaItems[item.id] ? <CheckCircle2 size={20} /> : <Box size={20} />) :
+                                                                         <CheckCircle2 size={20} />}
+                                                                    </div>
+                                                                    <div>
+                                                                        <h4 className="font-bold text-slate-800 text-xs">{item.descripcion}</h4>
+                                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                                            <span className={`text-[7px] font-black px-1.5 py-0.5 rounded uppercase ${
+                                                                                item.estado === 'RECIBIDO_CENTRAL' ? 'bg-blue-100 text-blue-600' :
+                                                                                'bg-emerald-100 text-emerald-600'
+                                                                            }`}>
+                                                                                {item.estado === 'RECIBIDO_CENTRAL' ? 'EN PLANTA' : 'LISTO PARA RETORNO'}
+                                                                            </span>
+                                                                            {item.codigo_manual && (
+                                                                                <span className="text-[7px] font-bold text-slate-400 uppercase">#{item.codigo_manual}</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-2">
+                                                                    {item.estado === 'RECIBIDO_CENTRAL' && (
+                                                                        <button 
+                                                                            onClick={(e) => { e.stopPropagation(); handleUpdatePlantaStatus(item.id, 'EMPAQUETADO'); }}
+                                                                            className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md transition-all active:scale-95"
+                                                                        >
+                                                                            PONER LISTO
+                                                                        </button>
+                                                                    )}
+                                                                    {item.estado === 'EMPAQUETADO' && (
+                                                                        <div className="flex flex-col items-end">
+                                                                            <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                                                                                <CheckCircle2 size={10} /> LISTO PARA RETORNO
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                    <button 
+                                                                        onClick={(e) => handleViewItemHistory(e, item.id)}
+                                                                        className="p-2 text-slate-300 hover:text-accent transition-colors"
+                                                                        title="Ver Traza"
+                                                                    >
+                                                                        <History size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))
                             )}
                         </div>
                     ) : isLoading ? (
@@ -525,13 +721,13 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
                             <Loader2 className="animate-spin text-accent" size={40} />
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sincronizando logística...</p>
                         </div>
-                    ) : guias.length === 0 ? (
+                    ) : filteredGuias.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 bg-white rounded-[2rem] border-2 border-dashed border-slate-200">
                             <Box size={48} className="text-slate-200 mb-4" />
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No hay guías en esta sección</p>
                         </div>
                     ) : (
-                        guias.map((guia) => (
+                        filteredGuias.map((guia) => (
                             <button
                                 key={guia.id}
                                 onClick={() => handleViewDetails(guia)}
@@ -671,21 +867,35 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
 
                                 {activeTab === 'INCOMING' && (
                                     <div className="p-6 bg-white border-t border-slate-100">
-                                        {selectedGuia.estado === 'POR_VALIDAR' && (
-                                            <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 flex gap-3 mb-4">
-                                                <MapPin className="text-orange-500 shrink-0" size={18} />
-                                                <p className="text-[10px] text-orange-800 font-bold uppercase leading-tight">
-                                                    El chofer indica que YA LLEGÓ. Revisa la carga físicamente antes de confirmar.
-                                                </p>
+                                        {selectedGuia.estado === 'POR_VALIDAR' ? (
+                                            <>
+                                                <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 flex gap-3 mb-4">
+                                                    <MapPin className="text-orange-500 shrink-0" size={18} />
+                                                    <p className="text-[10px] text-orange-800 font-bold uppercase leading-tight">
+                                                        El chofer indica que YA LLEGÓ. Revisa la carga físicamente antes de confirmar.
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={handleReceiveGuia}
+                                                    disabled={isUpdating || isLoadingDetails || !allItemsProcessed}
+                                                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-emerald-100 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale"
+                                                >
+                                                    {isUpdating ? <Loader2 className="animate-spin" size={20} /> : <><CheckCircle2 size={20} /> CONFIRMAR RECEPCIÓN</>}
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <div className="bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed border-slate-200 text-center space-y-3">
+                                                <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center mx-auto text-slate-300">
+                                                    <Clock size={24} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Carga en Tránsito</p>
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                                                        Podrás recibir las prendas cuando el chofer confirme su llegada al destino.
+                                                    </p>
+                                                </div>
                                             </div>
                                         )}
-                                        <button
-                                            onClick={handleReceiveGuia}
-                                            disabled={isUpdating || isLoadingDetails || !allItemsProcessed}
-                                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-emerald-100 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale"
-                                        >
-                                            {isUpdating ? <Loader2 className="animate-spin" size={20} /> : <><CheckCircle2 size={20} /> CONFIRMAR RECEPCIÓN</>}
-                                        </button>
                                         <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-widest mt-4 leading-relaxed">
                                             Al confirmar, las prendas marcadas pasarán a estado "RECIBIDO" y se registrará la custodia en tu sucursal.
                                         </p>
@@ -823,6 +1033,42 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
                         
                         <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Las acciones marcadas con <span className="text-emerald-500">RECIBIDO</span> confirman la custodia física en sucursal.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* CUSTOM CONFIRM MODAL */}
+            {confirmModal.isOpen && (
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="p-8 text-center space-y-4">
+                            <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center bg-accent/10 text-accent">
+                                <BellRing size={32} />
+                            </div>
+                            <div className="space-y-2">
+                                <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">{confirmModal.title}</h3>
+                                <p className="text-xs font-bold text-slate-500 leading-relaxed whitespace-pre-wrap">{confirmModal.message}</p>
+                            </div>
+                        </div>
+                        <div className="flex border-t border-slate-100">
+                            {confirmModal.type === 'CONFIRM' && (
+                                <button 
+                                    onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                                    className="flex-1 py-5 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 hover:bg-slate-50 transition-colors"
+                                >
+                                    CANCELAR
+                                </button>
+                            )}
+                            <button 
+                                onClick={() => {
+                                    if (confirmModal.onConfirm) confirmModal.onConfirm();
+                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                }}
+                                className={`flex-1 py-5 font-black text-[10px] uppercase tracking-[0.2em] text-white transition-all shadow-inner bg-accent hover:opacity-90`}
+                            >
+                                {confirmModal.type === 'CONFIRM' ? 'CONFIRMAR' : 'ENTENDIDO'}
+                            </button>
                         </div>
                     </div>
                 </div>

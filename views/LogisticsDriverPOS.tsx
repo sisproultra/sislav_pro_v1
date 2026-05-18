@@ -40,6 +40,30 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
     
+    // Custom Confirm/Message Modal
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm?: () => void;
+        type: 'CONFIRM' | 'ALERT';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'ALERT',
+        onConfirm: () => {},
+    });
+
+    const showAlert = (message: string, title: string = "Atención") => {
+        setConfirmModal({
+            isOpen: true,
+            title,
+            message,
+            type: 'ALERT'
+        });
+    };
+    
     // Evidence Modal State
     const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
     const [selectedDelivery, setSelectedDelivery] = useState<Invoice | null>(null);
@@ -197,7 +221,7 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
         try {
             await dbUpdatePickupRequestStatus(pickup.id, 'IN_ROUTE');
             await loadAllData();
-        } catch (e) { alert("Error al iniciar ruta."); } finally { setIsLoading(false); }
+        } catch (e) { showAlert("Error al iniciar ruta."); } finally { setIsLoading(false); }
     };
 
     const handleStartRouteDelivery = async (invoice: Invoice) => {
@@ -205,14 +229,14 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
         try {
             await dbUpdateInvoiceStatus(invoice.id, 'EN_RUTA');
             await loadAllData();
-        } catch (e) { alert("Error al iniciar ruta de entrega."); } finally { setIsLoading(false); }
+        } catch (e) { showAlert("Error al iniciar ruta de entrega."); } finally { setIsLoading(false); }
     };
 
     const handleFinishPickup = (pickup: PickupRequest) => {
         if (onConvertToOrder) {
             onConvertToOrder(pickup);
         } else {
-            alert("Opción no disponible en este modo.");
+            showAlert("Opción no disponible en este modo.");
         }
     };
 
@@ -229,7 +253,7 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
             setCameraStream(stream);
             setCameraActive(true);
-        } catch (e: any) { alert("Error accediendo a cámara."); setCameraActive(false); }
+        } catch (e: any) { showAlert("Error accediendo a cámara."); setCameraActive(false); }
     };
 
     const capturePhoto = () => {
@@ -241,7 +265,7 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
             canvas.getContext('2d')?.drawImage(video, 0, 0);
             const photoData = canvas.toDataURL('image/jpeg', 0.6);
             if (evidencePhotos.length < 3) setEvidencePhotos(prev => [...prev, photoData]);
-            else alert("Máximo 3 fotos permitidas.");
+            else showAlert("Máximo 3 fotos permitidas.");
         }
     };
 
@@ -252,7 +276,7 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
 
     const submitEvidence = async () => {
         if (!selectedDelivery) return;
-        if (evidencePhotos.length < 3) { alert("Debe tomar exactamente 3 fotos como evidencia."); return; }
+        if (evidencePhotos.length < 3) { showAlert("Debe tomar exactamente 3 fotos como evidencia."); return; }
         const status: OrderStatus = isSuccess ? 'ENTREGADO' : 'LISTO';
         setIsUpdating(true);
         try {
@@ -261,7 +285,7 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
             stopCamera();
             await loadAllData();
         } catch (e) {
-            alert("Error al guardar evidencia.");
+            showAlert("Error al guardar evidencia.");
         } finally {
             setIsUpdating(false);
         }
@@ -323,12 +347,32 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
         if (!selectedGuia) return;
         
         let confirmMsg = "";
-        if (nuevoEstadoGuia === 'EN_TRANSITO') confirmMsg = "¿Confirmas que has recogido las prendas marcadas?";
-        if (nuevoEstadoGuia === 'POR_VALIDAR') confirmMsg = "¿Confirmas que has llegado al destino y entregarás la carga?";
-        if (nuevoEstadoGuia === 'ENTREGADO') confirmMsg = "¿Confirmas que has entregado las prendas en el destino?";
-            
-        if (!window.confirm(confirmMsg)) return;
+        let title = "Confirmar Acción";
 
+        if (nuevoEstadoGuia === 'EN_TRANSITO') {
+            title = "Iniciar Traslado";
+            confirmMsg = "¿Confirmas que has recogido las prendas marcadas?";
+        }
+        if (nuevoEstadoGuia === 'POR_VALIDAR') {
+            title = "Validar Llegada";
+            confirmMsg = "¿Confirmas que has llegado al destino y entregarás la carga?";
+        }
+        if (nuevoEstadoGuia === 'ENTREGADO') {
+            title = "Finalizar Entrega";
+            confirmMsg = "¿Confirmas que has entregado las prendas en el destino?";
+        }
+            
+        setConfirmModal({
+            isOpen: true,
+            title,
+            message: confirmMsg,
+            type: 'CONFIRM',
+            onConfirm: () => executeStatusUpdate(nuevoEstadoGuia)
+        });
+    };
+
+    const executeStatusUpdate = async (nuevoEstadoGuia: 'EN_TRANSITO' | 'POR_VALIDAR' | 'ENTREGADO') => {
+        if (!selectedGuia) return;
         setIsUpdating(true);
         try {
             const itemsToProcess = Object.keys(checkedItems).filter(id => checkedItems[id]);
@@ -361,7 +405,7 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
             loadAllData();
         } catch (error) {
             console.error("Error updating logistics status:", error);
-            alert("Error al actualizar el estado.");
+            showAlert("Error al actualizar el estado.");
         } finally {
             setIsUpdating(false);
         }
@@ -889,6 +933,50 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
                     </div>
                 </div>
             )}
+
+            {/* CUSTOM CONFIRM MODAL */}
+            <AnimatePresence>
+                {confirmModal.isOpen && (
+                    <div className="fixed inset-0 z-[600] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-sm">
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl"
+                        >
+                            <div className="p-8 text-center space-y-4">
+                                <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center" style={{ backgroundColor: (holdingBranding?.color_primario || '#4f8ef7') + '20', color: holdingBranding?.color_primario || '#4f8ef7' }}>
+                                    <BellRing size={32} />
+                                </div>
+                                <div className="space-y-2">
+                                    <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">{confirmModal.title}</h3>
+                                    <p className="text-xs font-bold text-slate-500 leading-relaxed whitespace-pre-wrap">{confirmModal.message}</p>
+                                </div>
+                            </div>
+                            <div className="flex border-t border-slate-100">
+                                {confirmModal.type === 'CONFIRM' && (
+                                    <button 
+                                        onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                                        className="flex-1 py-5 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 hover:bg-slate-50 transition-colors"
+                                    >
+                                        CANCELAR
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={() => {
+                                        if (confirmModal.onConfirm) confirmModal.onConfirm();
+                                        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                    }}
+                                    className="flex-1 py-5 font-black text-[10px] uppercase tracking-[0.2em] text-white transition-all shadow-inner"
+                                    style={{ backgroundColor: holdingBranding?.color_primario || '#4f8ef7' }}
+                                >
+                                    {confirmModal.type === 'CONFIRM' ? 'CONFIRMAR' : 'ENTENDIDO'}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
         </div>
     );

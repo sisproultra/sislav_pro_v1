@@ -4207,29 +4207,31 @@ export const dbUpdateGuiaItemStatus = async (guiaId: string, itemId: string, nue
 };
 
 /**
- * Actualiza el estado de un ítem de venta y registra el movimiento en el historial
+ * Actualiza el estado de múltiples ítems de venta y registra los movimientos
  */
-export const dbUpdateItemVentaStatus = async (itemId: string, nuevoEstado: string, sucursalId: string, usuarioId: string, usuarioNombre: string) => {
-    // 1. Actualizar el ítem
+export const dbUpdateMultipleItemsStatus = async (itemIds: string[], nuevoEstado: string, sucursalId: string, usuarioId: string, usuarioNombre: string) => {
+    // 1. Actualizar los ítems
     const { error: itemError } = await supabase
         .from('items_venta')
         .update({ estado: nuevoEstado })
-        .eq('id', itemId);
+        .in('id', itemIds);
 
     if (itemError) throw itemError;
 
-    // 2. Registrar movimiento en logística
+    // 2. Registrar movimientos
+    const movements = itemIds.map(id => ({
+        item_venta_id: id,
+        estado_nuevo: nuevoEstado,
+        ubicacion_tipo: 'SUCURSAL',
+        ubicacion_id: sucursalId,
+        usuario_id: usuarioId,
+        usuario_nombre: usuarioNombre,
+        fecha_registro: new Date().toISOString()
+    }));
+
     const { error: logError } = await supabase
         .from('logistica_movimientos')
-        .insert({
-            item_venta_id: itemId,
-            estado_nuevo: nuevoEstado,
-            ubicacion_tipo: 'SUCURSAL',
-            ubicacion_id: sucursalId,
-            usuario_id: usuarioId,
-            usuario_nombre: usuarioNombre,
-            fecha_registro: new Date().toISOString()
-        });
+        .insert(movements);
 
     if (logError) throw logError;
 };
@@ -4238,22 +4240,11 @@ export const dbUpdateItemVentaStatus = async (itemId: string, nuevoEstado: strin
  * Obtiene los items que están físicamente en una sucursal central para procesamiento
  */
 export const dbGetItemsEnPlanta = async (sucursalId: string) => {
+    // Simplificado: Solo mostramos lo que está recibido en central o ya empaquetado
     const { data, error } = await supabase
         .from('items_venta')
-        .select(`
-            *,
-            ventas (
-                id,
-                codigo_orden,
-                clientes (
-                    id,
-                    nombre_completo,
-                    nombres,
-                    celular
-                )
-            )
-        `)
-        .in('estado', ['RECIBIDO_CENTRAL', 'EN_LAVADO', 'EN_SECADO', 'EMPAQUETADO']);
+        .select('*, ventas(*, clientes(*), sucursales(*))')
+        .in('estado', ['RECIBIDO_CENTRAL', 'EMPAQUETADO']);
 
     if (error) throw error;
     return data || [];
