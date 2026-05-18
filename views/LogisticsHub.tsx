@@ -50,6 +50,49 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
         loadGuias();
         loadSucursalInfo();
         if (activeTab === 'PLANTA') loadPlantaItems();
+
+        // Real-time subscription for Logistics Hub
+        const subscribeRealtime = async () => {
+            const { supabase } = await import('../services/dbService');
+            
+            const guiasChannel = supabase
+                .channel('logistics_hub_guias')
+                .on('postgres_changes', { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'guias_remision' 
+                }, () => {
+                    console.log("🔄 Real-time update: Reloading guias...");
+                    loadGuias();
+                })
+                .subscribe();
+
+            const itemsChannel = supabase
+                .channel('logistics_hub_items')
+                .on('postgres_changes', { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'items_venta' 
+                }, (payload: any) => {
+                    // Solo recargar planta si el item está en planta o cambió a un estado de planta
+                    if (activeTab === 'PLANTA' || payload.new?.estado?.includes('CENTRAL')) {
+                        loadPlantaItems();
+                    }
+                    // También actualizar summary general
+                    loadGuias();
+                })
+                .subscribe();
+
+            return () => {
+                guiasChannel.unsubscribe();
+                itemsChannel.unsubscribe();
+            };
+        };
+
+        const cleanupPromise = subscribeRealtime();
+        return () => {
+            cleanupPromise.then(cleanup => cleanup());
+        };
     }, [activeTab]);
 
     const loadPlantaItems = async () => {
@@ -339,7 +382,7 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
                         >
                             <ArrowUpRight size={14} /> SALIENTES
                         </button>
-                        {sucursalInfo?.tipo_sucursal === 'CENTRAL' && (
+                        {(sucursalInfo?.tipo_sucursal === 'CENTRAL' || sucursalInfo?.tipo_sucursal === 'PLANTA' || sucursalInfo?.modulos_config?.control_planta === true) && (
                             <button 
                                 onClick={() => setActiveTab('PLANTA')}
                                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'PLANTA' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}

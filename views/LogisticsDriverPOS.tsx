@@ -5,8 +5,10 @@ import {
     XCircle, Loader2, ArrowRight, AlertTriangle, RefreshCw, 
     LogOut, Smartphone, Box, Navigation, QrCode, Camera, X,
     Headphones, Repeat, Phone, Hash, CheckCircle, Image as ImageIcon,
-    CheckCheck, ShieldCheck, ExternalLink, Gauge, Locate, List, Shirt, PackageCheck
+    CheckCheck, ShieldCheck, ExternalLink, Gauge, Locate, List, Shirt, PackageCheck,
+    BellRing, Sparkles
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { GuiaRemision, OrderStatus, PickupRequest, Invoice, Company } from '../types';
 import { 
     dbGetGuiasRemision, dbUpdateGuiaEstado, dbGetGuiaDetails, 
@@ -59,7 +61,7 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
     const playNotification = () => {
         try {
             // Sonido de burbujas personalizado
-            const audio = new Audio('https://yvgshdypqanlcgxdyvls.supabase.co/storage/v1/object/public/laundry-assets/burbujas.mp3');
+            const audio = new Audio('https://yvgshdypqanlcgxdyvls.supabase.co/storage/v1/object/public/laundry-assets/newservice.mp3');
             audio.volume = 0.6;
             audio.play();
         } catch (e) {
@@ -596,13 +598,50 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
 
             {/* MAIN CONTENT */}
             <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar">
-                {isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-20 gap-4">
-                        <Loader2 className="animate-spin text-accent" size={40} />
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cargando tareas...</p>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
+                <AnimatePresence mode="wait">
+                    {isLoading ? (
+                        <motion.div 
+                            key="loader"
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 1.1 }}
+                            className="flex flex-col items-center justify-center py-20 gap-6"
+                        >
+                            <div className="relative">
+                                <motion.div 
+                                    animate={{ 
+                                        y: [0, -10, 0],
+                                        rotate: [0, 5, -5, 0]
+                                    }}
+                                    transition={{ 
+                                        duration: 2,
+                                        repeat: Infinity,
+                                        ease: "easeInOut"
+                                    }}
+                                    className="w-20 h-20 bg-emerald-100 rounded-[2rem] flex items-center justify-center text-emerald-600 shadow-xl shadow-emerald-500/10"
+                                >
+                                    <Shirt size={40} />
+                                </motion.div>
+                                <motion.div 
+                                    animate={{ opacity: [0, 1, 0], y: [-10, -30] }}
+                                    transition={{ duration: 1.5, repeat: Infinity }}
+                                    className="absolute -top-4 -right-2 text-emerald-400"
+                                >
+                                    <Sparkles size={20} />
+                                </motion.div>
+                            </div>
+                            <div className="text-center space-y-1">
+                                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Sincronizando...</h3>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Buscando nuevas asignaciones</p>
+                            </div>
+                        </motion.div>
+                    ) : (
+                        <motion.div 
+                            key="content"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-4"
+                        >
                         {/* LOGISTICS HUB ITEMS */}
                         {mainMode === 'LOGISTICS_HUB' && (
                             <div className="space-y-4">
@@ -628,17 +667,21 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
                                                             <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
                                                                 <Truck size={16} />
                                                             </div>
-                                                            <div className="min-w-0">
+                                                                <div className="min-w-0">
                                                                 <div className="flex items-center gap-2">
                                                                     <h4 className="font-extrabold text-slate-800 text-xs">{guia.codigo_guia}</h4>
-                                                                    <span className="text-[7px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-tighter">
-                                                                        {guia.sucursal_origen?.nombre_sucursal}
+                                                                    <span className="text-[7px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                                                                        {guia.tipo_guia}
                                                                     </span>
                                                                 </div>
-                                                                <div className="flex items-center gap-1 mt-0.5 opacity-60">
-                                                                    <span className="text-[8px] font-bold text-slate-400 uppercase truncate max-w-[80px]">{guia.sucursal_origen?.distrito || 'Origen'}</span>
+                                                                <div className="flex items-center gap-1 mt-0.5">
+                                                                    <span className="text-[8px] font-black text-slate-500 uppercase truncate max-w-[80px]">{guia.sucursal_origen?.nombre_sucursal || 'Sede Origen'}</span>
                                                                     <ArrowRight size={8} className="text-slate-300" />
-                                                                    <span className="text-[8px] font-bold text-slate-400 uppercase truncate max-w-[80px]">{guia.sucursal_destino?.nombre_sucursal}</span>
+                                                                    <span className="text-[8px] font-black text-slate-800 uppercase truncate max-w-[80px]">{guia.sucursal_destino?.nombre_sucursal || 'Destino'}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 mt-1 opacity-60">
+                                                                    <span className="text-[7px] font-bold text-slate-400 uppercase flex items-center gap-1"><Calendar size={8} /> {format(new Date(guia.fecha_registro), 'dd/MM')}</span>
+                                                                    <span className="text-[7px] font-bold text-slate-400 uppercase flex items-center gap-1"><Clock size={8} /> {format(new Date(guia.fecha_registro), 'HH:mm')}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -759,8 +802,9 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
                                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed">No tienes tareas pendientes en esta sección.</p>
                             </div>
                         )}
-                    </div>
-                )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </main>
 
 
