@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { PickupRequest, Company, Invoice, OrderStatus } from '../types';
+import { PickupRequest, Company, Invoice, OrderStatus, GuiaRemision } from '../types';
 import { dbGetPickupRequests, dbUpdatePickupRequestStatus, dbGetInvoices, dbUpdateInvoiceStatus } from '../services/dbService';
 import { 
     Truck, MapPin, Navigation, Phone, Calendar, CheckCircle, CheckCircle2, 
     XCircle, Camera, X, RefreshCw, MessageCircle, Trash2, AlertTriangle, 
     Loader2, CheckCheck, Check, List, Siren, Target, Shirt, PackageCheck, 
     Info, Gauge, ExternalLink, Image as ImageIcon, Locate, Map as MapIcon, 
-    Printer, Smartphone, Clock, Bell, Hash
+    Printer, Smartphone, Clock, Bell, Hash, Headphones, Repeat, Box
 } from 'lucide-react';
 import { sendInvoiceViaWhatsApp, generateWhatsAppLink } from '../services/whatsappService';
 import LeafletMap from '../components/LeafletMap';
 import OrderPrintModal from '../components/OrderPrintModal';
+import { dbGetGuiasRemision, dbUpdateGuiaEstado, dbGetGuiaDetails, dbUpdateGuiaItemStatus, getActiveUserId } from '../services/dbService';
 
 interface DeliveryProps {
   onConvertToOrder: (pickup: PickupRequest) => void; 
@@ -23,9 +24,18 @@ interface RouteInfo {
     duration: number;
 }
 
+interface GuiaRemisionExtended extends GuiaRemision {
+    clientName?: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+}
+
 const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
+  const [mainMode, setMainMode] = useState<'CALL_CENTER' | 'LOGISTICS_HUB'>('CALL_CENTER');
   const [pickups, setPickups] = useState<PickupRequest[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [guias, setGuias] = useState<GuiaRemisionExtended[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setSelectedTab] = useState<'RECOJOS' | 'ENTREGAS' | 'COMPLETED'>('RECOJOS');
   
@@ -35,6 +45,12 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [activeRoute, setActiveRoute] = useState<RouteInfo | null>(null);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+
+  // States para Logística
+  const [selectedGuiaItems, setSelectedGuiaItems] = useState<any[]>([]);
+  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+  const [missingItems, setMissingItems] = useState<Record<string, boolean>>({});
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
   // States para WhatsApp e Impresión
   const [sendingWaId, setSendingWaId] = useState<string | null>(null);
@@ -92,9 +108,31 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-        const [pData, { invoices: iData }] = await Promise.all([dbGetPickupRequests(), dbGetInvoices()]);
+        const userId = getActiveUserId();
+        const [pData, { invoices: iData }, gData] = await Promise.all([
+            dbGetPickupRequests(), 
+            dbGetInvoices(),
+            dbGetGuiasRemision({ chofer_id: userId! })
+        ]);
+
         setPickups(pData);
         setInvoices(iData);
+
+        // Mapear guías para que funcionen con el mapa
+        const mappedGuias = gData.map(g => {
+            const isDelivered = g.estado === 'ENTREGADO';
+            const targetLat = g.estado === 'PENDIENTE' ? g.sucursal_origen?.latitud : g.sucursal_destino?.latitud;
+            const targetLng = g.estado === 'PENDIENTE' ? g.sucursal_origen?.longitud : g.sucursal_destino?.longitud;
+            
+            return {
+                ...g,
+                clientName: `${g.codigo_guia} - ${g.tipo_guia}`,
+                address: g.estado === 'PENDIENTE' ? g.sucursal_origen?.nombre_sucursal : g.sucursal_destino?.nombre_sucursal,
+                latitude: targetLat,
+                longitude: targetLng
+            };
+        });
+        setGuias(mappedGuias);
     } catch (e) {
         console.error("Error loading delivery data", e);
     } finally {
@@ -104,10 +142,21 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
 
   const calculateBestRoute = async (signal?: AbortSignal) => {
     if (!selectedItemId || !userLocation) return;
-    const target = pickups.find(p => p.id === selectedItemId) || invoices.find(inv => inv.id === selectedItemId);
+    const target = pickups.find(p => p.id === selectedItemId) || invoices.find(inv => inv.id === selectedItemId) || guias.find(g => g.id === selectedItemId);
     if (!target) return;
-    const lat = 'latitude' in target ? (target as any).latitude : (target as Invoice).client?.latitude;
-    const lng = 'longitude' in target ? (target as any).longitude : (target as Invoice).client?.longitude;
+    
+    let lat: number | undefined;
+    let lng: number | undefined;
+
+    if ('latitude' in target) {
+        lat = (target as any).latitude;
+        lng = (target as any).longitude;
+    } else {
+        const inv = target as Invoice;
+        lat = inv.client?.latitude;
+        lng = inv.client?.longitude;
+    }
+
     if (!lat || !lng) { setActiveRoute(null); return; }
     
     setIsCalculatingRoute(true);
@@ -132,10 +181,100 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
 
   const handleCall = (phone: string) => window.open(`tel:${phone}`);
 
-  const handleItemSelect = (id: string) => {
+  const handleItemSelect = async (id: string) => {
       setSelectedItemId(prev => prev === id ? null : id);
-      if (selectedItemId === id) setActiveRoute(null);
+      if (selectedItemId === id) {
+          setActiveRoute(null);
+          setSelectedGuiaItems([]);
+      } else {
+          // Si es una guía, cargar sus items
+          const foundGuia = guias.find(g => g.id === id);
+          if (foundGuia) {
+              loadGuiaDetails(foundGuia);
+          }
+      }
       if (window.innerWidth < 768 && id !== selectedItemId) setMobileView('map');
+  };
+
+  const loadGuiaDetails = async (guia: GuiaRemision) => {
+      setIsLoadingDetails(true);
+      setCheckedItems({});
+      setMissingItems({});
+      try {
+          const items = await dbGetGuiaDetails(guia.id);
+          setSelectedGuiaItems(items);
+          if (guia.estado === 'EN_TRANSITO') {
+              const initialChecked: Record<string, boolean> = {};
+              items.forEach((it: any) => {
+                  const itemId = it.item_venta_id || it.item_id;
+                  if (it.estado_item !== 'FALTANTE' && itemId) initialChecked[itemId] = true;
+              });
+              setCheckedItems(initialChecked);
+          }
+      } catch (e) {
+          console.error("Error loading guia details", e);
+      } finally {
+          setIsLoadingDetails(false);
+      }
+  };
+
+  const handleUpdateGuiaStatus = async (guia: GuiaRemision, nuevoEstadoGuia: 'EN_TRANSITO' | 'ENTREGADO') => {
+      const confirmMsg = nuevoEstadoGuia === 'EN_TRANSITO' 
+          ? "¿Confirmas que has recogido las prendas marcadas y están bajo tu custodia?"
+          : "¿Confirmas que has entregado las prendas en el destino?";
+          
+      if (!window.confirm(confirmMsg)) return;
+
+      setIsLoading(true);
+      try {
+          const itemsToProcess = Object.keys(checkedItems).filter(id => checkedItems[id]);
+          const itemsMissing = Object.keys(missingItems).filter(id => missingItems[id]);
+
+          for (const itemId of itemsMissing) {
+              await dbUpdateGuiaItemStatus(guia.id, itemId, 'FALTANTE');
+          }
+
+          for (const itemId of itemsToProcess) {
+              await dbUpdateGuiaItemStatus(guia.id, itemId, 'CARGADO');
+          }
+
+          let nuevoEstadoItem: OrderStatus;
+          if (nuevoEstadoGuia === 'EN_TRANSITO') {
+              nuevoEstadoItem = guia.tipo_guia === 'RECOJO' ? 'EN_TRANSITO_CENTRAL' : 'EN_TRANSITO_ACOPIO';
+          } else {
+              nuevoEstadoItem = guia.tipo_guia === 'RECOJO' ? 'RECIBIDO_CENTRAL' : 'RECIBIDO_ACOPIO';
+          }
+
+          await dbUpdateGuiaEstado(guia.id, nuevoEstadoGuia, nuevoEstadoItem, itemsToProcess);
+          
+          setSelectedItemId(null);
+          await loadData();
+      } catch (error) {
+          console.error("Error updating logistics status:", error);
+          alert("Error al actualizar el estado.");
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
+  const toggleItemCheck = (itemId: string) => {
+      setCheckedItems(prev => ({
+          ...prev,
+          [itemId]: !prev[itemId]
+      }));
+      if (!checkedItems[itemId]) {
+          setMissingItems(prev => ({ ...prev, [itemId]: false }));
+      }
+  };
+
+  const toggleItemMissing = (itemId: string) => {
+      setMissingItems(prev => ({
+          ...prev,
+          [itemId]: !prev[itemId]
+      }));
+      if (!missingItems[itemId]) {
+          setCheckedItems(prev => ({ ...prev, [itemId]: false }));
+      }
   };
 
   const handleStartRoutePickup = async (pickup: PickupRequest) => {
@@ -204,7 +343,7 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
       loadData();
   };
 
-  const selectedItemData = [...pickups, ...invoices.map(i => ({...i, clientName: i.client.name, address: i.client.address, latitude: i.client.latitude, longitude: i.client.longitude}))].find(i => i.id === selectedItemId);
+  const selectedItemData = [...pickups, ...invoices.map(i => ({...i, clientName: i.client.name, address: i.client.address, latitude: i.client.latitude, longitude: i.client.longitude})), ...guias].find(i => i.id === selectedItemId);
 
   const filteredInvoicesForDelivery = invoices.filter(i => {
     const totalItemsCount = i.items.length;
@@ -216,6 +355,17 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
   });
 
   const mapMarkers = useMemo(() => {
+    if (mainMode === 'LOGISTICS_HUB') {
+        const filteredGuias = activeTab === 'COMPLETED' 
+            ? guias.filter(g => g.estado === 'ENTREGADO') 
+            : guias.filter(g => g.estado === 'PENDIENTE' || g.estado === 'EN_TRANSITO');
+        
+        return filteredGuias.map(g => ({
+            ...g,
+            status: g.estado === 'ENTREGADO' ? 'COMPLETED' : g.estado
+        })) as unknown as PickupRequest[];
+    }
+
     if (activeTab === 'RECOJOS') {
         return pickups.filter(p => p.status !== 'COMPLETED' && p.status !== 'CANCELLED');
     }
@@ -242,18 +392,35 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
         return [...compPickups, ...compDeliveries];
     }
     return [];
-  }, [activeTab, pickups, filteredInvoicesForDelivery, invoices]);
+  }, [activeTab, pickups, filteredInvoicesForDelivery, invoices, mainMode, guias]);
 
   const pendingPickupsCount = pickups.filter(p => p.status !== 'COMPLETED' && p.status !== 'CANCELLED').length;
   const pendingDeliveriesCount = filteredInvoicesForDelivery.length;
+  const pendingLogisticsCount = guias.filter(g => g.estado === 'PENDIENTE' || g.estado === 'EN_TRANSITO').length;
 
   return (
     <div className="h-full bg-slate-100 flex flex-col md:flex-row overflow-hidden relative">
         <aside className={`${mobileView === 'list' ? 'flex' : 'hidden'} md:flex w-full md:w-[420px] bg-white border-r border-slate-200 flex-col z-20 shadow-xl shrink-0 h-full`}>
-            <div className="p-4 md:p-6 border-b border-white/10 text-white shrink-0" style={{ backgroundColor: primaryColor }}>
+            {/* Header Main Toggle */}
+            <div className="bg-slate-900 p-2 flex gap-1 shrink-0">
+                <button 
+                    onClick={() => { setMainMode('CALL_CENTER'); setSelectedItemId(null); }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${mainMode === 'CALL_CENTER' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                >
+                    <Headphones size={16} /> CALL CENTER
+                </button>
+                <button 
+                    onClick={() => { setMainMode('LOGISTICS_HUB'); setSelectedItemId(null); }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${mainMode === 'LOGISTICS_HUB' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                >
+                    <Repeat size={16} /> LOGISTICA HUB
+                </button>
+            </div>
+
+            <div className="p-4 md:p-6 border-b border-white/10 text-white shrink-0" style={{ backgroundColor: mainMode === 'LOGISTICS_HUB' ? '#0F172A' : primaryColor }}>
                 <div className="flex justify-between items-center mb-1">
                     <h2 className="text-xl md:text-2xl font-bold uppercase tracking-tight flex items-center gap-3">
-                        <Truck size={28} /> DELIVERY
+                        <Truck size={28} /> {mainMode === 'LOGISTICS_HUB' ? 'LOGÍSTICA' : 'DELIVERY'}
                     </h2>
                     <div className="flex gap-2">
                         <button onClick={startLocationTracking} className="p-2 md:p-2.5 bg-white/20 rounded-xl hover:bg-white/30 transition-all"><Locate size={18} className={userLocation ? 'text-green-300' : 'animate-pulse text-white'} /></button>
@@ -267,37 +434,45 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
                 <button 
                     onClick={() => setSelectedTab('RECOJOS')} 
                     className={`flex-1 py-2.5 md:py-3 rounded-xl text-[8px] md:text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'RECOJOS' ? 'bg-white shadow-md border' : 'text-slate-400'}`} 
-                    style={activeTab === 'RECOJOS' ? { color: primaryColor } : {}}
+                    style={activeTab === 'RECOJOS' ? { color: mainMode === 'LOGISTICS_HUB' ? '#0F172A' : primaryColor } : {}}
                 >
-                    RECOJOS
-                    {pendingPickupsCount > 0 && (
+                    {mainMode === 'LOGISTICS_HUB' ? 'PENDIENTES' : 'RECOJOS'}
+                    {mainMode === 'CALL_CENTER' && pendingPickupsCount > 0 && (
                         <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${activeTab === 'RECOJOS' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-50'}`}>
                             {pendingPickupsCount}
                         </span>
                     )}
-                </button>
-                <button 
-                    onClick={() => setSelectedTab('ENTREGAS')} 
-                    className={`flex-1 py-2.5 md:py-3 rounded-xl text-[8px] md:text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'ENTREGAS' ? 'bg-white shadow-md border' : 'text-slate-400'}`} 
-                    style={activeTab === 'ENTREGAS' ? { color: primaryColor } : {}}
-                >
-                    ENTREGAS
-                    {pendingDeliveriesCount > 0 && (
-                        <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${activeTab === 'ENTREGAS' ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-200 text-slate-50'}`}>
-                            {pendingDeliveriesCount}
+                    {mainMode === 'LOGISTICS_HUB' && pendingLogisticsCount > 0 && activeTab === 'RECOJOS' && (
+                         <span className="px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-amber-500 text-white animate-pulse">
+                            {pendingLogisticsCount}
                         </span>
                     )}
                 </button>
+                {mainMode === 'CALL_CENTER' && (
+                    <button 
+                        onClick={() => setSelectedTab('ENTREGAS')} 
+                        className={`flex-1 py-2.5 md:py-3 rounded-xl text-[8px] md:text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'ENTREGAS' ? 'bg-white shadow-md border' : 'text-slate-400'}`} 
+                        style={activeTab === 'ENTREGAS' ? { color: primaryColor } : {}}
+                    >
+                        ENTREGAS
+                        {pendingDeliveriesCount > 0 && (
+                            <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${activeTab === 'ENTREGAS' ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-200 text-slate-50'}`}>
+                                {pendingDeliveriesCount}
+                            </span>
+                        )}
+                    </button>
+                )}
                 <button onClick={() => setSelectedTab('COMPLETED')} className={`flex-1 py-2.5 md:py-3 rounded-xl text-[8px] md:text-[9px] font-bold uppercase tracking-widest transition-all ${activeTab === 'COMPLETED' ? 'bg-white shadow-md border' : 'text-slate-400'}`}>HISTORIAL</button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 md:space-y-4 custom-scrollbar bg-slate-50/30">
-                {activeTab === 'RECOJOS' && pickups.filter(p => p.status !== 'COMPLETED' && p.status !== 'CANCELLED').map(p => (
+                {mainMode === 'CALL_CENTER' && activeTab === 'RECOJOS' && pickups.filter(p => p.status !== 'COMPLETED' && p.status !== 'CANCELLED').map(p => (
                     <div key={p.id} onClick={() => handleItemSelect(p.id)} className={`bg-white rounded-[1.5rem] md:rounded-[1.8rem] shadow-sm border-2 p-4 md:p-5 group hover:border-indigo-100 transition-all cursor-pointer ${selectedItemId === p.id ? 'ring-2 border-indigo-500' : 'border-slate-100'}`} style={selectedItemId === p.id ? { borderColor: primaryColor } : {}}>
                         <div className="flex justify-between items-start mb-3 md:mb-4">
                             <div className="min-w-0 flex-1 pr-2">
                                 <h3 className="font-bold text-sm md:text-base text-slate-800 uppercase truncate leading-tight">{p.clientName}</h3>
                                 <div className="flex items-center gap-2 text-[9px] md:text-[10px] font-bold text-slate-400 uppercase mt-1"><Clock size={10}/> {p.timeRange}</div>
+                                <p className="text-[9px] font-medium text-slate-500 uppercase mt-1 truncate">{p.address}</p>
                             </div>
                             <button onClick={(e) => { e.stopPropagation(); handleCall(p.phone); }} className="p-2 md:p-2.5 bg-slate-900 text-white rounded-xl shadow-md"><Phone size={16}/></button>
                         </div>
@@ -309,12 +484,13 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
                     </div>
                 ))}
 
-                {activeTab === 'ENTREGAS' && filteredInvoicesForDelivery.map(inv => (
+                {mainMode === 'CALL_CENTER' && activeTab === 'ENTREGAS' && filteredInvoicesForDelivery.map(inv => (
                     <div key={inv.id} onClick={() => handleItemSelect(inv.id)} className={`bg-white rounded-[1.5rem] md:rounded-[1.8rem] shadow-sm border-2 p-4 md:p-5 group hover:border-indigo-100 transition-all cursor-pointer ${selectedItemId === inv.id ? 'ring-2 border-indigo-500' : 'border-slate-100'}`} style={selectedItemId === inv.id ? { borderColor: primaryColor } : {}}>
                         <div className="flex justify-between items-start mb-3 md:mb-4">
                             <div className="min-w-0 flex-1 pr-2">
                                 <h3 className="font-bold text-sm md:text-base text-slate-800 uppercase truncate leading-tight">{inv.client.name}</h3>
                                 <div className="flex items-center gap-2 text-[9px] md:text-[10px] font-bold text-slate-400 uppercase mt-1"><Hash size={10}/> Orden #{inv.ordenNumber}</div>
+                                <p className="text-[9px] font-medium text-slate-500 uppercase mt-1 truncate">{inv.client.address}</p>
                             </div>
                             <div className="flex gap-2 shrink-0">
                                 <button onClick={(e) => { e.stopPropagation(); handleCall(inv.client.phone || ''); }} className="p-2 md:p-2.5 bg-slate-900 text-white rounded-xl shadow-md"><Phone size={16}/></button>
@@ -328,7 +504,121 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
                     </div>
                 ))}
 
-                {(activeTab === 'RECOJOS' && pickups.length === 0) || (activeTab === 'ENTREGAS' && filteredInvoicesForDelivery.length === 0) ? (
+                {mainMode === 'LOGISTICS_HUB' && activeTab === 'RECOJOS' && guias.filter(g => g.estado !== 'ENTREGADO' && g.estado !== 'CANCELADO').map(g => (
+                    <div key={g.id} onClick={() => handleItemSelect(g.id)} className={`bg-white rounded-[1.5rem] md:rounded-[1.8rem] shadow-sm border-2 p-4 md:p-5 group hover:border-amber-100 transition-all cursor-pointer ${selectedItemId === g.id ? 'ring-4 border-amber-500 shadow-xl' : 'border-slate-100'}`}>
+                        <div className="flex justify-between items-start mb-3 md:mb-4">
+                            <div className="min-w-0 flex-1 pr-2">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-black text-sm md:text-base text-slate-800 uppercase truncate leading-tight">{g.codigo_guia}</h3>
+                                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${g.tipo_guia === 'RECOJO' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>{g.tipo_guia}</span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase"><MapPin size={10} className="text-emerald-500" /> {g.sucursal_origen?.nombre_sucursal}</div>
+                                        <div className="ml-[5px] border-l border-dashed border-slate-300 h-2 my-0.5" />
+                                        <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase"><Navigation size={10} className="text-accent" /> {g.sucursal_destino?.nombre_sucursal}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all ${g.estado === 'PENDIENTE' ? 'bg-amber-500 text-white' : 'bg-blue-500 text-white animate-pulse'}`}>
+                                <Truck size={20} />
+                            </div>
+                        </div>
+
+                        {selectedItemId === g.id && (
+                            <div className="mt-4 space-y-4 animate-in slide-in-from-top-2">
+                                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Box size={12}/> Contenido de Carga</h4>
+                                    {isLoadingDetails ? (
+                                        <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-slate-300" /></div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {selectedGuiaItems.map((it, idx) => (
+                                                <div 
+                                                    key={idx} 
+                                                    onClick={(e) => { e.stopPropagation(); toggleItemCheck(it.item_venta_id || it.item_id); }}
+                                                    className={`p-3 rounded-xl border flex items-center justify-between transition-all ${checkedItems[it.item_venta_id || it.item_id] ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200'}`}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                       <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${checkedItems[it.item_venta_id || it.item_id] ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                                            {checkedItems[it.item_venta_id || it.item_id] ? <Check size={14} strokeWidth={4} /> : <Box size={14} />}
+                                                       </div>
+                                                       <span className="text-[10px] font-bold text-slate-700 uppercase">{it.items_venta?.descripcion || 'Prenda'}</span>
+                                                    </div>
+                                                    {g.estado === 'PENDIENTE' && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); toggleItemMissing(it.item_venta_id || it.item_id); }}
+                                                            className={`p-1.5 rounded-lg transition-colors ${missingItems[it.item_venta_id || it.item_id] ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-400'}`}
+                                                        >
+                                                            <AlertTriangle size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {g.estado === 'PENDIENTE' ? (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleUpdateGuiaStatus(g, 'EN_TRANSITO'); }}
+                                        disabled={!selectedGuiaItems.length || !selectedGuiaItems.every(it => checkedItems[it.item_venta_id || it.item_id] || missingItems[it.item_venta_id || it.item_id])}
+                                        className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 disabled:opacity-30 transition-all"
+                                    >
+                                        <Truck size={16} /> INICIAR TRASLADO
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleUpdateGuiaStatus(g, 'ENTREGADO'); }}
+                                        className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all"
+                                    >
+                                        <CheckCircle2 size={16} /> FINALIZAR ENTREGA
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ))}
+
+                {activeTab === 'COMPLETED' && (
+                    <div className="space-y-4">
+                         {mainMode === 'CALL_CENTER' ? (
+                            [...pickups.filter(p => p.status === 'COMPLETED'), ...invoices.filter(i => i.orderStatus === 'ENTREGADO')].map((item: any) => (
+                                <div key={item.id} className="bg-white rounded-3xl p-5 border border-slate-100 flex items-center justify-between opacity-60 grayscale hover:grayscale-0 transition-all">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                                            <CheckCheck size={20} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-800 uppercase text-sm">{item.clientName || item.client?.name}</h4>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.date ? new Date(item.date).toLocaleDateString() : '---'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-emerald-500 font-black text-[10px] uppercase tracking-widest">Entregado</div>
+                                </div>
+                            ))
+                         ) : (
+                             guias.filter(g => g.estado === 'ENTREGADO').map(g => (
+                                <div key={g.id} className="bg-white rounded-3xl p-5 border border-slate-100 flex items-center justify-between opacity-60 grayscale hover:grayscale-0 transition-all">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                                            <CheckCheck size={20} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-800 uppercase text-sm">{g.codigo_guia}</h4>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{g.fecha_registro ? new Date(g.fecha_registro).toLocaleDateString() : '---'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-emerald-600 font-black text-[10px] uppercase tracking-widest">Finalizado</div>
+                                </div>
+                             ))
+                         )}
+                    </div>
+                )}
+
+                {((mainMode === 'CALL_CENTER' && activeTab === 'RECOJOS' && pickups.length === 0) || 
+                  (mainMode === 'CALL_CENTER' && activeTab === 'ENTREGAS' && filteredInvoicesForDelivery.length === 0) ||
+                  (mainMode === 'LOGISTICS_HUB' && activeTab === 'RECOJOS' && guias.filter(g => g.estado !== 'ENTREGADO').length === 0)) ? (
                     <div className="py-20 text-center flex flex-col items-center justify-center opacity-20"><Truck size={64} strokeWidth={1}/><p className="font-bold uppercase tracking-widest text-xs mt-4">Sin tareas pendientes</p></div>
                 ) : null}
             </div>
@@ -342,6 +632,11 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
                 routeStart={userLocation} 
                 detailedPath={activeRoute?.path} 
                 onTakeOrder={(item) => {
+                    const foundGuia = guias.find(g => g.id === item.id);
+                    if (foundGuia) {
+                         handleItemSelect(foundGuia.id);
+                         return;
+                    }
                     const foundPickup = pickups.find(p => p.id === item.id);
                     if (foundPickup) {
                         if (foundPickup.status === 'PENDING') handleStartRoutePickup(foundPickup);

@@ -37,6 +37,8 @@ const WaReminders: React.FC<WaRemindersProps> = ({
   const [currentSendingId, setCurrentSendingId] = useState<string | null>(null);
 
   // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [flyingMessages, setFlyingMessages] = useState<{ id: number, x: number, y: number }[]>([]);
 
   const addFlyingMessage = (e: React.MouseEvent | { clientX: number, clientY: number }) => {
@@ -664,7 +666,7 @@ const WaReminders: React.FC<WaRemindersProps> = ({
           <div className="flex items-center gap-2">
             <button 
               disabled={currentPage === 1}
-              onClick={() => setCurrentPage(prev => prev - 1)}
+              onClick={() => setCurrentPage((prev: number) => prev - 1)}
               className="p-2 rounded-xl bg-white dark:bg-bg2 border border-slate-100 dark:border-border text-slate-400 disabled:opacity-30"
             >
               <ArrowRight className="rotate-180" size={16} />
@@ -674,7 +676,7 @@ const WaReminders: React.FC<WaRemindersProps> = ({
             </span>
             <button 
               disabled={currentPage >= totalPages}
-              onClick={() => setCurrentPage(prev => prev + 1)}
+              onClick={() => setCurrentPage((prev: number) => prev + 1)}
               className="p-2 rounded-xl bg-white dark:bg-bg2 border border-slate-100 dark:border-border text-slate-400 disabled:opacity-30"
             >
               <ArrowRight size={16} />

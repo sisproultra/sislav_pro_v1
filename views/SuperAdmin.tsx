@@ -1369,6 +1369,7 @@ export const SuperAdmin: React.FC<{
             limite_reconteo: brLimiteReconteo,
             doc_enforce_enabled: brDocEnforceEnabled,
             doc_enforce_threshold: brDocEnforceThreshold,
+            sucursal_tipo: brType,
             cash_management_type: brCashManagementType,
             puntos_equivalencia: parseFloat(brPuntosEq),
             cobranza: brCobranza,

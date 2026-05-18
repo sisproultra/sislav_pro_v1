@@ -59,7 +59,7 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
   const [isCustomDate, setIsCustomDate] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'logistics'>('dashboard');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
   const activeBranches = useMemo(() => {
@@ -195,203 +195,112 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
   const textSecondary = isDarkMode ? 'text-text2' : 'text-gray-500';
 
   return (
-    <div className={`h-screen flex transition-colors duration-300 font-sans overflow-hidden ${themeClass}`}>
-      {/* DESKTOP SIDEBAR */}
-      <aside className={`hidden xl:flex flex-col w-72 shrink-0 border-r ${isDarkMode ? 'bg-surface border-white/5 shadow-2xl' : 'bg-white border-gray-200 shadow-xl'}`}>
-        <div className="p-6 border-b border-white/5">
-          <div className="flex items-center gap-3">
-            {holdingInfo?.url_favicon ? (
-              <img src={holdingInfo.url_favicon} className="w-10 h-10 object-contain rounded-xl" alt="Favicon" />
-            ) : (
-              <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-accent/20">
-                {session.user.holding_name?.charAt(0) || 'S'}
-              </div>
-            )}
-            <div>
-              <p className="font-bold text-sm leading-tight">Panel Corporativo</p>
-              <p className={`text-[10px] uppercase tracking-widest font-black ${textSecondary}`}>SISLAV Intelligence</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-8 custom-scrollbar">
-          <div className="space-y-2">
-            <p className="text-[10px] font-black text-text3 uppercase tracking-[0.2em] px-3 mb-4">Navegación Central</p>
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`w-full px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-3 group ${
-                activeTab === 'dashboard' ? 'bg-accent text-white shadow-xl shadow-accent/30 scale-[1.02]' : 'text-text2 hover:bg-white/5'
-              }`}
-            >
-              <LayoutDashboard className={`w-5 h-5 transition-transform group-hover:scale-110 ${activeTab === 'dashboard' ? 'text-white' : 'text-accent'}`} />
-              Dashboard Ejecutivo
-            </button>
-            <button
-              onClick={() => setActiveTab('logistics')}
-              className={`w-full px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-3 group ${
-                activeTab === 'logistics' ? 'bg-accent text-white shadow-xl shadow-accent/30 scale-[1.02]' : 'text-text2 hover:bg-white/5'
-              }`}
-            >
-              <Truck className={`w-5 h-5 transition-transform group-hover:scale-110 ${activeTab === 'logistics' ? 'text-white' : 'text-amber-500'}`} />
-              Logística Hub
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            <p className="text-[10px] font-black text-text3 uppercase tracking-[0.2em] px-3 mb-4">Mis Sucursales</p>
-            <div className="space-y-2">
-              {branches.map(branch => (
-                <button
-                  key={branch.id}
-                  onClick={() => onSelectBranch(branch)}
-                  className={`w-full p-3 rounded-2xl border transition-all flex items-center gap-3 group/btn ${
-                    isDarkMode 
-                      ? 'bg-bg/40 border-white/5 hover:border-accent/40 hover:bg-accent/5' 
-                      : 'bg-gray-50 border-gray-100 hover:border-accent/40 hover:bg-accent/5'
-                  }`}
-                >
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-all group-hover/btn:scale-110 group-hover/btn:rotate-3 ${isDarkMode ? 'bg-white/5' : 'bg-white border border-gray-100'}`}
-                       style={{ borderColor: !isDarkMode && branch.color_primario ? `${branch.color_primario}40` : undefined }}>
-                    {branch.url_favicon ? (
-                      <img src={branch.url_favicon} className="w-5 h-5 object-contain" alt="Sucursal" />
-                    ) : (
-                      <Store className="w-4 h-4 text-accent" />
-                    )}
-                  </div>
-                  <div className="flex-1 text-left">
-                    <p className={`text-xs font-bold truncate group-hover/btn:text-accent transition-colors ${isDarkMode ? 'text-text2' : 'text-gray-700'}`}>{branch.nombre_sucursal}</p>
-                    <p className="text-[8px] font-black text-text3 uppercase tracking-widest">{branch.tipo_sucursal || 'Tienda'}</p>
-                  </div>
-                  <ChevronRight className="w-3 h-3 text-text3 opacity-0 group-hover/btn:opacity-100 transition-all translate-x-[-4px] group-hover/btn:translate-x-0" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 border-t border-white/5 space-y-2">
-          {session.user.isMasterBypass && (
-            <button 
-              onClick={() => {
-                const masterSession = {
-                  user: {
-                    id: 'admin',
-                    username: 'admin',
-                    name: UserRole.ADMIN,
-                    role: UserRole.SAAS_MASTER
-                  }
-                };
-                localStorage.setItem('sislav_auth_session', JSON.stringify(masterSession));
-                window.location.reload();
-              }}
-              className="w-full px-4 py-3 rounded-xl bg-indigo-600/5 text-indigo-400 font-bold text-xs flex items-center gap-3 hover:bg-indigo-600 hover:text-white transition-all group"
-            >
-              <ShieldCheck className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-              Modo Master
-            </button>
-          )}
-          <button 
-            onClick={onLogout}
-            className="w-full px-4 py-3 rounded-xl bg-red-500/5 text-red-500 font-bold text-xs flex items-center gap-3 hover:bg-red-500 hover:text-white transition-all group"
-          >
-            <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            Cerrar Sesión
-          </button>
-        </div>
-      </aside>
-
+    <div className={`h-screen flex flex-col transition-colors duration-300 font-sans overflow-hidden ${themeClass}`}>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* MOBILE SIDEBAR */}
+      {/* SIDEBAR OVERLAY */}
       <AnimatePresence>
-        {isMobileMenuOpen && (
+        {isSidebarOpen && (
           <>
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] xl:hidden"
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
             />
             <motion.div 
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className={`fixed inset-y-0 left-0 w-72 z-[70] p-6 shadow-2xl xl:hidden flex flex-col ${isDarkMode ? 'bg-surface border-r border-white/5' : 'bg-white border-r border-gray-200'}`}
+              className={`fixed inset-y-0 left-0 w-80 z-[70] shadow-2xl flex flex-col ${isDarkMode ? 'bg-surface border-r border-white/5' : 'bg-white border-r border-gray-200'}`}
             >
-              <div className="flex items-center justify-between mb-8">
+              <div className="p-6 border-b border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {holdingInfo?.url_favicon ? (
                     <img src={holdingInfo.url_favicon} className="w-10 h-10 object-contain rounded-xl" alt="Favicon" />
                   ) : (
-                    <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-white font-bold">
-                      {session.user.company_name?.charAt(0)}
+                    <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-accent/20">
+                      {session.user.holding_name?.charAt(0) || 'S'}
                     </div>
                   )}
-                  <span className="font-bold text-sm">Menú Corporativo</span>
+                  <div>
+                    <p className="font-bold text-sm leading-tight">Panel Corporativo</p>
+                    <p className={`text-[10px] uppercase tracking-widest font-black ${textSecondary}`}>SISLAV Intelligence</p>
+                  </div>
                 </div>
-                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">
-                  <XCircle className="w-5 h-5 text-text2" />
+                <button onClick={() => setIsSidebarOpen(false)} className={`p-2 rounded-xl transition-all ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-100'}`}>
+                  <XCircle className="w-6 h-6 text-text2" />
                 </button>
               </div>
 
-              <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar">
+              <div className="flex-1 overflow-y-auto p-4 space-y-8 custom-scrollbar">
                 <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-text3 uppercase tracking-widest px-2">Navegación</p>
+                  <p className="text-[10px] font-black text-text3 uppercase tracking-[0.2em] px-3 mb-4">Navegación Central</p>
                   <button
-                    onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
-                    className={`w-full px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-3 ${
-                      activeTab === 'dashboard' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-text2 hover:bg-white/5'
+                    onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }}
+                    className={`w-full px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-3 group ${
+                      activeTab === 'dashboard' ? 'bg-accent text-white shadow-xl shadow-accent/30 scale-[1.02]' : 'text-text2 hover:bg-white/5'
                     }`}
                   >
-                    <LayoutDashboard className="w-5 h-5" />
+                    <LayoutDashboard className={`w-5 h-5 transition-transform group-hover:scale-110 ${activeTab === 'dashboard' ? 'text-white' : 'text-accent'}`} />
                     Dashboard Ejecutivo
                   </button>
                   <button
-                    onClick={() => { setActiveTab('logistics'); setIsMobileMenuOpen(false); }}
-                    className={`w-full px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-3 ${
-                      activeTab === 'logistics' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-text2 hover:bg-white/5'
+                    onClick={() => { setActiveTab('logistics'); setIsSidebarOpen(false); }}
+                    className={`w-full px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-3 group ${
+                      activeTab === 'logistics' ? 'bg-accent text-white shadow-xl shadow-accent/30 scale-[1.02]' : 'text-text2 hover:bg-white/5'
                     }`}
                   >
-                    <Truck className="w-5 h-5" />
+                    <Truck className={`w-5 h-5 transition-transform group-hover:scale-110 ${activeTab === 'logistics' ? 'text-white' : 'text-amber-500'}`} />
                     Logística Hub
                   </button>
+                  <a
+                    href={`${window.location.origin}/?mode=logistics${holdingInfo?.id ? `&h=${holdingInfo.id}` : ''}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-3 group text-text2 hover:bg-white/5"
+                  >
+                    <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-500 group-hover:scale-110 transition-transform">
+                        <Truck className="w-4 h-4" />
+                    </div>
+                    Panel del Chofer
+                  </a>
                 </div>
 
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-text3 uppercase tracking-widest px-2">Mis Sucursales</p>
-                  <div className="grid grid-cols-1 gap-2">
+                <div className="space-y-3">
+                  <p className="text-[10px] font-black text-text3 uppercase tracking-[0.2em] px-3 mb-4">Mis Sucursales</p>
+                  <div className="space-y-2">
                     {branches.map(branch => (
                       <button
                         key={branch.id}
-                        onClick={() => { onSelectBranch(branch); setIsMobileMenuOpen(false); }}
-                        className={`w-full px-4 py-3 rounded-xl text-sm font-medium border transition-all flex items-center gap-3 ${
+                        onClick={() => { onSelectBranch(branch); setIsSidebarOpen(false); }}
+                        className={`w-full p-3 rounded-2xl border transition-all flex items-center gap-3 group/btn ${
                           isDarkMode 
-                            ? 'bg-bg border-white/5 hover:border-white/20 text-text2 hover:text-white' 
-                            : 'bg-white border-gray-100 text-gray-600'
+                            ? 'bg-bg/40 border-white/5 hover:border-accent/40 hover:bg-accent/5' 
+                            : 'bg-gray-50 border-gray-100 hover:border-accent/40 hover:bg-accent/5'
                         }`}
-                        style={{ 
-                          borderColor: !isDarkMode && branch.color_primario ? `${branch.color_primario}20` : undefined,
-                          color: !isDarkMode && branch.color_primario ? branch.color_primario : undefined,
-                          backgroundColor: !isDarkMode && branch.color_secundario ? `${branch.color_secundario}05` : undefined
-                        }}
                       >
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-white/5' : ''}`}
-                             style={{ backgroundColor: !isDarkMode && branch.color_primario ? `${branch.color_primario}10` : undefined }}>
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-all group-hover/btn:scale-110 group-hover/btn:rotate-3 ${isDarkMode ? 'bg-white/5' : 'bg-white border border-gray-100'}`}
+                             style={{ borderColor: !isDarkMode && branch.color_primario ? `${branch.color_primario}40` : undefined }}>
                           {branch.url_favicon ? (
                             <img src={branch.url_favicon} className="w-5 h-5 object-contain" alt="Sucursal" />
                           ) : (
-                            <Store className="w-4 h-4" />
+                            <Store className="w-4 h-4 text-accent" />
                           )}
                         </div>
-                        <span className="truncate">{branch.nombre_sucursal}</span>
+                        <div className="flex-1 text-left">
+                          <p className={`text-xs font-bold truncate group-hover/btn:text-accent transition-colors ${isDarkMode ? 'text-text2' : 'text-gray-700'}`}>{branch.nombre_sucursal}</p>
+                          <p className="text-[8px] font-black text-text3 uppercase tracking-widest">{branch.tipo_sucursal || 'Tienda'}</p>
+                        </div>
+                        <ChevronRight className="w-3 h-3 text-text3 opacity-0 group-hover/btn:opacity-100 transition-all translate-x-[-4px] group-hover/btn:translate-x-0" />
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
 
-              <div className="pt-6 border-t border-white/5 space-y-3">
+              <div className="p-4 border-t border-white/5 space-y-2">
                 {session.user.isMasterBypass && (
                   <button 
                     onClick={() => {
@@ -406,17 +315,17 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
                       localStorage.setItem('sislav_auth_session', JSON.stringify(masterSession));
                       window.location.reload();
                     }}
-                    className="w-full px-4 py-3 rounded-xl bg-indigo-600/10 text-indigo-400 font-bold text-sm flex items-center gap-3 hover:bg-indigo-600 hover:text-white transition-all"
+                    className="w-full px-4 py-3 rounded-xl bg-indigo-600/5 text-indigo-400 font-bold text-xs flex items-center gap-3 hover:bg-indigo-600 hover:text-white transition-all group"
                   >
-                    <ShieldCheck className="w-5 h-5" />
-                    Volver a Master
+                    <ShieldCheck className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+                    Modo Master
                   </button>
                 )}
                 <button 
                   onClick={onLogout}
-                  className="w-full px-4 py-3 rounded-xl bg-red-500/10 text-red-500 font-bold text-sm flex items-center gap-3 hover:bg-red-500 hover:text-white transition-all"
+                  className="w-full px-4 py-3 rounded-xl bg-red-500/5 text-red-500 font-bold text-xs flex items-center gap-3 hover:bg-red-500 hover:text-white transition-all group"
                 >
-                  <LogOut className="w-5 h-5" />
+                  <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                   Cerrar Sesión
                 </button>
               </div>
@@ -430,8 +339,8 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-4 md:gap-8 overflow-hidden">
             <button 
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="xl:hidden p-2 hover:bg-white/5 rounded-lg text-text2"
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 hover:bg-white/5 rounded-xl text-text2 transition-all hover:scale-110 active:scale-95"
             >
               <Menu className="w-6 h-6" />
             </button>
@@ -479,6 +388,15 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
                 <Truck className="w-4 h-4" />
                 Logística Hub
               </button>
+              <a
+                href={`${window.location.origin}/?mode=logistics${holdingInfo?.id ? `&h=${holdingInfo.id}` : ''}`}
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-text2 hover:text-white"
+              >
+                <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse" />
+                Panel del Chofer
+              </a>
             </nav>
           </div>
 
@@ -689,6 +607,43 @@ export default function OwnerDashboard({ session, onLogout, onSelectBranch, isDa
             color="text-purple-500"
             isDarkMode={isDarkMode}
           />
+        </div>
+
+        {/* QUICK ACCESS SECTION */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <a 
+                href={`${window.location.origin}/?mode=logistics${holdingInfo?.id ? `&h=${holdingInfo.id}` : ''}`} 
+                target="_blank" 
+                rel="noreferrer"
+                className={`p-6 rounded-[2.5rem] border-2 transition-all group flex items-center justify-between ${isDarkMode ? 'bg-accent/5 border-accent/20 hover:border-accent hover:bg-accent/10' : 'bg-blue-50 border-blue-100 hover:border-blue-300 hover:bg-blue-100/50'}`}
+            >
+                <div className="flex items-center gap-5">
+                    <div className="w-16 h-16 rounded-[1.5rem] bg-accent text-white flex items-center justify-center shadow-xl shadow-accent/20 group-hover:scale-110 transition-transform">
+                        <Truck size={32} />
+                    </div>
+                    <div>
+                        <h4 className="text-lg font-black uppercase tracking-tight">Panel del Chofer</h4>
+                        <p className={`text-xs font-bold uppercase tracking-widest opacity-60 ${textSecondary}`}>Ingresar a la vista de campo PWA</p>
+                    </div>
+                </div>
+                <ArrowUpRight className="w-10 h-10 text-accent opacity-20 group-hover:opacity-100 group-hover:translate-x-2 group-hover:-translate-y-2 transition-all" />
+            </a>
+
+            <button 
+                onClick={() => setActiveTab('logistics')}
+                className={`p-6 rounded-[2.5rem] border-2 transition-all group flex items-center justify-between ${isDarkMode ? 'bg-white/5 border-white/5 hover:border-emerald-500/30 hover:bg-emerald-500/5' : 'bg-emerald-50 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-100/50'}`}
+            >
+                <div className="flex items-center gap-5">
+                    <div className="w-16 h-16 rounded-[1.5rem] bg-emerald-600 text-white flex items-center justify-center shadow-xl shadow-emerald-600/20 group-hover:scale-110 transition-transform">
+                        <RefreshCw size={32} />
+                    </div>
+                    <div>
+                        <h4 className="text-lg font-black uppercase tracking-tight">Red Logística Hub</h4>
+                        <p className={`text-xs font-bold uppercase tracking-widest opacity-60 ${textSecondary}`}>Gestionar envíos y traslados</p>
+                    </div>
+                </div>
+                <ChevronRight className="w-10 h-10 text-emerald-600 opacity-20 group-hover:opacity-100 group-hover:translate-x-2 transition-all" />
+            </button>
         </div>
 
         {/* CHARTS GRID */}
@@ -1400,7 +1355,7 @@ function LogisticsManagement({ isDarkMode, textSecondary, cardClass, branches, h
                     <Store className="w-4 h-4 text-accent" />
                     Sucursales Asignadas
                   </h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3">
                     {branches.map((branch: any) => {
                       const isAssigned = driverRoutes.some(r => r.sucursal_id === branch.id);
                       return (

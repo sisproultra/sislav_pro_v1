@@ -1958,7 +1958,8 @@ export default function App() {
             case 'view:machines': return <Machines machines={machines} invoices={invoices} activeItems={activeItems} globalMachineImages={globalConfig?.defaultMachineImages} onAddMachine={async (m) => { await dbSaveMachine(m); refreshData(true); }} onUpdateMachineStatus={async (id, u) => { await dbUpdateMachine(id, u); refreshData(true); }} onSyncMachines={async () => { await dbSyncMachines(); refreshData(true); }} canManage={canManageApp} />;
             case 'view:callcenter': return <CallCenter apiToken={globalConfig?.apiToken || ''} onRefreshData={() => refreshData(true)} clients={clients} company={activeSucursal} invoices={invoices} />;
             case 'view:delivery': return <Delivery onConvertToOrder={(p) => { if (window.innerWidth >= 768) { navigateToPos(p); } else { setActivePickupForFastOrder(p); setIsFastOrderOpen(true); } }} company={activeSucursal} />;
-            case 'view:logistics_hub': return <LogisticsHub />;
+            case 'view:logistics_hub': return <LogisticsHub onOpenDriverView={() => handleViewChange('view:driver_pos')} />;
+            case 'view:driver_pos': return <LogisticsDriverPOS onLogout={handleLogout} onConvertToOrder={(pickup) => { setActivePickupForFastOrder(pickup); setIsFastOrderOpen(true); }} />;
             case 'view:supplies': return <Supplies supplies={supplies} company={activeSucursal} onOpenModal={() => setIsSupplyModalOpen(true)} onDelete={async (id) => { await dbDeleteSupply(id); refreshData(true); }} canManage={canManageApp} />;
             case 'view:purchases': return <Purchases purchases={purchases} company={activeSucursal} onOpenModal={() => setIsPurchaseModalOpen(true)} canManage={canManageApp} />;
             case 'view:package_inventory': return <PackageInventory invoices={invoices} onUpdateStatus={dbUpdateInvoiceStatus} company={activeSucursal} />;
@@ -2121,7 +2122,13 @@ export default function App() {
     if (trackingId) return <Tracking id={trackingId} />;
 
     if (authSession?.user?.role === UserRole.DELIVERY) {
-        return <LogisticsDriverPOS onLogout={handleLogout} />;
+        return <LogisticsDriverPOS 
+            onLogout={handleLogout} 
+            onConvertToOrder={(pickup) => {
+                setActivePickupForFastOrder(pickup);
+                setIsFastOrderOpen(true);
+            }}
+        />;
     }
 
     const params = new URLSearchParams(window.location.search);

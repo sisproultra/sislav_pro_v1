@@ -4,21 +4,32 @@ import {
     Truck, Package, MapPin, User, Calendar, Clock, CheckCircle2, 
     XCircle, Loader2, Search, Filter, ArrowRight, ChevronDown, 
     ChevronUp, AlertTriangle, RefreshCw, Eye, Download, Printer,
-    ArrowDownLeft, ArrowUpRight, Box, Plus, Send
+    ArrowDownLeft, ArrowUpRight, Box, Plus, Send, History
 } from 'lucide-react';
 import { GuiaRemision, OrderStatus } from '../types';
-import { dbGetGuiasRemision, dbGetGuiaDetails, dbUpdateGuiaEstado, getActiveBranchId, dbGetItemsPendientesLogistica, dbGetSucursalById, dbUpdateGuiaItemStatus } from '../services/dbService';
+import { 
+    dbGetGuiasRemision, dbGetGuiaDetails, dbUpdateGuiaEstado, 
+    getActiveBranchId, dbGetItemsPendientesLogistica, 
+    dbGetSucursalById, dbUpdateGuiaItemStatus, dbGetItemLogisticsHistory,
+    dbGetItemsEnPlanta, dbUpdateItemVentaStatus, getActiveUserId, getActiveUserName
+} from '../services/dbService';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import LogisticsBulkDispatchModal from '../components/LogisticsBulkDispatchModal';
 import { printGuiaRemision } from '../utils/printUtils';
 
-const LogisticsHub: React.FC = () => {
+interface LogisticsHubProps {
+    onOpenDriverView?: () => void;
+}
+
+const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView }) => {
     const [guias, setGuias] = useState<GuiaRemision[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'INCOMING' | 'OUTGOING' | 'HISTORY'>('INCOMING');
+    const [activeTab, setActiveTab] = useState<'INCOMING' | 'OUTGOING' | 'HISTORY' | 'PLANTA'>('INCOMING');
     const [selectedGuia, setSelectedGuia] = useState<GuiaRemision | null>(null);
     const [guiaItems, setGuiaItems] = useState<any[]>([]);
+    const [plantaItems, setPlantaItems] = useState<any[]>([]);
+    const [isLoadingPlanta, setIsLoadingPlanta] = useState(false);
     const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
     const [missingItems, setMissingItems] = useState<Record<string, boolean>>({});
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
@@ -29,13 +40,30 @@ const LogisticsHub: React.FC = () => {
     const [pendingItems, setPendingItems] = useState<any[]>([]);
     const [isLoadingPending, setIsLoadingPending] = useState(false);
     const [sucursalInfo, setSucursalInfo] = useState<any>(null);
+    const [selectedItemHistory, setSelectedItemHistory] = useState<any[] | null>(null);
+    const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+    const [historyItemId, setHistoryItemId] = useState<string | null>(null);
 
     const currentBranchId = getActiveBranchId();
 
     useEffect(() => {
         loadGuias();
         loadSucursalInfo();
+        if (activeTab === 'PLANTA') loadPlantaItems();
     }, [activeTab]);
+
+    const loadPlantaItems = async () => {
+        if (!currentBranchId) return;
+        setIsLoadingPlanta(true);
+        try {
+            const items = await dbGetItemsEnPlanta(currentBranchId);
+            setPlantaItems(items);
+        } catch (error) {
+            console.error("Error loading planta items:", error);
+        } finally {
+            setIsLoadingPlanta(false);
+        }
+    };
 
     const loadSucursalInfo = async () => {
         if (!currentBranchId) return;
@@ -44,6 +72,33 @@ const LogisticsHub: React.FC = () => {
             setSucursalInfo(info);
         } catch (e) {
             console.error(e);
+        }
+    };
+
+    const handleViewItemHistory = async (e: React.MouseEvent, itemId: string) => {
+        e.stopPropagation();
+        setHistoryItemId(itemId);
+        setIsHistoryLoading(true);
+        try {
+            const history = await dbGetItemLogisticsHistory(itemId);
+            setSelectedItemHistory(history);
+        } catch (error) {
+            console.error("Error loading item history:", error);
+        } finally {
+            setIsHistoryLoading(false);
+        }
+    };
+
+    const handleUpdatePlantaStatus = async (itemId: string, newStatus: string) => {
+        if (!currentBranchId) return;
+        try {
+            const userId = getActiveUserId();
+            const userName = getActiveUserName() || 'SISTEMA';
+            await dbUpdateItemVentaStatus(itemId, newStatus, currentBranchId, userId, userName);
+            loadPlantaItems();
+        } catch (error) {
+            console.error("Error updating planta item status:", error);
+            alert("Error al actualizar estado.");
         }
     };
 
@@ -80,10 +135,15 @@ const LogisticsHub: React.FC = () => {
             let data: GuiaRemision[] = [];
             
             if (activeTab === 'INCOMING') {
-                data = await dbGetGuiasRemision({
+                const transit = await dbGetGuiasRemision({
                     sucursal_destino_id: currentBranchId!,
                     estado: 'EN_TRANSITO'
                 });
+                const waiting = await dbGetGuiasRemision({
+                    sucursal_destino_id: currentBranchId!,
+                    estado: 'POR_VALIDAR'
+                });
+                data = [...transit, ...waiting];
             } else if (activeTab === 'OUTGOING') {
                 const pending = await dbGetGuiasRemision({
                     sucursal_origen_id: currentBranchId!,
@@ -193,7 +253,10 @@ const LogisticsHub: React.FC = () => {
                 await dbUpdateGuiaItemStatus(selectedGuia.id, itemId, 'RECIBIDO');
             }
 
-            const nuevoEstado = selectedGuia.tipo_guia === 'RECOJO' ? 'RECIBIDO_CENTRAL' : 'RECIBIDO_ACOPIO';
+            // Si es una guía de RETORNO y está volviendo a la sucursal final (ACOPIO o TIENDA), el estado debe ser LISTO
+            const esRetornoAFinal = selectedGuia.tipo_guia === 'RETORNO';
+            const nuevoEstado = esRetornoAFinal ? 'LISTO' : 
+                               (selectedGuia.tipo_guia === 'RECOJO' ? 'RECIBIDO_CENTRAL' : 'RECIBIDO_ACOPIO');
             
             await dbUpdateGuiaEstado(selectedGuia.id, 'ENTREGADO', nuevoEstado, itemsToProcess);
             setSelectedGuia(null);
@@ -246,6 +309,14 @@ const LogisticsHub: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {onOpenDriverView && (
+                            <button 
+                                onClick={onOpenDriverView}
+                                className="px-4 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg"
+                            >
+                                <User size={16} /> VISTA CHOFER
+                            </button>
+                        )}
                         <button 
                             onClick={handleOpenDispatch}
                             disabled={isLoadingPending}
@@ -268,6 +339,14 @@ const LogisticsHub: React.FC = () => {
                         >
                             <ArrowUpRight size={14} /> SALIENTES
                         </button>
+                        {sucursalInfo?.tipo_sucursal === 'CENTRAL' && (
+                            <button 
+                                onClick={() => setActiveTab('PLANTA')}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'PLANTA' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                <RefreshCw size={14} /> CONTROL PLANTA
+                            </button>
+                        )}
                         <button 
                             onClick={() => setActiveTab('HISTORY')}
                             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'HISTORY' ? 'bg-white text-accent shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -312,9 +391,93 @@ const LogisticsHub: React.FC = () => {
 
             <div className="flex-1 overflow-hidden flex flex-col md:flex-row p-6 gap-6">
                 
-                {/* LIST OF GUIAS */}
+                {/* LIST OF GUIAS & PLANTA CONTROL */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4">
-                    {isLoading ? (
+                    {activeTab === 'PLANTA' ? (
+                        <div className="space-y-4">
+                            {isLoadingPlanta ? (
+                                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                                    <Loader2 className="animate-spin text-emerald-500" size={40} />
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Consultando cola de producción...</p>
+                                </div>
+                            ) : plantaItems.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-20 bg-white rounded-[2rem] border-2 border-dashed border-slate-200">
+                                    <CheckCircle2 size={48} className="text-emerald-100 mb-4" />
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No hay prendas en procesamiento hoy</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-3">
+                                    {plantaItems.map((item) => (
+                                        <div 
+                                            key={item.id}
+                                            className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between group"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                                                    item.estado === 'RECIBIDO_CENTRAL' ? 'bg-blue-50 text-blue-500' :
+                                                    item.estado === 'EN_LAVADO' ? 'bg-cyan-50 text-cyan-500' :
+                                                    item.estado === 'EN_SECADO' ? 'bg-amber-50 text-amber-500' :
+                                                    'bg-emerald-50 text-emerald-500'
+                                                }`}>
+                                                    {item.estado === 'RECIBIDO_CENTRAL' ? <Box size={24} /> :
+                                                     item.estado === 'EN_LAVADO' ? <RefreshCw className="animate-spin-slow" size={24} /> :
+                                                     item.estado === 'EN_SECADO' ? <Clock size={24} /> :
+                                                     <CheckCircle2 size={24} />}
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="font-black text-slate-800 text-sm">{item.descripcion}</h4>
+                                                        <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase">
+                                                            {item.ventas?.codigo_orden}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                                        {item.ventas?.clientes?.nombre_completo || item.ventas?.clientes?.nombres}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                {/* PROCESS BUTTONS */}
+                                                {item.estado === 'RECIBIDO_CENTRAL' && (
+                                                    <button 
+                                                        onClick={() => handleUpdatePlantaStatus(item.id, 'EN_LAVADO')}
+                                                        className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md"
+                                                    >
+                                                        INICIAR LAVADO
+                                                    </button>
+                                                )}
+                                                {item.estado === 'EN_LAVADO' && (
+                                                    <button 
+                                                        onClick={() => handleUpdatePlantaStatus(item.id, 'EN_SECADO')}
+                                                        className="px-3 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md"
+                                                    >
+                                                        PASAR A SECADO
+                                                    </button>
+                                                )}
+                                                {item.estado === 'EN_SECADO' && (
+                                                    <button 
+                                                        onClick={() => handleUpdatePlantaStatus(item.id, 'EMPAQUETADO')}
+                                                        className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md"
+                                                    >
+                                                        EMPAQUETAR
+                                                    </button>
+                                                )}
+                                                {item.estado === 'EMPAQUETADO' && (
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                                            <CheckCircle2 size={10} /> LISTO PARA RETORNO
+                                                        </span>
+                                                        <p className="text-[8px] font-bold text-slate-400 uppercase italic">Aparecerá en "Nuevo Envío"</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : isLoading ? (
                         <div className="flex flex-col items-center justify-center py-20 gap-4">
                             <Loader2 className="animate-spin text-accent" size={40} />
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sincronizando logística...</p>
@@ -351,9 +514,11 @@ const LogisticsHub: React.FC = () => {
                                             </span>
                                             <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
                                                 guia.estado === 'PENDIENTE' ? 'bg-amber-100 text-amber-600' : 
-                                                guia.estado === 'EN_TRANSITO' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
+                                                guia.estado === 'EN_TRANSITO' ? 'bg-blue-100 text-blue-600' : 
+                                                guia.estado === 'POR_VALIDAR' ? 'bg-orange-100 text-orange-600 animate-pulse' :
+                                                'bg-emerald-100 text-emerald-600'
                                             }`}>
-                                                {guia.estado}
+                                                {guia.estado === 'POR_VALIDAR' ? 'POR VALIDAR' : guia.estado}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -433,9 +598,17 @@ const LogisticsHub: React.FC = () => {
                                                             </div>
                                                             <div className="flex-1">
                                                                 <p className="text-sm font-black text-slate-800 leading-tight">{item.items_venta?.descripcion}</p>
-                                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                                                    {item.items_venta?.cantidad} {item.items_venta?.codigo_unidad}
-                                                                </p>
+                                                                <div className="flex items-center gap-3 mt-1">
+                                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                                                                        {item.items_venta?.cantidad} {item.items_venta?.codigo_unidad}
+                                                                    </p>
+                                                                    <button 
+                                                                        onClick={(e) => handleViewItemHistory(e, item.items_venta_id || item.item_id)}
+                                                                        className="flex items-center gap-1 text-[9px] font-black text-accent hover:underline uppercase tracking-tighter"
+                                                                    >
+                                                                        <History size={11} /> Trazabilidad
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                             {activeTab === 'INCOMING' && (
                                                                 <button 
@@ -455,6 +628,14 @@ const LogisticsHub: React.FC = () => {
 
                                 {activeTab === 'INCOMING' && (
                                     <div className="p-6 bg-white border-t border-slate-100">
+                                        {selectedGuia.estado === 'POR_VALIDAR' && (
+                                            <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 flex gap-3 mb-4">
+                                                <MapPin className="text-orange-500 shrink-0" size={18} />
+                                                <p className="text-[10px] text-orange-800 font-bold uppercase leading-tight">
+                                                    El chofer indica que YA LLEGÓ. Revisa la carga físicamente antes de confirmar.
+                                                </p>
+                                            </div>
+                                        )}
                                         <button
                                             onClick={handleReceiveGuia}
                                             disabled={isUpdating || isLoadingDetails || !allItemsProcessed}
@@ -500,6 +681,109 @@ const LogisticsHub: React.FC = () => {
                     setPendingItems([]);
                 }}
             />
+
+            {/* ITEM HISTORY MODAL */}
+            {historyItemId && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 animate-in fade-in transition-all">
+                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+                        <div className="p-6 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center">
+                                    <History size={20} className="text-accent" />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-sm uppercase tracking-widest">Historial de Traslado</h3>
+                                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Trazabilidad del Item</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setHistoryItemId(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><XCircle size={24} /></button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/50">
+                            {isHistoryLoading ? (
+                                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                                    <Loader2 className="animate-spin text-accent" size={32} />
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Consultando historial...</p>
+                                </div>
+                            ) : !selectedItemHistory || selectedItemHistory.length === 0 ? (
+                                <div className="text-center py-10">
+                                    <AlertTriangle size={32} className="text-amber-500 mx-auto mb-3" />
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">No se encontró historial para este item.</p>
+                                </div>
+                            ) : (
+                                <div className="relative space-y-6">
+                                    {/* Timeline line */}
+                                    <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-slate-200" />
+                                    
+                                    {selectedItemHistory.map((entry, idx) => (
+                                        <div key={idx} className="relative flex gap-4 pl-10">
+                                            {/* Dot */}
+                                            <div className={`absolute left-[13px] top-1.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm ring-4 ring-slate-100 ${
+                                                idx === 0 ? 'bg-accent' : 'bg-slate-400'
+                                            }`} />
+                                            
+                                            <div className="flex-1 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden group">
+                                                {/* Left Accent Bar */}
+                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+                                                    entry.estado_nuevo.includes('RECIBIDO') ? 'bg-emerald-500' : 
+                                                    entry.estado_nuevo.includes('EN_TRANSITO') ? 'bg-blue-500' : 'bg-slate-300'
+                                                }`} />
+                                                
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{format(new Date(entry.fecha_registro || entry.fecha_cambio), 'PPP p', { locale: es })}</p>
+                                                        <h4 className={`font-black text-xs uppercase tracking-tight mt-0.5 ${
+                                                            entry.estado_nuevo.includes('RECIBIDO') ? 'text-emerald-700' : 
+                                                            entry.estado_nuevo.includes('EN_TRANSITO') ? 'text-blue-700' : 'text-slate-800'
+                                                        }`}>
+                                                            {entry.estado_nuevo.replace(/_/g, ' ')}
+                                                        </h4>
+                                                    </div>
+                                                    <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-tighter">
+                                                        {entry.guia?.codigo_guia || 'MOV. MANUAL'}
+                                                    </span>
+                                                </div>
+                                                
+                                                <div className="space-y-1.5 border-t border-slate-50 pt-2">
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase leading-snug">
+                                                        <MapPin size={10} className="inline mr-1 text-slate-400" />
+                                                        Ubicación: <span className="text-slate-700">{
+                                                            entry.ubicacion_tipo === 'SUCURSAL' ? 
+                                                            (entry.guia?.sucursal_destino?.nombre_sucursal || 'Destino') : 
+                                                            'En Tránsito (Chofer)'
+                                                        }</span>
+                                                    </p>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase leading-snug">
+                                                        <User size={10} className="inline mr-1 text-slate-400" />
+                                                        Responsable: <span className="text-slate-700">{entry.usuario?.nombre_completo || entry.usuario_nombre || 'SISTEMA'}</span>
+                                                    </p>
+                                                </div>
+                                                
+                                                {entry.guia && (
+                                                    <div className="mt-2 text-[9px] bg-slate-50 p-2 rounded-lg flex items-center justify-between">
+                                                        <div className="flex items-center gap-1 text-slate-400 font-bold uppercase tracking-tighter">
+                                                            <span>{entry.guia.sucursal_origen?.nombre_sucursal}</span>
+                                                            <ArrowRight size={8} />
+                                                            <span>{entry.guia.sucursal_destino?.nombre_sucursal}</span>
+                                                        </div>
+                                                        <div className="font-black text-slate-500 uppercase tracking-tighter">
+                                                            {entry.guia.tipo_guia}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Las acciones marcadas con <span className="text-emerald-500">RECIBIDO</span> confirman la custodia física en sucursal.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

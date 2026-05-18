@@ -35,13 +35,20 @@ const LogisticsBulkDispatchModal: React.FC<LogisticsBulkDispatchModalProps> = ({
     // Group items by order
     const groupedItems = useMemo(() => {
         const groups: Record<string, any[]> = {};
-        selectedItems.forEach(item => {
+        
+        // Si estamos en retorno, solo mostramos los items que pertenecen a la sucursal destino seleccionada
+        // Si no hay destino seleccionado, mostramos todos para que el usuario sepa qué hay
+        const itemsToDisplay = (type === 'RETORNO' && selectedDestBranchId) 
+            ? selectedItems.filter(it => it.sucursal_id === selectedDestBranchId)
+            : selectedItems;
+
+        itemsToDisplay.forEach(item => {
             const orderId = item.venta_id || item.orden_id || 'SIN_ORDEN';
             if (!groups[orderId]) groups[orderId] = [];
             groups[orderId].push(item);
         });
         return groups;
-    }, [selectedItems]);
+    }, [selectedItems, type, selectedDestBranchId]);
 
     const orderIds = Object.keys(groupedItems);
 

@@ -138,6 +138,10 @@ export const getActiveUserId = () => {
     return activeUserId;
 };
 
+export const getActiveUserName = () => {
+    return localStorage.getItem('sislav_current_user_name') || 'SISTEMA';
+};
+
 /**
  * Autenticación para usuarios operativos (Sucursal) usando Supabase Auth con correos virtuales
  */
@@ -3968,19 +3972,30 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: {
 
     const itemIds = items.map(it => it.id);
 
-    // 2. Vincular items y actualizar estados vía RPC para atomicidad
+    // 2. Vincular items y registrar movimiento inicial como "Asignado"
+    // Si la guía es PENDIENTE, la ubicación inicial sigue siendo la SUCURSAL de origen
+    const isPending = (guia.estado || 'PENDIENTE') === 'PENDIENTE';
+    
     const { error: rpcError } = await supabase.rpc('procesar_movimiento_logistico', {
         p_items_ids: itemIds,
         p_guia_id: guiaData.id,
         p_nuevo_estado: guia.tipo_guia === 'RECOJO' ? 'EN_TRANSITO_CENTRAL' : 'EN_TRANSITO_ACOPIO',
-        p_ubicacion_tipo: 'DELIVERY',
-        p_ubicacion_id: guia.chofer_id,
+        p_ubicacion_tipo: isPending ? 'SUCURSAL' : 'DELIVERY',
+        p_ubicacion_id: isPending ? guia.sucursal_origen_id : guia.chofer_id,
         p_usuario_id: userId,
         p_usuario_nombre: userName,
         p_empresa_holding_id: holdingId
     });
 
     if (rpcError) throw rpcError;
+
+    // 3. Forzar el estado de la guía a PENDIENTE si el RPC lo cambió (mecanismo de seguridad)
+    if (isPending) {
+        await supabase
+            .from('guias_remision')
+            .update({ estado: 'PENDIENTE' })
+            .eq('id', guiaData.id);
+    }
 
     // 3. Insertar en items_guia para referencia
     // Nota: El RPC procesar_movimiento_logistico podría ya estar insertando en items_guia
@@ -4092,6 +4107,27 @@ export const dbGetGuiaDetails = async (guiaId: string) => {
     }));
 };
 
+export const dbGetItemLogisticsHistory = async (itemId: string) => {
+    const { data, error } = await supabase
+        .from('items_historial_logistica')
+        .select(`
+            *,
+            guia:guias_remision (
+                codigo_guia,
+                tipo_guia,
+                fecha_registro,
+                sucursal_origen:sucursales!guias_remision_sucursal_origen_id_fkey(nombre_sucursal),
+                sucursal_destino:sucursales!guias_remision_sucursal_destino_id_fkey(nombre_sucursal)
+            ),
+            usuario:usuarios_login(nombre_completo)
+        `)
+        .eq('item_id', itemId)
+        .order('fecha_registro', { ascending: false });
+
+    if (error) throw error;
+    return data;
+};
+
 export const dbUpdateGuiaEstado = async (guiaId: string, nuevoEstadoGuia: string, itemEstado?: string, itemsToProcess?: string[]) => {
     const userId = getActiveUserId();
     const userName = localStorage.getItem('sislav_current_user_name') || 'Sistema';
@@ -4170,6 +4206,59 @@ export const dbUpdateGuiaItemStatus = async (guiaId: string, itemId: string, nue
     }
 };
 
+/**
+ * Actualiza el estado de un ítem de venta y registra el movimiento en el historial
+ */
+export const dbUpdateItemVentaStatus = async (itemId: string, nuevoEstado: string, sucursalId: string, usuarioId: string, usuarioNombre: string) => {
+    // 1. Actualizar el ítem
+    const { error: itemError } = await supabase
+        .from('items_venta')
+        .update({ estado: nuevoEstado })
+        .eq('id', itemId);
+
+    if (itemError) throw itemError;
+
+    // 2. Registrar movimiento en logística
+    const { error: logError } = await supabase
+        .from('logistica_movimientos')
+        .insert({
+            item_venta_id: itemId,
+            estado_nuevo: nuevoEstado,
+            ubicacion_tipo: 'SUCURSAL',
+            ubicacion_id: sucursalId,
+            usuario_id: usuarioId,
+            usuario_nombre: usuarioNombre,
+            fecha_registro: new Date().toISOString()
+        });
+
+    if (logError) throw logError;
+};
+
+/**
+ * Obtiene los items que están físicamente en una sucursal central para procesamiento
+ */
+export const dbGetItemsEnPlanta = async (sucursalId: string) => {
+    const { data, error } = await supabase
+        .from('items_venta')
+        .select(`
+            *,
+            ventas (
+                id,
+                codigo_orden,
+                clientes (
+                    id,
+                    nombre_completo,
+                    nombres,
+                    celular
+                )
+            )
+        `)
+        .in('estado', ['RECIBIDO_CENTRAL', 'EN_LAVADO', 'EN_SECADO', 'EMPAQUETADO']);
+
+    if (error) throw error;
+    return data || [];
+};
+
 // --- LOGÍSTICA: CONEXIONES ENTRE SUCURSALES ---
 
 export const dbGetSucursalConexiones = async (holdingId: string) => {
@@ -4209,13 +4298,20 @@ export const dbRemoveSucursalConexion = async (origenId: string, destinoId: stri
 };
 
 export const dbGetItemsPendientesLogistica = async (sucursalId: string, tipoSucursal: 'ACOPIO' | 'CENTRAL' | 'TIENDA') => {
-    const targetStatus = tipoSucursal === 'CENTRAL' ? ['LISTO'] : ['RECIBIDO', 'PENDIENTE'];
-    
-    const { data, error } = await supabase
+    let query = supabase
         .from('items_venta')
-        .select('*, ventas(*, clientes(*))')
-        .eq('sucursal_id', sucursalId)
-        .in('estado', targetStatus);
+        .select('*, ventas(*, clientes(*))');
+
+    if (tipoSucursal === 'CENTRAL') {
+        // Para la planta, pendientes de envío son los que ya están empaquetados
+        // Independientemente de su sucursal_id original (vienen de cualquier lado)
+        query = query.eq('estado', 'EMPAQUETADO');
+    } else {
+        // Para tiendas/acopios, pendientes de envío son los nuevos o recién recibidos
+        query = query.eq('sucursal_id', sucursalId).in('estado', ['RECIBIDO', 'PENDIENTE']);
+    }
+    
+    const { data, error } = await query;
     
     if (error) throw error;
     return data;

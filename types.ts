@@ -758,7 +758,7 @@ export interface GuiaRemision {
     chofer_id: string;
     codigo_guia: string;
     tipo_guia: 'RECOJO' | 'RETORNO';
-    estado: 'PENDIENTE' | 'EN_TRANSITO' | 'ENTREGADO' | 'CANCELADO';
+    estado: 'PENDIENTE' | 'EN_TRANSITO' | 'POR_VALIDAR' | 'ENTREGADO' | 'CANCELADO';
     fecha_registro: string;
     fecha_entrega?: string;
     registrado_por: string;
