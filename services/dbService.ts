@@ -1117,7 +1117,10 @@ export const dbGetClients = async (page: number = 1, pageSize: number = 100, sea
             .eq('activo', true);
 
         if (searchTerm) {
-            query = query.or(`nombres.ilike.%${searchTerm}%,apellidos.ilike.%${searchTerm}%,dni.ilike.%${searchTerm}%,telefono.ilike.%${searchTerm}%`);
+            const words = searchTerm.trim().split(/\s+/).filter(w => w.length > 0);
+            words.forEach(word => {
+                query = query.or(`nombres.ilike.%${word}%,apellidos.ilike.%${word}%,dni.ilike.%${word}%,telefono.ilike.%${word}%,razon_social.ilike.%${word}%`);
+            });
         }
 
         const { data, count, error } = await query
@@ -1135,7 +1138,7 @@ export const dbGetClients = async (page: number = 1, pageSize: number = 100, sea
             empresa_holding_id: c.empresa_holding_id, 
             docType: c.tipo_documento || (c.dni?.length === 11 ? 'RUC' : 'DNI'), 
             docNumber: c.dni || '00000000', 
-            name: fixEncoding(c.nombres || 'CLIENTE VARIOS').toUpperCase(), 
+            name: fixEncoding(`${c.nombres || ''} ${c.apellidos || ''}`).trim().toUpperCase() || 'CLIENTE VARIOS', 
             ruc: c.ruc,
             razon_social: c.razon_social,
             phone: c.telefono || '', 
@@ -1191,7 +1194,7 @@ export const dbGetBirthdaysToday = async (branchId?: string): Promise<Client[]> 
             empresa_holding_id: c.empresa_holding_id, 
             docType: c.tipo_documento || (c.dni?.length === 11 ? 'RUC' : 'DNI'), 
             docNumber: c.dni || '00000000', 
-            name: fixEncoding(c.nombres || 'CLIENTE VARIOS').toUpperCase(), 
+            name: fixEncoding(`${c.nombres || ''} ${c.apellidos || ''}`).trim().toUpperCase() || 'CLIENTE VARIOS', 
             phone: c.telefono || '', 
             email: c.email || '', 
             address: fixEncoding(c.direccion || '-'), 
@@ -1917,7 +1920,7 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
                     empresa_holding_id: c.empresa_holding_id, 
                     docType: c.tipo_documento || (c.dni?.length === 11 ? 'RUC' : 'DNI'), 
                     docNumber: c.dni || '00000000', 
-                    name: fixEncoding(c.nombres || 'CLIENTE VARIOS').toUpperCase(), 
+                    name: fixEncoding(`${c.nombres || ''} ${c.apellidos || ''}`).trim().toUpperCase() || 'CLIENTE VARIOS', 
                     phone: c.telefono || '', 
                     address: fixEncoding(c.direccion || '-'), 
                     points: c.puntos || 0, 
@@ -2150,7 +2153,7 @@ export const dbGetInvoiceFull = async (id: string): Promise<Invoice | null> => {
             empresa_holding_id: c.empresa_holding_id, 
             docType: c.tipo_documento || (c.dni?.length === 11 ? 'RUC' : 'DNI'), 
             docNumber: c.dni || '00000000', 
-            name: fixEncoding(c.nombres || 'CLIENTE VARIOS').toUpperCase(), 
+            name: fixEncoding(`${c.nombres || ''} ${c.apellidos || ''}`).trim().toUpperCase() || 'CLIENTE VARIOS', 
             ruc: c.ruc,
             razon_social: c.razon_social,
             phone: c.telefono || '', 
@@ -4013,7 +4016,6 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: {
             const entry: any = {
                 guia_id: guiaData.id,
                 item_venta_id: item.id,
-                item_id: item.id, // Support both names for resiliency
                 estado_item: 'CARGADO',
                 empresa_holding_id: holdingId
             };
@@ -4027,7 +4029,7 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: {
         const { error: itemsError } = await supabase.from('items_guia').insert(itemsGuiaMap);
         if (itemsError) {
             console.warn("Items guide insertion failed, trying fallback:", itemsError.message);
-            // Reintentar con solo item_venta_id
+            // Reintentar con solo item_venta_id (esto ya es lo que hace el map arriba, pero por si acaso falló por algo más)
             const fallback1 = itemsToInsert.map(it => ({
                 guia_id: guiaData.id,
                 item_venta_id: it.id,
@@ -4036,14 +4038,7 @@ export const dbCreateGuiaRemision = async (guia: Partial<GuiaRemision>, items: {
             }));
             const { error: err1 } = await supabase.from('items_guia').insert(fallback1);
             if (err1) {
-                // Reintentar con solo item_id
-                const fallback2 = itemsToInsert.map(it => ({
-                    guia_id: guiaData.id,
-                    item_id: it.id,
-                    estado_item: 'CARGADO',
-                    empresa_holding_id: holdingId
-                }));
-                await supabase.from('items_guia').insert(fallback2);
+                console.error("Retrying guide item insertion failed:", err1.message);
             }
         }
     }
@@ -4084,26 +4079,39 @@ export const dbGetGuiasRemision = async (filters: {
 };
 
 export const dbGetGuiaDetails = async (guiaId: string) => {
-    // Try multiple join options for resiliency
+    // Consulta optimizada y simplificada para evitar errores de alias de Supabase (clientes_2, etc)
     const { data, error } = await supabase
         .from('items_guia')
-        .select('*, item:items_venta(*, ventas(*, clientes(*))), item_venta:items_venta(*, ventas(*, clientes(*))), items_venta(*, ventas(*, clientes(*)))')
+        .select(`
+            *,
+            items_venta (
+                *,
+                ventas (
+                    *,
+                    clientes (
+                        id, 
+                        nombres, 
+                        apellidos, 
+                        dni, 
+                        ruc, 
+                        razon_social
+                    )
+                )
+            )
+        `)
         .eq('guia_id', guiaId);
         
     if (error) {
-        console.warn("Complex join failed, trying simple join:", error.message);
-        const { data: simpleData, error: simpleError } = await supabase
-            .from('items_guia')
-            .select('*, items_venta(*, ventas(*, clientes(*)))')
-            .eq('guia_id', guiaId);
-        if (simpleError) throw simpleError;
-        return simpleData;
+        console.warn("Simple join failed:", error.message);
+        throw error;
     }
     
-    // Normalize to always have items_venta
+    // Mapear para compatibilidad: Asegurar que existan item e items_venta
     return (data || []).map(row => ({
         ...row,
-        items_venta: row.items_venta || row.item || row.item_venta
+        item: row.items_venta,
+        item_venta: row.items_venta,
+        items_venta: row.items_venta
     }));
 };
 
@@ -4239,15 +4247,62 @@ export const dbUpdateMultipleItemsStatus = async (itemIds: string[], nuevoEstado
 /**
  * Obtiene los items que están físicamente en una sucursal central para procesamiento
  */
-export const dbGetItemsEnPlanta = async (sucursalId: string) => {
+export const dbGetItemsEnPlanta = async (sucursalId: string | null) => {
     // Simplificado: Solo mostramos lo que está recibido en central o ya empaquetado
-    const { data, error } = await supabase
+    // Intentamos traer también info de la última guía asociada para consolidación
+    // Intento 1: Con join a items_guia
+    let { data, error } = await supabase
         .from('items_venta')
-        .select('*, ventas(*, clientes(*), sucursales(*))')
+        .select(`
+            *, 
+            ventas (
+                *, 
+                clientes (
+                    id, 
+                    nombres, 
+                    apellidos, 
+                    dni, 
+                    ruc, 
+                    razon_social
+                ), 
+                sucursales (*)
+            ), 
+            items_guia (
+                guia_id, 
+                guias_remision (
+                    codigo_guia
+                )
+            )
+        `)
         .in('estado', ['RECIBIDO_CENTRAL', 'EMPAQUETADO']);
 
-    if (error) throw error;
-    return data || [];
+    if (error) {
+        console.warn("dbGetItemsEnPlanta join failed, using simple fetch:", error.message);
+        const { data: simpleData, error: simpleError } = await supabase
+            .from('items_venta')
+            .select(`
+                *, 
+                ventas (
+                    *, 
+                    clientes (id, nombres, apellidos, dni, ruc, razon_social), 
+                    sucursales (*)
+                )
+            `)
+            .in('estado', ['RECIBIDO_CENTRAL', 'EMPAQUETADO']);
+        
+        if (simpleError) throw simpleError;
+        data = simpleData;
+    }
+    
+    return (data || []).map(it => {
+        const guias = Array.isArray((it as any).items_guia) ? (it as any).items_guia : [(it as any).items_guia].filter(Boolean);
+        const latestGuia = (guias as any[])[(guias as any[]).length - 1]?.guias_remision;
+
+        return {
+            ...it,
+            codigo_guia: latestGuia?.codigo_guia || 'SIN GUÍA'
+        };
+    });
 };
 
 // --- LOGÍSTICA: CONEXIONES ENTRE SUCURSALES ---
@@ -4288,18 +4343,18 @@ export const dbRemoveSucursalConexion = async (origenId: string, destinoId: stri
     if (error) throw error;
 };
 
-export const dbGetItemsPendientesLogistica = async (sucursalId: string, tipoSucursal: 'ACOPIO' | 'CENTRAL' | 'TIENDA') => {
+export const dbGetItemsPendientesLogistica = async (sucursalId: string, tipoSucursal: string) => {
     let query = supabase
         .from('items_venta')
         .select('*, ventas(*, clientes(*))');
 
-    if (tipoSucursal === 'CENTRAL') {
-        // Para la planta, pendientes de envío son los que ya están empaquetados
+    if (tipoSucursal === 'CENTRAL' || tipoSucursal === 'PLANTA') {
+        // Para la planta, pendientes de envío son los que ya están empaquetados o marcados como listos en planta
         // Independientemente de su sucursal_id original (vienen de cualquier lado)
-        query = query.eq('estado', 'EMPAQUETADO');
+        query = query.in('estado', ['EMPAQUETADO', 'LISTO_EN_PLANTA', 'LISTO_PARA_RETORNO']);
     } else {
         // Para tiendas/acopios, pendientes de envío son los nuevos o recién recibidos
-        query = query.eq('sucursal_id', sucursalId).in('estado', ['RECIBIDO', 'PENDIENTE']);
+        query = query.eq('sucursal_id', sucursalId).in('estado', ['RECIBIDO', 'PENDIENTE', 'LISTO']);
     }
     
     const { data, error } = await query;

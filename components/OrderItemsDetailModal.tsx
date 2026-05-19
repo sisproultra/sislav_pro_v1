@@ -104,50 +104,49 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
       <div className="w-full h-full flex flex-col overflow-hidden animate-in zoom-in-95 duration-500">
         
         {/* HEADER MODERNO - FULLWIDTH */}
-        <div className="p-4 md:px-8 md:py-5 shrink-0 relative overflow-hidden flex items-center justify-between shadow-lg" style={{ backgroundColor: brandPrimary }}>
+        <div className="p-4 md:px-8 md:py-4 shrink-0 relative overflow-hidden flex items-center justify-between shadow-lg" style={{ backgroundColor: brandPrimary }}>
           <div className="flex items-center gap-4 relative z-10">
-            <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-md border border-white/20">
-                <Shirt size={28} className="text-white" />
+            <div className="bg-white/20 p-2.5 rounded-xl backdrop-blur-md border border-white/20 shadow-inner">
+                <Shirt size={24} className="text-white" />
             </div>
             <div>
-              <h3 className="font-black text-xl md:text-3xl text-white uppercase tracking-tighter leading-none">Orden #{initialInvoice.ordenNumber}</h3>
-              <p className="text-[10px] md:text-[11px] font-bold text-white/80 uppercase tracking-[0.2em] mt-1">{initialInvoice.client.name.toUpperCase()}</p>
+              <h3 className="font-black text-lg md:text-2xl text-white uppercase tracking-tighter leading-none">Orden #{initialInvoice.ordenNumber}</h3>
+              <p className="text-[9px] md:text-[10px] font-bold text-white/70 uppercase tracking-[0.2em] mt-1">{initialInvoice.client.name.toUpperCase()}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white border border-white/10 z-20"><X size={28} strokeWidth={3}/></button>
+          <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white border border-white/10 z-20 shadow-lg active:scale-90"><X size={24} strokeWidth={3}/></button>
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
           {isLoading ? (
-              <div className="h-full flex flex-col items-center justify-center gap-6 py-20 animate-pulse">
+              <div className="h-full flex flex-col items-center justify-center gap-4 py-20">
                   <div className="relative">
-                    <Loader2 className="animate-spin text-indigo-600" size={64} strokeWidth={3} />
-                    <DollarSign className="absolute inset-0 m-auto text-indigo-400" size={24} />
+                    <Loader2 className="animate-spin" style={{ color: brandPrimary }} size={48} strokeWidth={3} />
                   </div>
-                  <div className="text-center font-black uppercase tracking-[0.3em] text-slate-900">Sincronizando Auditoría...</div>
+                  <div className="text-center font-black uppercase tracking-[0.2em] text-slate-400 text-[10px]">Sincronizando Auditoría...</div>
               </div>
           ) : !invoice ? (
               <div className="h-full flex flex-col items-center justify-center p-10 text-slate-400 gap-4">
                 <AlertTriangle size={48} className="text-amber-500" />
                 <p className="uppercase font-black text-xs tracking-widest">No se pudo recuperar la información</p>
-                <button onClick={loadFullInvoice} className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold uppercase">Reintentar</button>
+                <button onClick={loadFullInvoice} className="px-6 py-2 rounded-xl font-bold uppercase text-white shadow-lg" style={{ backgroundColor: brandPrimary }}>Reintentar</button>
               </div>
           ) : (
             <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto w-full">
               
               {/* SECCIÓN 1: CABECERA DE ESTADO (Compacta en Mobile) */}
-              <div className="grid grid-cols-3 gap-2 md:gap-5">
-                <div className="bg-white border-b-2 md:border-b-6 border-emerald-500 p-2 md:p-5 rounded-2xl md:rounded-3xl shadow-xl flex flex-col items-center text-center">
-                  <span className="text-[7px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total</span>
-                  <p className="text-sm md:text-3xl font-black text-slate-900 tracking-tighter">{currency} {(invoice.totals.total - (invoice.descuento || 0)).toFixed(1)}</p>
+              <div className="grid grid-cols-3 gap-2 md:gap-4">
+                <div className="bg-white border-b-4 border-emerald-500 p-2 md:p-4 rounded-2xl md:rounded-[1.5rem] shadow-md flex flex-col items-center text-center">
+                  <span className="text-[7px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Total</span>
+                  <p className="text-sm md:text-2xl font-black text-slate-800 tracking-tighter">{currency} {(invoice.totals.total - (invoice.descuento || 0)).toFixed(2)}</p>
                 </div>
-                <div className="bg-white border-b-2 md:border-b-6 border-indigo-500 p-2 md:p-5 rounded-2xl md:rounded-3xl shadow-xl flex flex-col items-center text-center">
-                  <span className="text-[7px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Abonado</span>
-                  <p className="text-sm md:text-3xl font-black text-indigo-600 tracking-tighter">{currency} {(invoice.prePaymentAmount || 0).toFixed(1)}</p>
+                <div className="bg-white border-b-4 border-indigo-500 p-2 md:p-4 rounded-2xl md:rounded-[1.5rem] shadow-md flex flex-col items-center text-center">
+                  <span className="text-[7px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Abonado</span>
+                  <p className="text-sm md:text-2xl font-black text-indigo-600 tracking-tighter">{currency} {(invoice.prePaymentAmount || 0).toFixed(2)}</p>
                 </div>
-                <div className={`bg-white border-b-2 md:border-b-6 p-2 md:p-5 rounded-2xl md:rounded-3xl shadow-xl flex flex-col items-center text-center ${payInfo.isPaid ? 'border-emerald-500' : 'border-red-500'}`}>
-                  <span className="text-[7px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Saldo</span>
-                  <p className={`text-sm md:text-3xl font-black tracking-tighter ${payInfo.isPaid ? 'text-slate-300' : 'text-red-600 animate-pulse'}`}>{currency} {payInfo.pending.toFixed(1)}</p>
+                <div className={`bg-white border-b-4 p-2 md:p-4 rounded-2xl md:rounded-[1.5rem] shadow-md flex flex-col items-center text-center ${payInfo.isPaid ? 'border-emerald-500' : 'border-red-500'}`}>
+                  <span className="text-[7px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Saldo</span>
+                  <p className={`text-sm md:text-2xl font-black tracking-tighter ${payInfo.isPaid ? 'text-slate-300' : 'text-red-600 animate-pulse'}`}>{currency} {payInfo.pending.toFixed(2)}</p>
                 </div>
               </div>
 
@@ -202,173 +201,130 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* SECCIÓN 2: DETALLE DE PRENDAS (ESTILO CARDS FOTO) */}
-              <div className="space-y-6">
+              {/* SECCIÓN 2: DETALLE DE PRENDAS (TIPO TABLA) */}
+              <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
-                  <h4 className="font-black text-lg text-slate-900 uppercase tracking-tight">Análisis Técnico de Prendas</h4>
+                  <div className="w-1 h-5 bg-indigo-600 rounded-full" style={{ backgroundColor: brandPrimary }}></div>
+                  <h4 className="font-black text-base text-slate-800 uppercase tracking-tight">Análisis Técnico de Prendas</h4>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                  {[...invoice.items].sort((a: any, b: any) => {
-                      const isACanceled = a.estado_id === 9 || a.status === 'ANULADO' || a.status === 'CANCELADO';
-                      const isBCanceled = b.estado_id === 9 || b.status === 'ANULADO' || b.status === 'CANCELADO';
-                      return (isACanceled ? 1 : 0) - (isBCanceled ? 1 : 0);
-                  }).flatMap((item, itemIdx) => {
-                      let units: any[] = [];
-                      const rawSource = (item as any).observaciones || item.details || '';
-                      
-                      try { 
-                          if (rawSource && typeof rawSource === 'string' && rawSource.trim().startsWith('[')) {
-                              const parsed = JSON.parse(rawSource);
-                              if (Array.isArray(parsed) && parsed.length > 0) {
-                                  units = parsed.map(u => ({
-                                      ...u,
-                                      details: u.observaciones || u.details || '' // Mapeamos observaciones internas al campo details para renderizado
-                                  }));
-                              }
-                          }
-                          if (units.length === 0) throw new Error();
-                      } catch (e) { 
-                          units = [{ 
-                              details: (rawSource && typeof rawSource === 'string' && rawSource.trim().startsWith('[')) ? '' : rawSource, 
-                              images: [ (item as any).url_foto_1, (item as any).url_foto_2, (item as any).url_foto_3 ].filter(Boolean),
-                              audioNote: (item as any).url_audio || (item as any).unit_audio || (item as any).audioNote, 
-                              color: (item as any).color,
-                              defects: (item as any).defectos ? (item as any).defectos.split(', ') : [],
-                              deliveryDate: (item as any).fecha_entrega_item || (item as any).fecha_entrega_especifica || item.itemDeliveryDate
-                          }]; 
-                      }
+                <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50/80 border-b border-slate-100">
+                          <th className="px-4 py-3 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Prenda / Color</th>
+                          <th className="px-4 py-3 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Defectos / Notas</th>
+                          <th className="px-4 py-3 text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">Multim.</th>
+                          <th className="px-4 py-3 text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">Entrega</th>
+                          <th className="px-4 py-3 text-right text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {[...invoice.items].sort((a: any, b: any) => {
+                            const isACanceled = a.estado_id === 9 || a.status === 'ANULADO' || a.status === 'CANCELADO';
+                            const isBCanceled = b.estado_id === 9 || b.status === 'ANULADO' || b.status === 'CANCELADO';
+                            return (isACanceled ? 1 : 0) - (isBCanceled ? 1 : 0);
+                        }).flatMap((item, itemIdx) => {
+                            let units: any[] = [];
+                            const rawSource = (item as any).observaciones || item.details || '';
+                            
+                            try { 
+                                if (rawSource && typeof rawSource === 'string' && rawSource.trim().startsWith('[')) {
+                                    const parsed = JSON.parse(rawSource);
+                                    if (Array.isArray(parsed) && parsed.length > 0) {
+                                        units = parsed.map(u => ({ ...u, details: u.observaciones || u.details || '' }));
+                                    }
+                                }
+                                if (units.length === 0) throw new Error();
+                            } catch (e) { 
+                                units = [{ 
+                                    details: (rawSource && typeof rawSource === 'string' && rawSource.trim().startsWith('[')) ? '' : rawSource, 
+                                    images: [ (item as any).url_foto_1, (item as any).url_foto_2, (item as any).url_foto_3 ].filter(Boolean),
+                                    audioNote: (item as any).url_audio || (item as any).unit_audio || (item as any).audioNote, 
+                                    color: (item as any).color,
+                                    defects: (item as any).defectos ? (item as any).defectos.split(', ') : [],
+                                    deliveryDate: (item as any).fecha_entrega_item || (item as any).fecha_entrega_especifica || item.itemDeliveryDate
+                                }]; 
+                            }
 
-                      return units.map((unit, uIdx) => {
-                          const isCanceled = (item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO';
-                          const colorName = String(unit.color || '').trim();
-                          const matchedColor = globalColors.find(c => String(c.nombre || '').trim().toLowerCase() === colorName.toLowerCase());
-                          const defects = Array.isArray(unit.defects) ? unit.defects : (unit.defectos ? String(unit.defectos).split(', ') : []);
-                          
-                          // Gather all images from specific columns and JSON
-                          const itemImages = [
-                            (item as any).url_foto_1, 
-                            (item as any).url_foto_2, 
-                            (item as any).url_foto_3,
-                            ...(Array.isArray(unit.images) ? unit.images : [])
-                          ].filter(Boolean);
+                            return units.map((unit, uIdx) => {
+                                const isCanceled = (item as any).estado_id === 9 || (item.status as any) === 'ANULADO' || item.status === 'CANCELADO';
+                                const colorName = String(unit.color || '').trim();
+                                const matchedColor = globalColors.find(c => String(c.nombre || '').trim().toLowerCase() === colorName.toLowerCase());
+                                const defects = Array.isArray(unit.defects) ? unit.defects : (unit.defectos ? String(unit.defectos).split(', ') : []);
+                                
+                                const itemImages = [
+                                  (item as any).url_foto_1, (item as any).url_foto_2, (item as any).url_foto_3,
+                                  ...(Array.isArray(unit.images) ? unit.images : [])
+                                ].filter(Boolean);
 
-                          const deliveryDateVal = unit.deliveryDate || (item as any).fecha_entrega_item || invoice.deliveryDate;
-                          const formattedDate = deliveryDateVal ? new Date(deliveryDateVal).toISOString().split('T')[0] : '';
-                          const formattedTime = deliveryDateVal ? new Date(deliveryDateVal).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+                                const deliveryDateVal = unit.deliveryDate || (item as any).fecha_entrega_item || invoice.deliveryDate;
+                                const formattedDate = deliveryDateVal ? new Date(deliveryDateVal).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }) : '';
+                                const formattedTime = deliveryDateVal ? new Date(deliveryDateVal).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
 
-                          return (
-                          <div key={`${itemIdx}-${uIdx}`} className={`rounded-3xl p-4 md:p-5 shadow-xl border flex flex-col gap-4 relative overflow-hidden group transition-all ${ isCanceled ? 'bg-red-50/50 border-red-200' : (item as any).es_ajuste ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-100 hover:border-indigo-200'}`}>
-                              {/* Barrita lateral de color */}
-                              <div className="absolute top-0 left-0 bottom-0 w-1" style={{ backgroundColor: isCanceled ? '#ef4444' : (item as any).es_ajuste ? '#2563eb' : (matchedColor?.hex || brandPrimary) }}></div>
-
-                              {/* Fila 1: Imagen Color, Nombre Prenda, Fotos, Audio */}
-                              <div className={`flex flex-col gap-3 ${isCanceled ? 'opacity-70' : ''}`}>
-                                  <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-3 min-w-0">
+                                return (
+                                  <tr key={`${itemIdx}-${uIdx}`} className={`group transition-colors ${isCanceled ? 'bg-red-50/30' : 'hover:bg-slate-50/50'}`}>
+                                    <td className="px-4 py-3">
+                                      <div className="flex items-center gap-3">
                                         <div 
-                                            className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-white shadow-md flex-shrink-0"
+                                            className="w-8 h-8 rounded-lg border shadow-sm shrink-0"
                                             style={{ 
-                                                backgroundColor: matchedColor?.url_imagen ? undefined : (isCanceled ? '#fee2e2' : (matchedColor?.hex || '#f8fafc')), 
+                                                backgroundColor: matchedColor?.url_imagen ? undefined : (matchedColor?.hex || '#f8fafc'), 
                                                 backgroundImage: matchedColor?.url_imagen ? `url(${matchedColor.url_imagen})` : undefined, 
                                                 backgroundSize: 'cover',
                                                 backgroundPosition: 'center'
                                             }}
                                         />
                                         <div className="min-w-0">
-                                          <h6 className={`font-black text-[12px] md:text-[14px] leading-tight uppercase line-clamp-2 gap-2 flex items-center ${isCanceled ? 'text-red-700 strike-through' : 'text-slate-800'}`}>
-                                            {item.name}
-                                            {(item as any).es_ajuste && !isCanceled && (
-                                                <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-600 text-[8px] font-black rounded-md border border-indigo-200">ADICIONAL</span>
-                                            )}
-                                          </h6>
-                                          <div className="flex items-center gap-2 mt-1">
-                                             <p className={`font-bold text-[8px] md:text-[9px] uppercase tracking-widest leading-none truncate max-w-[80px] ${isCanceled ? 'text-red-400' : 'text-indigo-500'}`}>{unit.color || 'NO COLOR'}</p>
-                                             <span className="text-slate-300">•</span>
-                                             {getStatusBadge(isCanceled ? 'CANCELADO' : item.status)}
-                                          </div>
+                                          <p className={`text-[12px] font-black uppercase tracking-tight leading-none ${isCanceled ? 'text-red-400 line-through' : 'text-slate-800'}`}>{item.name}</p>
+                                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{unit.color || 'SIN COLOR'}</p>
                                         </div>
                                       </div>
-                                      
-                                      <div className="shrink-0 flex gap-2">
-                                        {unit.audioNote && !isCanceled && (
-                                          <button onClick={() => handlePlayAudio(unit.audioNote)} className={`w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center transition-all shrink-0 ${playingAudio === unit.audioNote ? 'bg-slate-900 text-white animate-pulse' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100'}`}>
-                                            <Volume2 size={18} />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      {defects.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mb-1">
+                                          {defects.map((def: string, di: number) => (
+                                            <span key={di} className="text-[7px] font-black text-slate-500 bg-slate-100 px-1 py-0.5 rounded uppercase">{def}</span>
+                                          ))}
+                                        </div>
+                                      )}
+                                      <p className="text-[10px] text-slate-600 font-bold uppercase leading-tight line-clamp-1">{unit.details || 'Sin notas'}</p>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <div className="flex items-center justify-center gap-2">
+                                        {itemImages.length > 0 && (
+                                          <div className="flex -space-x-2">
+                                            {itemImages.slice(0, 2).map((img, i) => (
+                                              <img key={i} src={img} className="w-7 h-7 rounded-md border-2 border-white object-cover cursor-pointer" onClick={() => { setPreviewImages(itemImages); setCurrentImageIndex(i); }} />
+                                            ))}
+                                            {itemImages.length > 2 && (
+                                              <div className="w-7 h-7 rounded-md bg-slate-800 text-white text-[8px] font-black flex items-center justify-center border-2 border-white">+{itemImages.length - 2}</div>
+                                            )}
+                                          </div>
+                                        )}
+                                        {unit.audioNote && (
+                                          <button onClick={() => handlePlayAudio(unit.audioNote)} className={`w-7 h-7 rounded-md flex items-center justify-center transition-all ${playingAudio === unit.audioNote ? 'bg-indigo-600 text-white animate-pulse' : 'bg-emerald-50 text-emerald-600'}`}>
+                                            <Volume2 size={14} />
                                           </button>
                                         )}
-                                        {isCanceled ? (
-                                          <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-red-100 text-red-600 border border-red-200 flex items-center justify-center shadow-inner">
-                                            <X size={18} strokeWidth={3} />
-                                          </div>
-                                        ) : (
-                                          <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-rose-50 text-rose-300 border border-rose-100 flex items-center justify-center opacity-40">
-                                            <LucideIcons.Trash2 size={18} />
-                                          </div>
-                                        )}
                                       </div>
-                                  </div>
-
-                                  <div className="flex items-center justify-between gap-2 border-t pt-3">
-                                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                                        {itemImages.slice(0, 4).map((img, pIdx) => (
-                                          <div key={pIdx} className="w-9 h-9 md:w-10 md:h-10 rounded-lg overflow-hidden border border-slate-50 shadow-sm cursor-pointer hover:scale-110 transition-transform shrink-0" onClick={() => { if (!isCanceled) { setPreviewImages(itemImages); setCurrentImageIndex(pIdx); } }}>
-                                            <img src={img} className={`w-full h-full object-cover ${isCanceled ? 'grayscale' : ''}`} />
-                                          </div>
-                                        ))}
-                                        {itemImages.length > 4 && (
-                                          <div className="w-9 h-9 md:w-10 md:h-10 rounded-lg bg-slate-900 flex items-center justify-center text-white text-[8px] md:text-[10px] font-black cursor-pointer" onClick={() => { if (!isCanceled) { setPreviewImages(itemImages); setCurrentImageIndex(0); } }}>
-                                            +{itemImages.length - 4}
-                                          </div>
-                                        )}
-                                      </div>
-                                  </div>
-                              </div>
-
-                              {/* Fila 2: Tags de Defectos (DENSE) */}
-                              <div className="flex flex-wrap gap-1">
-                                  {defects.length > 0 ? defects.map((def: string, di: number) => (
-                                      <span key={di} className={`px-2 py-0.5 md:py-1 rounded-md text-[8px] md:text-[8.5px] font-black uppercase tracking-tighter shadow-sm border ${di === 1 ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200'}`}>
-                                        {def}
-                                      </span>
-                                  )) : (
-                                    <span className="text-[7px] md:text-[8px] font-black uppercase text-slate-300 tracking-[0.2em] italic flex items-center gap-1.5 px-0.5 whitespace-nowrap"><Check size={10}/> Sin desperfectos</span>
-                                  )}
-                              </div>
-
-                              {/* Fila 3: Fechas */}
-                              <div className="grid grid-cols-2 gap-2">
-                                  <div className="space-y-0.5">
-                                    <label className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                      <Calendar size={9} className="text-indigo-500" /> Entrega
-                                    </label>
-                                    <div className="bg-slate-50 border border-slate-100 rounded-lg px-2 py-1.5 font-bold text-slate-700 text-[11px] md:text-[12px] flex items-center justify-center">
-                                      <span className="truncate">{formattedDate || '---'}</span>
-                                    </div>
-                                  </div>
-                                  <div className="space-y-0.5">
-                                    <label className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                      <Clock size={9} className="text-indigo-500" /> Hora
-                                    </label>
-                                    <div className="bg-slate-50 border border-slate-100 rounded-lg px-2 py-1.5 font-bold text-slate-700 text-[11px] md:text-[12px] flex items-center justify-center">
-                                      <span className="truncate">{formattedTime || '---'}</span>
-                                    </div>
-                                  </div>
-                              </div>
-
-                              {/* Fila 4: Notas de Recepción */}
-                              <div className="space-y-0.5">
-                                <label className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                  <StickyNote size={9} className="text-slate-400" /> Notas Recepción
-                                </label>
-                                <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 font-bold text-slate-600 text-[10px] md:text-[11px] uppercase leading-snug min-h-[36px] line-clamp-2">
-                                  {unit.details || 'SIN OBSERVACIONES.'}
-                                </div>
-                              </div>
-                          </div>
-                          );
-                      });
-                  })}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <p className="text-[10px] font-black text-slate-700 leading-none">{formattedDate}</p>
+                                      <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{formattedTime}</p>
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                      {getStatusBadge(isCanceled ? 'CANCELADO' : item.status)}
+                                    </td>
+                                  </tr>
+                                );
+                            });
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
@@ -376,13 +332,14 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
         </div>
 
         {/* FOOTER ACCIONES - FULLWIDTH */}
-        <div className="p-5 md:px-10 border-t bg-white flex items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.05)] shrink-0">
+        <div className="p-4 md:px-10 border-t bg-white flex items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.05)] shrink-0">
             <div>
-              <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest">Visualización en alta fidelidad • 2026</p>
+              <p className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-widest">Visualización en alta fidelidad • 2026</p>
             </div>
             <button 
                 onClick={onClose} 
-                className="px-10 md:px-16 py-3.5 md:py-4.5 bg-slate-950 text-white font-black rounded-2xl text-[12px] md:text-[14px] uppercase tracking-[0.2em] hover:bg-black transition-all shadow-2xl active:scale-95"
+                className="px-8 md:px-12 py-3 md:py-4 text-white font-black rounded-2xl text-[11px] md:text-[13px] uppercase tracking-[0.15em] hover:opacity-90 transition-all shadow-xl active:scale-95"
+                style={{ backgroundColor: brandPrimary }}
             >
                 Cerrar Detalle
             </button>

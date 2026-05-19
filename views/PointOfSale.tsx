@@ -318,12 +318,13 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
     }
 
     const searchNormalized = normalizeStr(query);
+    const searchWords = searchNormalized.split(/\s+/).filter(w => w.length > 0);
 
     // 1. Búsqueda Local Instantánea
-    const localMatches = clients.filter(c => 
-        normalizeStr(c.name).includes(searchNormalized) || 
-        (c.docNumber || '').includes(query)
-    ).slice(0, 10);
+    const localMatches = clients.filter(c => {
+        const fullName = normalizeStr(`${c.name} ${c.razon_social || ''} ${c.docNumber || ''} ${c.phone || ''}`);
+        return searchWords.every(word => fullName.includes(word));
+    }).slice(0, 10);
 
     // 2. Verificar Caché para ahorrar consultas al servidor
     if (searchCache.current[searchNormalized]) {

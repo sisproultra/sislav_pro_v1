@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, LayoutGrid, List, PieChart, Info, AlertTriangle, Box, Clock, CheckCircle2, ChevronDown, ChevronUp, Hash, User, Shirt, WashingMachine, MessageSquare, Phone, Image as ImageIcon, Mic, ExternalLink, Play, AlertCircle, Ban } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, LayoutGrid, List, PieChart, Info, AlertTriangle, Box, Clock, CheckCircle2, ChevronDown, ChevronUp, Hash, User, Shirt, WashingMachine, MessageSquare, Phone, Image as ImageIcon, Mic, ExternalLink, Play, AlertCircle, Ban, Package } from 'lucide-react';
 import { Invoice, Company, CartItem, OrderStatus } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendReadyNotification } from '../services/whatsappService';
@@ -155,25 +155,11 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
         }));
     };
 
-    const handleSendWA = async (invoice: Invoice) => {
+    const handleSendWA = (invoice: Invoice) => {
         if (!invoice.client.phone) return alert("El cliente no tiene teléfono registrado.");
-        setIsSendingWA(invoice.id);
-        try {
-            const res = await sendReadyNotification(invoice, company, invoice.client.phone);
-            if (res.success) {
-                alert("Notificación enviada con éxito.");
-            } else if (res.fallbackUrl) {
-                if (confirm("No se pudo enviar automáticamente. ¿Deseas abrir WhatsApp manualmente?")) {
-                    window.open(res.fallbackUrl, '_blank');
-                }
-            } else {
-                alert("Error: " + res.message);
-            }
-        } catch (e) {
-            alert("Error al enviar notificación.");
-        } finally {
-            setIsSendingWA(null);
-        }
+        const phone = invoice.client.phone.replace(/\D/g, '');
+        const message = `Hola ${invoice.client.name}, le informamos que su orden #${invoice.ordenNumber || ''} ya está procesada y lista.`;
+        window.open(`https://wa.me/${phone.startsWith('51') ? phone : '51' + phone}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
     const getStatusInfo = (status: OrderStatus, isItemAnulado?: boolean) => {
@@ -421,303 +407,238 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                 )}
             </div>
 
-            {/* MODAL RESUMEN TAREA DEL DIA */}
+            {/* MODAL RESUMEN TAREA DEL DIA - FULL SCREEN & TABLE VIEW */}
             <AnimatePresence>
                 {daySummary && (
-                    <div className="fixed inset-0 bg-slate-950/60 z-[300] flex items-center justify-center backdrop-blur-[20px] overflow-y-auto pt-4 pb-4 px-2 lg:px-6">
-                        {/* ATMOSPHERIC BACKGROUND ELEMENTS FOR MODAL */}
-                        <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
-                            <div className="absolute top-0 right-0 w-[50%] h-[50%] bg-indigo-500 blur-[150px] rounded-full" />
-                            <div className="absolute bottom-0 left-0 w-[50%] h-[50%] bg-emerald-500 blur-[150px] rounded-full" />
-                        </div>
-
-                        <motion.div 
-                            initial={{ opacity: 0, scale: 0.9, y: 100 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 100 }}
-                            className="bg-white/80 backdrop-blur-3xl rounded-[2rem] w-full lg:w-[90vw] max-w-[1400px] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] flex flex-col border border-white/50 min-h-[85vh] lg:h-[90vh] relative overflow-hidden"
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-white z-[300] flex flex-col overflow-hidden"
+                    >
+                        {/* CABECERA FULL SCREEN */}
+                        <div 
+                            className="px-6 lg:px-10 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-50 shadow-sm"
                         >
-                            {/* Cabecera del Modal */}
-                            <div className="p-6 lg:p-10 border-b border-black/5 flex justify-between items-center sticky top-0 z-50 shrink-0 bg-white/40 backdrop-blur-md">
-                                <div className="flex items-center gap-6">
-                                    <motion.div 
-                                        whileHover={{ rotate: 10, scale: 1.1 }}
-                                        className="p-4 rounded-xl text-white shadow-xl hidden sm:flex" 
-                                        style={{ backgroundColor: primaryColor }}
-                                    >
-                                        <CalendarIcon size={24} />
-                                    </motion.div>
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-xl text-white flex items-center justify-center shadow-lg" style={{ backgroundColor: primaryColor }}>
+                                    <WashingMachine size={20} />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                        <span className="text-[9px] font-black text-indigo-600 uppercase tracking-[0.15em]">{daySummary.date}</span>
+                                        <span className="w-1 h-1 rounded-full bg-slate-200" />
+                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em]">{daySummary.orders.length} ÓRDENES</span>
+                                    </div>
+                                    <h3 className="font-black text-xl lg:text-2xl text-slate-900 uppercase tracking-tighter leading-none">Mi Tarea del Día</h3>
+                                </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-4">
+                                <div className="hidden md:flex items-center gap-6 mr-8 text-right">
                                     <div>
-                                        <h3 className="font-black text-2xl lg:text-4xl text-slate-900 uppercase tracking-tighter leading-none tracking-[-0.04em]">Hoja de Ruta</h3>
-                                        <div className="flex flex-wrap items-center gap-4 mt-4">
-                                            <div className="bg-slate-900 text-white px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-slate-900/20">
-                                                <CalendarIcon size={12} className="text-indigo-400" />
-                                                {daySummary.date}
-                                            </div>
-                                            <div className="bg-white/50 px-5 py-1.5 rounded-full text-[11px] font-black text-slate-500 uppercase tracking-widest border border-white flex items-center gap-2">
-                                                <Shirt size={12} style={{ color: primaryColor }} />
-                                                {daySummary.orders.length} ÓRDENES PROGRAMADAS
-                                            </div>
-                                        </div>
+                                        <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">TOTAL PRENDAS</p>
+                                        <p className="text-lg font-black text-slate-900 tracking-tighter" style={{ color: primaryColor }}>{daySummary.total.toFixed(2)}</p>
+                                    </div>
+                                    <div className="h-6 w-px bg-slate-100" />
+                                    <div>
+                                        <p className="text-[7px] font-black text-amber-500 uppercase tracking-widest leading-none mb-1">POR LAVAR</p>
+                                        <p className="text-lg font-black text-amber-600 tracking-tighter">{daySummary.pending.toFixed(2)}</p>
                                     </div>
                                 </div>
                                 <button 
                                     onClick={() => setSelectedDate(null)}
-                                    className="w-16 h-16 bg-white/80 hover:bg-white text-slate-400 hover:text-slate-900 rounded-[2rem] transition-all active:scale-90 border border-white flex items-center justify-center shadow-xl group"
+                                    className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 border border-slate-200 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-90 group"
                                 >
-                                    <X size={32} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-500" />
+                                    <X size={20} className="group-hover:rotate-90 transition-transform duration-500" />
                                 </button>
                             </div>
+                        </div>
 
-                            <div className="flex-1 overflow-y-auto custom-scrollbar p-8 lg:p-14 space-y-16">
-                                {/* TARJETAS DE RESUMEN TÉCNICO */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    <motion.div 
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 0.1 }}
-                                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-all"
-                                    >
-                                        <div>
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Prendas Totales</p>
-                                            <p className="text-2xl font-black text-slate-900 day-number tracking-tighter tabular-nums" style={{ color: primaryColor }}>{Number(daySummary.total.toFixed(2))}</p>
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                <div className="w-1 h-1 rounded-full" style={{ backgroundColor: primaryColor }} />
-                                                <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">Registros de Hoy</p>
-                                            </div>
-                                        </div>
-                                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all" 
-                                             style={{ backgroundColor: `${primaryColor}10`, color: primaryColor, borderColor: `${primaryColor}20` }}>
-                                            <Shirt size={28} />
-                                        </div>
-                                    </motion.div>
+                        {/* CUERPO DEL REPORTE - VISTA TABLA COMPACTA */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/20">
+                            <div className="max-w-[1200px] mx-auto p-4 lg:p-6">
+                                <div className="space-y-6">
+                                    {[...daySummary.orders]
+                                        .sort((a, b) => {
+                                            const timeA = a.invoice.deliveryDate ? new Date(a.invoice.deliveryDate).getTime() : 0;
+                                            const timeB = b.invoice.deliveryDate ? new Date(b.invoice.deliveryDate).getTime() : 0;
+                                            return timeA - timeB;
+                                        })
+                                        .map(({ invoice, items }) => {
+                                            const timeStatus = getTimeStatus(invoice.deliveryDate);
+                                            const isCancelled = invoice.orderStatus === 'CANCELADO';
 
-                                    <motion.div 
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 0.2 }}
-                                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-all"
-                                    >
-                                        <div>
-                                            <p className="text-[9px] font-black text-amber-500 uppercase tracking-[0.2em] mb-1">Por Procesar</p>
-                                            <p className="text-2xl font-black text-amber-600 day-number tracking-tighter tabular-nums">{Number(daySummary.pending.toFixed(2))}</p>
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                <div className="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
-                                                <p className="text-[9px] font-bold text-amber-300 uppercase tracking-widest">En cola de trabajo</p>
-                                            </div>
-                                        </div>
-                                        <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shrink-0 border border-amber-100">
-                                            <WashingMachine size={28} />
-                                        </div>
-                                    </motion.div>
-
-                                    <motion.div 
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 0.3 }}
-                                        className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-lg flex items-center justify-between group transition-all sm:col-span-2 lg:col-span-1"
-                                    >
-                                        <div>
-                                            <p className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-1">Para Entrega</p>
-                                            <p className="text-2xl font-black text-white day-number tracking-tighter tabular-nums">{Number(daySummary.ready.toFixed(2))}</p>
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                <div className="w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)]" />
-                                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Listo para el cliente</p>
-                                            </div>
-                                        </div>
-                                        <div className="w-14 h-14 bg-white/10 text-emerald-400 rounded-2xl flex items-center justify-center shrink-0 border border-white/10 group-hover:bg-emerald-500 group-hover:text-white transition-all">
-                                            <CheckCircle2 size={28} />
-                                        </div>
-                                    </motion.div>
-                                </div>
-
-                                {/* LISTADO DE ÓRDENES */}
-                                <div className="space-y-8">
-                                    <div className="flex items-center justify-between mb-6 px-6">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-1.5 h-8 rounded-full shadow-[0_0_15px_rgba(0,0,0,0.1)]" style={{ backgroundColor: primaryColor }} />
-                                            <div>
-                                                <h4 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Detalle Operativo</h4>
-                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">Listado de tickets y clientes del día</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-[10px] font-black tracking-widest text-slate-400 uppercase bg-slate-100 px-5 py-1.5 rounded-full border border-slate-200">{daySummary.orders.length} TICKETS</div>
-                                    </div>
-
-                                    {daySummary.orders.map(({ invoice, items }) => {
-                                        const timeStatus = getTimeStatus(invoice.deliveryDate);
-                                        const isCancelled = invoice.orderStatus === 'CANCELADO';
-
-                                        return (
-                                            <div key={invoice.id} className={`bg-white border rounded-[1.5rem] overflow-hidden transition-all duration-300 ${timeStatus.isUrgent ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.1)]' : 'border-slate-100 hover:border-slate-300 shadow-sm hover:shadow-md'} ${isCancelled ? 'opacity-40 grayscale' : ''}`}>
-                                                {/* Header Orden */}
-                                                <div className="w-full px-6 py-5 flex flex-col md:flex-row md:items-center justify-between text-left gap-4 md:gap-6 bg-slate-50/20">
-                                                    <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6 flex-1 min-w-0">
-                                                        <div 
-                                                            className="h-10 px-4 rounded-lg text-white font-black text-xs shadow-sm shadow-black/10 shrink-0 flex items-center justify-center border-b-4 border-black/20 tracking-widest min-w-[100px]"
-                                                            style={{ backgroundColor: isCancelled ? '#94a3b8' : primaryColor }}
-                                                        >
-                                                            ID: {invoice.ordenNumber || '---'}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3">
-                                                                <span className="font-black text-slate-900 uppercase text-sm tracking-tight truncate max-w-[250px] flex items-center gap-2">
-                                                                    <User size={14} className="text-slate-300" />
-                                                                    {invoice.client.name}
-                                                                </span>
-                                                                <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                                                                    <Phone size={10} strokeWidth={3} className="opacity-50" />
-                                                                    {invoice.client.phone || 'S/T'}
+                                            return (
+                                                <div key={invoice.id} className={`bg-white rounded-2xl shadow-md border border-slate-200/60 overflow-hidden transition-all ${timeStatus.isUrgent ? 'ring-1 ring-red-100 ring-offset-2' : ''} ${isCancelled ? 'opacity-40 grayscale' : ''}`}>
+                                                    {/* SECCIÓN CLIENTE / CABECERA ORDEN COMPACTA */}
+                                                    <div className="px-5 py-4 bg-slate-50/40 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+                                                        <div className="flex items-center gap-4 min-w-0" onClick={() => { setSelectedInvoiceAction(invoice); setShowDetailModal(true); }}>
+                                                            <div className="w-12 h-12 rounded-xl text-white flex items-center justify-center shadow-md shrink-0 cursor-pointer" style={{ backgroundColor: primaryColor }}>
+                                                                <User size={22} />
+                                                            </div>
+                                                            <div className="min-w-0 cursor-pointer">
+                                                                <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                                    <span className="px-2 py-0.5 text-white text-[8px] font-black rounded-md tracking-widest" style={{ backgroundColor: primaryColor }}>ID: {invoice.ordenNumber || '---'}</span>
+                                                                    <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border ${invoice.orderStatus === 'LISTO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                                                        {invoice.orderStatus}
+                                                                    </span>
+                                                                    {timeStatus.isUrgent && (
+                                                                        <span className="px-2 py-0.5 bg-red-500 text-white text-[8px] font-black rounded-md tracking-widest animate-pulse">URGENTE</span>
+                                                                    )}
+                                                                </div>
+                                                                <h4 className="text-lg font-black text-slate-800 uppercase tracking-tighter truncate leading-none">{invoice.client.name}</h4>
+                                                                <div className="flex items-center gap-4 mt-1.5 text-slate-400">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <Phone size={12} style={{ color: primaryColor }} />
+                                                                        <span className="text-[10px] font-bold text-slate-500">{invoice.client.phone || 'S/T'}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1.5 border-l border-slate-200 pl-4">
+                                                                        <Clock size={12} style={{ color: primaryColor }} />
+                                                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{timeStatus.timeStr}</span>
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex items-center gap-4 mt-1 flex-wrap">
-                                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Shirt size={10} /> {items.length} ITEMS</span>
-                                                                <span className="text-[9px] font-black uppercase border-b" style={{ color: primaryColor, borderColor: `${primaryColor}20` }}>DEUDA: {currency} {(Number(invoice.totals?.total) || 0).toFixed(2)}</span>
-                                                                <div className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-[0.1em] flex items-center gap-1 ${invoice.orderStatus === 'LISTO' ? 'bg-emerald-500 text-white shadow-sm' : (isCancelled ? 'bg-slate-200 text-slate-500' : 'bg-amber-100 text-amber-600 border border-amber-200')}`}>
-                                                                    {isCancelled ? <Ban size={8}/> : (invoice.orderStatus === 'LISTO' ? <CheckCircle2 size={8}/> : <Clock size={8}/>)}
-                                                                    {invoice.orderStatus}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex flex-row md:items-center justify-between md:justify-end gap-6 md:gap-12 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
-                                                        <div className={`flex flex-col items-center md:items-end ${timeStatus.isUrgent ? 'text-red-600 animate-pulse' : 'text-slate-900'}`}>
-                                                            <p className="text-[8px] font-black uppercase tracking-[0.2em] leading-none mb-1 opacity-50">Hora Límite</p>
-                                                            <p className="text-xl font-black tabular-nums tracking-tighter">
-                                                                {timeStatus.timeStr}
-                                                            </p>
                                                         </div>
 
                                                         <div className="flex items-center gap-2">
                                                             <button 
-                                                                disabled={isSendingWA === invoice.id || isCancelled}
                                                                 onClick={(e) => { e.stopPropagation(); handleSendWA(invoice); }}
-                                                                className={`h-10 px-5 rounded-xl flex items-center justify-center gap-2.5 transition-all active:scale-95 shadow-sm group/wa ${isSendingWA === invoice.id ? 'bg-slate-100 text-slate-400' : 'bg-emerald-500 text-white hover:bg-emerald-600 border-b-4 border-emerald-700'}`}
+                                                                className="px-4 py-2 bg-[#25D366] text-white rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-lg shadow-emerald-100"
                                                             >
-                                                                {isSendingWA === invoice.id ? (
-                                                                    <WashingMachine className="animate-spin" size={16} />
-                                                                ) : (
-                                                                    <img src="https://iili.io/BWIGQGs.png" className="w-4 h-4 object-contain group-hover/wa:scale-110 transition-transform" alt="WA" />
-                                                                )}
-                                                                <span className="text-[9px] font-black uppercase tracking-[0.15em] hidden sm:inline">NOTIFICAR</span>
+                                                                <Smartphone size={14} fill="white" />
+                                                                <span className="text-[9px] font-black uppercase tracking-widest">WhatsApp</span>
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); setSelectedInvoiceAction(invoice); setShowDetailModal(true); }}
+                                                                className="px-4 py-2 text-white rounded-xl transition-all hover:opacity-90 active:scale-95 flex items-center gap-2 shadow-lg"
+                                                                style={{ backgroundColor: primaryColor }}
+                                                            >
+                                                                <Eye size={14} />
+                                                                <span className="text-[9px] font-black uppercase tracking-widest">Ver</span>
                                                             </button>
                                                         </div>
                                                     </div>
-                                                </div>
 
-                                                {/* Detalle Técnico Prendas */}
-                                                <div className="px-5 pb-5">
-                                                    <div className="bg-slate-50/50 rounded-xl border border-slate-100 overflow-hidden shadow-inner">
-                                                        <div className="overflow-x-auto">
-                                                            <table className="w-full text-left text-xs border-separate border-spacing-0">
-                                                                <thead>
-                                                                    <tr className="bg-slate-100/30">
-                                                                        <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[9px]">Prenda / Servicio</th>
-                                                                        <th className="px-6 py-4 text-center font-black text-slate-400 uppercase tracking-widest text-[9px]">Cant.</th>
-                                                                        <th className="px-6 py-4 text-center font-black text-slate-400 uppercase tracking-widest text-[9px]">Multimedia</th>
-                                                                        <th className="px-6 py-4 text-right font-black text-slate-400 uppercase tracking-widest text-[9px]">Estado</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="divide-y divide-slate-200/50">
-                                                                    {items.map((item, idx) => {
-                                                                        const status = getStatusInfo(item.status || invoice.orderStatus, item.isAnulado);
-                                                                        return (
-                                                                            <tr key={idx} className="hover:bg-white transition-colors group">
-                                                                                <td className="px-6 py-4">
-                                                                                    <div className="font-black text-slate-800 uppercase text-xs">{item.name}</div>
-                                                                                    <div className="flex flex-wrap gap-2 mt-1">
-                                                                                        {item.color && <span className="text-[9px] font-bold text-slate-400 border border-slate-100 px-1.5 py-0.5 rounded uppercase">COLOR: {item.color}</span>}
-                                                                                        {item.details && <span className="text-[9px] text-slate-500 italic flex items-center gap-1"><Info size={10} /> {item.details}</span>}
-                                                                                    </div>
-                                                                                </td>
-                                                                                <td className="px-6 py-4 text-center font-black text-slate-900 text-lg tabular-nums">{Number(item.quantity).toLocaleString()}</td>
-                                                                                <td className="px-6 py-4">
-                                                                                    <div className="flex items-center justify-center gap-3">
-                                                                                        {item.images && item.images.length > 0 ? (
-                                                                                            <div className="flex -space-x-1.5">
-                                                                                                {item.images.slice(0, 3).map((img, i) => (
-                                                                                                    <div 
-                                                                                                        key={i} 
-                                                                                                        onClick={() => setViewedImage(img)}
-                                                                                                        className="w-8 h-8 rounded-lg border border-white shadow-sm overflow-hidden cursor-zoom-in hover:scale-110 active:scale-95 transition-all relative group/thumb"
-                                                                                                    >
-                                                                                                        <img src={img} className="w-full h-full object-cover" alt="Prenda" />
-                                                                                                    </div>
-                                                                                                ))}
-                                                                                            </div>
-                                                                                        ) : (
-                                                                                            <ImageIcon size={14} className="text-slate-200" />
+                                                {/* TABLA DE PRENDAS DETALLADA COMPACTA */}
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full border-collapse">
+                                                        <thead>
+                                                            <tr className="bg-slate-50/30">
+                                                                <th className="px-5 py-3 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Prenda / Servicio</th>
+                                                                <th className="px-5 py-3 text-center text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Cant</th>
+                                                                <th className="px-5 py-3 text-center text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Multimedia</th>
+                                                                <th className="px-5 py-3 text-right text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Estado</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-slate-50">
+                                                            {items.map((item, idx) => {
+                                                                const status = getStatusInfo(item.status || invoice.orderStatus, item.isAnulado);
+                                                                return (
+                                                                    <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
+                                                                        <td className="px-5 py-3">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${status.bg} ${status.color}`}>
+                                                                                    <Shirt size={18} />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <h6 className="text-[12px] font-black text-slate-800 uppercase tracking-tight transition-colors leading-none mb-1 group-hover:text-indigo-600" style={{ color: primaryColor }}>{item.name}</h6>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        {item.color && (
+                                                                                            <span className="px-1.5 py-0.5 border border-slate-50 bg-white text-slate-400 text-[7px] font-black rounded-md uppercase">COLOR: {item.color}</span>
                                                                                         )}
-                                                                                        
-                                                                                        {item.audioNote ? (
-                                                                                            <button 
-                                                                                                onClick={() => {
-                                                                                                    const audio = new Audio(item.audioNote!);
-                                                                                                    audio.play();
-                                                                                                }}
-                                                                                                className="w-8 h-8 flex items-center justify-center rounded-lg shadow-sm active:scale-90 transition-all"
-                                                                                                style={{ backgroundColor: `${primaryColor}10`, color: primaryColor }}
+                                                                                        {item.details && (
+                                                                                            <span className="text-[7px] font-bold text-slate-300 italic truncate max-w-[150px]">"{item.details}"</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-5 py-3 text-center">
+                                                                            <span className="text-base font-black text-slate-700 tracking-tighter tabular-nums">{item.quantity}</span>
+                                                                        </td>
+                                                                        <td className="px-5 py-3">
+
+                                                                            <div className="flex items-center justify-center gap-3">
+                                                                                {item.images && item.images.length > 0 ? (
+                                                                                    <div className="flex -space-x-2">
+                                                                                        {item.images.slice(0, 3).map((img, i) => (
+                                                                                            <div 
+                                                                                                key={i}
+                                                                                                onClick={() => setViewedImage(img)}
+                                                                                                className="w-8 h-8 rounded-lg border-2 border-white shadow-md overflow-hidden cursor-zoom-in hover:scale-110 active:scale-95 transition-all hover:z-10 bg-slate-100"
                                                                                             >
-                                                                                                <Mic size={14} />
-                                                                                            </button>
-                                                                                        ) : (
-                                                                                            <Mic size={14} className="text-slate-200" />
-                                                                                        )}
+                                                                                                <img src={img} className="w-full h-full object-cover" />
+                                                                                            </div>
+                                                                                        ))}
                                                                                     </div>
-                                                                                </td>
-                                                                                <td className="px-6 py-4 text-right">
-                                                                                    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg font-black text-[9px] uppercase tracking-widest shadow-sm ${status.bg} ${status.color}`}>
-                                                                                        {status.icon}
-                                                                                        {status.label}
-                                                                                    </div>
-                                                                                </td>
-                                                                            </tr>
-                                                                        );
-                                                                    })}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
+                                                                                ) : (
+                                                                                    <span className="text-[8px] font-bold text-slate-200 uppercase italic">Sin Fotos</span>
+                                                                                )}
+                                                                                {item.audioNote && (
+                                                                                    <button 
+                                                                                        onClick={() => {
+                                                                                            const audio = new Audio(item.audioNote!);
+                                                                                            audio.play();
+                                                                                        }}
+                                                                                        className="w-8 h-8 rounded-lg flex items-center justify-center shadow-sm transition-all active:scale-90"
+                                                                                        style={{ backgroundColor: `${primaryColor}10`, color: primaryColor }}
+                                                                                    >
+                                                                                        <Mic size={14} />
+                                                                                    </button>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-right">
+                                                                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm ${status.bg} ${status.color}`}>
+                                                                                {status.icon}
+                                                                                {status.label}
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
                                                 </div>
                                             </div>
                                         );
                                     })}
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Footer del Modal Premium */}
-                            <div className="p-8 border-t border-black/5 bg-slate-50/50 backdrop-blur-md flex flex-col sm:flex-row justify-between items-center gap-8 shrink-0 rounded-b-[4rem] mt-auto">
-                                <div className="flex items-center gap-12">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                                            <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)]" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none">Entrega Normal</p>
-                                            <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">ESTÁNDAR (4H+)</p>
-                                        </div>
+                        {/* PIE DE PÁGINA FIXO COMPACTO */}
+                        <div className="px-10 py-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row justify-between items-center gap-6 sticky bottom-0 z-50">
+                            <div className="flex items-center gap-10">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,1)]" />
                                     </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-2xl bg-red-500/10 flex items-center justify-center border border-red-500/20">
-                                            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,1)]" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-black text-red-600 uppercase tracking-widest leading-none">Entrega Crítica</p>
-                                            <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">MENOS DE 4 HORAS</p>
-                                        </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none">Normal</p>
+                                        <p className="text-[8px] text-slate-400 font-bold mt-0.5 uppercase tracking-tighter italic">ESTÁNDAR</p>
                                     </div>
                                 </div>
-                                <button 
-                                    onClick={() => setSelectedDate(null)}
-                                    className="w-full sm:w-auto px-12 h-14 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all hover:opacity-90 group flex items-center justify-center gap-6 border-b-4"
-                                    style={{ backgroundColor: primaryColor, borderColor: 'rgba(0,0,0,0.2)' }}
-                                >
-                                    Cerrar Reporte <CheckCircle2 size={20} className="group-hover:translate-x-2 transition-transform duration-300" />
-                                </button>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-red-50 flex items-center justify-center border border-red-100">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,1)]" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-red-600 uppercase tracking-widest leading-none">Urgente</p>
+                                        <p className="text-[8px] text-slate-400 font-bold mt-0.5 uppercase tracking-tighter italic">PRIORIDAD</p>
+                                    </div>
+                                </div>
                             </div>
-                        </motion.div>
-                    </div>
+                            <button 
+                                onClick={() => setSelectedDate(null)}
+                                className="w-full sm:w-auto px-12 h-14 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl hover:-translate-y-0.5 active:scale-95 transition-all flex items-center justify-center gap-4"
+                                style={{ backgroundColor: primaryColor }}
+                            >
+                                FINALIZAR REVISIÓN <CheckCircle2 size={18} />
+                            </button>
+                        </div>
+                    </motion.div>
                 )}
             </AnimatePresence>
 

@@ -19,11 +19,10 @@ import LogisticsBulkDispatchModal from '../components/LogisticsBulkDispatchModal
 import { printGuiaRemision } from '../utils/printUtils';
 
 interface LogisticsHubProps {
-    onOpenDriverView?: () => void;
     currentUser?: any;
 }
 
-const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView, currentUser }) => {
+const LogisticsHub: React.FC<LogisticsHubProps> = ({ currentUser }) => {
     const [guias, setGuias] = useState<GuiaRemision[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'INCOMING' | 'OUTGOING' | 'HISTORY' | 'PLANTA'>('INCOMING');
@@ -428,27 +427,31 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView, currentUs
         return (
             item.descripcion?.toLowerCase().includes(query) ||
             item.ventas?.codigo_orden?.toLowerCase().includes(query) ||
+            item.codigo_guia?.toLowerCase().includes(query) ||
             item.ventas?.clientes?.nombre_completo?.toLowerCase().includes(query) ||
             item.ventas?.clientes?.nombres?.toLowerCase().includes(query) ||
             item.ventas?.sucursales?.nombre_sucursal?.toLowerCase().includes(query)
         );
     });
 
-    // Agrupar items de planta por SUCURSAL de ORIGEN y luego por ORDEN
+    // Agrupar items de planta por SUCURSAL de ORIGEN, luego por GUIA y luego por ORDEN
     const consolidatedPlanta = filteredPlantaItems.reduce((acc: any, item: any) => {
         const sucursalId = item.ventas?.sucursal_id || 'no-sucursal';
         const sucursalNombre = item.ventas?.sucursales?.nombre_sucursal || 'Origen Desconocido';
+        const guiaCode = item.codigo_guia || 'SIN GUÍA';
         const orderId = item.ventas?.id || 'no-order';
         
-        if (!acc[sucursalId]) acc[sucursalId] = { nombre: sucursalNombre, orders: {} };
-        if (!acc[sucursalId].orders[orderId]) {
-            acc[sucursalId].orders[orderId] = {
+        if (!acc[sucursalId]) acc[sucursalId] = { nombre: sucursalNombre, guias: {} };
+        if (!acc[sucursalId].guias[guiaCode]) acc[sucursalId].guias[guiaCode] = { codigo: guiaCode, orders: {} };
+        
+        if (!acc[sucursalId].guias[guiaCode].orders[orderId]) {
+            acc[sucursalId].guias[guiaCode].orders[orderId] = {
                 codigo_orden: item.ventas?.codigo_orden || '---',
                 cliente: item.ventas?.clientes?.nombre_completo || item.ventas?.clientes?.nombres || 'Cliente',
                 items: []
             };
         }
-        acc[sucursalId].orders[orderId].items.push(item);
+        acc[sucursalId].guias[guiaCode].orders[orderId].items.push(item);
         return acc;
     }, {});
 
@@ -473,7 +476,7 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView, currentUs
                             <div className="p-2 bg-accent rounded-xl text-white shadow-lg shadow-accent/20">
                                 <Truck size={24} />
                             </div>
-                            LOGÍSTICA HUB & SPOKE
+                            PROCESAMIENTO EN PLANTA
                         </h2>
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Gestión de traslados y custodia de prendas</p>
                     </div>
@@ -634,77 +637,70 @@ const LogisticsHub: React.FC<LogisticsHubProps> = ({ onOpenDriverView, currentUs
                                             </button>
                                         </div>
                                         
-                                        <div className="grid grid-cols-1 gap-4">
-                                            {Object.entries(sucursalData.orders).map(([orderId, order]: [string, any]) => (
-                                                <div key={orderId} className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-                                                    <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="p-2 bg-white rounded-xl shadow-sm text-slate-400">
-                                                                <Package size={16} />
-                                                            </div>
-                                                            <div>
-                                                                <h4 className="text-xs font-black text-slate-800">TICKET #{order.codigo_orden}</h4>
-                                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{order.cliente}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-[8px] font-black bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full uppercase tracking-widest">
-                                                            PAGADO
-                                                        </div>
+                                        <div className="grid grid-cols-1 gap-6">
+                                            {Object.entries(sucursalData.guias).map(([guiaCode, guiaData]: [string, any]) => (
+                                                <div key={guiaCode} className="space-y-4">
+                                                    <div className="flex items-center gap-2 ml-4">
+                                                        <Package size={12} className="text-slate-400" />
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest text-emerald-600">Guía: {guiaCode}</span>
                                                     </div>
-                                                    <div className="p-2 space-y-2">
-                                                        {order.items.map((item: any) => (
-                                                            <div 
-                                                                key={item.id}
-                                                                onClick={() => item.estado === 'RECIBIDO_CENTRAL' && togglePlantaItemSelection(item.id)}
-                                                                className={`p-4 rounded-2xl flex items-center justify-between group hover:bg-slate-50/50 transition-colors cursor-pointer ${selectedPlantaItems[item.id] ? 'bg-emerald-50 ring-1 ring-emerald-200' : ''}`}
-                                                            >
-                                                                <div className="flex items-center gap-4">
-                                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                                                                        item.estado === 'RECIBIDO_CENTRAL' ? (selectedPlantaItems[item.id] ? 'bg-emerald-500 text-white' : 'bg-blue-50 text-blue-500') :
-                                                                        'bg-emerald-50 text-emerald-500'
-                                                                    }`}>
-                                                                        {item.estado === 'RECIBIDO_CENTRAL' ? (selectedPlantaItems[item.id] ? <CheckCircle2 size={20} /> : <Box size={20} />) :
-                                                                         <CheckCircle2 size={20} />}
-                                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {Object.entries(guiaData.orders).map(([orderId, order]: [string, any]) => (
+                                                            <div key={orderId} className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                                                                <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
                                                                     <div>
-                                                                        <h4 className="font-bold text-slate-800 text-xs">{item.descripcion}</h4>
-                                                                        <div className="flex items-center gap-2 mt-0.5">
-                                                                            <span className={`text-[7px] font-black px-1.5 py-0.5 rounded uppercase ${
-                                                                                item.estado === 'RECIBIDO_CENTRAL' ? 'bg-blue-100 text-blue-600' :
-                                                                                'bg-emerald-100 text-emerald-600'
-                                                                            }`}>
-                                                                                {item.estado === 'RECIBIDO_CENTRAL' ? 'EN PLANTA' : 'LISTO PARA RETORNO'}
-                                                                            </span>
-                                                                            {item.codigo_manual && (
-                                                                                <span className="text-[7px] font-bold text-slate-400 uppercase">#{item.codigo_manual}</span>
-                                                                            )}
-                                                                        </div>
+                                                                        <h4 className="text-[10px] font-black text-slate-800">#{order.codigo_orden}</h4>
+                                                                        <p className="text-[8px] font-bold text-slate-400 uppercase truncate max-w-[120px]">{order.cliente}</p>
+                                                                    </div>
+                                                                    <div className="text-[7px] font-black bg-white border border-slate-200 px-2 py-0.5 rounded-full uppercase">
+                                                                        {order.items.length} prendas
                                                                     </div>
                                                                 </div>
-
-                                                                <div className="flex items-center gap-2">
-                                                                    {item.estado === 'RECIBIDO_CENTRAL' && (
-                                                                        <button 
-                                                                            onClick={(e) => { e.stopPropagation(); handleUpdatePlantaStatus(item.id, 'EMPAQUETADO'); }}
-                                                                            className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md transition-all active:scale-95"
+                                                                <div className="p-1 space-y-1">
+                                                                    {order.items.map((item: any) => (
+                                                                        <div 
+                                                                            key={item.id}
+                                                                            onClick={() => item.estado === 'RECIBIDO_CENTRAL' && togglePlantaItemSelection(item.id)}
+                                                                            className={`p-3 rounded-2xl flex items-center justify-between group transition-all cursor-pointer ${selectedPlantaItems[item.id] ? 'bg-emerald-50 ring-1 ring-emerald-200 shadow-sm' : 'hover:bg-slate-50'}`}
                                                                         >
-                                                                            PONER LISTO
-                                                                        </button>
-                                                                    )}
-                                                                    {item.estado === 'EMPAQUETADO' && (
-                                                                        <div className="flex flex-col items-end">
-                                                                            <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-0.5 flex items-center gap-1">
-                                                                                <CheckCircle2 size={10} /> LISTO PARA RETORNO
-                                                                            </span>
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                                                                    item.estado === 'RECIBIDO_CENTRAL' ? (selectedPlantaItems[item.id] ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400') :
+                                                                                    'bg-emerald-100 text-emerald-600'
+                                                                                }`}>
+                                                                                    {item.estado === 'RECIBIDO_CENTRAL' ? (selectedPlantaItems[item.id] ? <CheckCircle2 size={16} /> : <Box size={16} />) :
+                                                                                     <CheckCircle2 size={16} />}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <h4 className="font-bold text-slate-800 text-[10px] uppercase line-clamp-1">{item.descripcion}</h4>
+                                                                                    {item.detalles && <p className="text-[7px] text-indigo-500 font-bold uppercase">{item.detalles}</p>}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="flex items-center gap-2">
+                                                                                {item.estado === 'RECIBIDO_CENTRAL' && (
+                                                                                    <button 
+                                                                                        onClick={(e) => { e.stopPropagation(); handleUpdatePlantaStatus(item.id, 'EMPAQUETADO'); }}
+                                                                                        className="px-2 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-[7px] font-black uppercase tracking-widest shadow-sm"
+                                                                                    >
+                                                                                        LISTO
+                                                                                    </button>
+                                                                                )}
+                                                                                {item.estado === 'EMPAQUETADO' && (
+                                                                                    <span className="text-[7px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
+                                                                                        <CheckCircle2 size={8} /> LISTO
+                                                                                    </span>
+                                                                                )}
+                                                                                <button 
+                                                                                    onClick={(e) => handleViewItemHistory(e, item.id)}
+                                                                                    className="p-1 text-slate-300 hover:text-accent transition-colors shrink-0"
+                                                                                >
+                                                                                    <History size={12} />
+                                                                                </button>
+                                                                            </div>
                                                                         </div>
-                                                                    )}
-                                                                    <button 
-                                                                        onClick={(e) => handleViewItemHistory(e, item.id)}
-                                                                        className="p-2 text-slate-300 hover:text-accent transition-colors"
-                                                                        title="Ver Traza"
-                                                                    >
-                                                                        <History size={14} />
-                                                                    </button>
+                                                                    ))}
                                                                 </div>
                                                             </div>
                                                         ))}
