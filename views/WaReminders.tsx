@@ -3,7 +3,7 @@ import {
   MessageCircle, Search, Filter, CheckCircle2, AlertCircle, 
   Clock, Phone, DollarSign, ArrowRight, Loader2, Play, Pause,
   RotateCw, CheckCircle, Info, Hash, User, Percent, Send, 
-  LayoutDashboard
+  LayoutDashboard, X
 } from 'lucide-react';
 import { Invoice, Company, OrderStatus, WaTemplate, CampaignStatus } from '../types';
 import { dbGetUndeliveredOrdersForReminders, dbUpdateLastReminderSent, dbGetWaTemplates } from '../services/dbService';
@@ -32,7 +32,9 @@ const WaReminders: React.FC<WaRemindersProps> = ({
   setMetricsGlobal = () => {} 
 }) => {
   const queryClient = useQueryClient();
+  const primaryColor = company?.primaryColor || '#4f46e5';
   const [searchTerm, setSearchTerm] = useState('');
+  const [completeModalData, setCompleteModalData] = useState<{ sent: number; failed: number } | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [currentSendingId, setCurrentSendingId] = useState<string | null>(null);
 
@@ -161,7 +163,7 @@ const WaReminders: React.FC<WaRemindersProps> = ({
     }
 
     if (waTemplates.length === 0) {
-        alert("No hay plantillas de RECOJO o RECORDATORIO activas. Cárgalas desde el módulo de Campaña WA.");
+        alert("No hay plantillas de RECOJO o RECORDATORIO activas. Cárgalas desde el módulo de Campaña de Marketing.");
         return;
     }
 
@@ -254,7 +256,7 @@ const WaReminders: React.FC<WaRemindersProps> = ({
     setCurrentSendingId(null);
     setSelectedOrders([]);
     queryClient.invalidateQueries({ queryKey: ['undeliveredOrders'] });
-    alert(`Campaña finalizada. Enviados: ${sentCount}, Fallidos: ${failedCount}`);
+    setCompleteModalData({ sent: sentCount, failed: failedCount });
   };
 
   useEffect(() => {
@@ -273,7 +275,7 @@ const WaReminders: React.FC<WaRemindersProps> = ({
     }
 
     if (waTemplates.length === 0) {
-        alert("No hay plantillas de RECOJO o RECORDATORIO activas. Cárgalas desde el módulo de Campaña WA.");
+        alert("No hay plantillas de RECOJO o RECORDATORIO activas. Cárgalas desde el módulo de Campaña de Marketing.");
         return;
     }
 
@@ -684,6 +686,78 @@ const WaReminders: React.FC<WaRemindersProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Modal de Finalización de Campaña / Recordatorios */}
+      <AnimatePresence>
+        {completeModalData && (
+          <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: 'spring', duration: 0.5 }}
+              className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden flex flex-col"
+            >
+              {/* Header styled with the branch color */}
+              <div 
+                className="p-6 text-white flex justify-between items-center transition-colors"
+                style={{ backgroundColor: primaryColor }}
+              >
+                <h3 className="font-bold text-base uppercase tracking-wider">Campaña de Recordatorios</h3>
+                <button 
+                  onClick={() => setCompleteModalData(null)}
+                  className="text-white/80 hover:text-white transition-opacity"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-10 flex flex-col items-center text-center gap-6">
+                {/* Icon Container */}
+                <div 
+                  className="p-5 rounded-full"
+                  style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}
+                >
+                  <CheckCircle2 size={48} className="animate-pulse" />
+                </div>
+
+                {/* Title */}
+                <div className="space-y-1">
+                  <h4 className="font-black text-xl text-slate-900 uppercase tracking-tight">¡Envío Finalizado!</h4>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-wide">Los mensajes de recordatorio han terminado de procesarse.</p>
+                </div>
+
+                {/* Metrics Box */}
+                <div className="w-full bg-slate-50 rounded-3xl p-5 border border-slate-100 flex justify-around items-center">
+                  <div className="flex flex-col items-center">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Enviados</span>
+                    <span className="text-2xl font-black text-emerald-500 tabular-nums">{completeModalData.sent}</span>
+                  </div>
+
+                  <div className="h-8 w-px bg-slate-200" />
+
+                  <div className="flex flex-col items-center">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Fallidos</span>
+                    <span className="text-2xl font-black text-rose-500 tabular-nums">{completeModalData.failed}</span>
+                  </div>
+                </div>
+
+                {/* Confirmation Button */}
+                <button 
+                  onClick={() => setCompleteModalData(null)}
+                  className="w-full text-white py-4 rounded-2xl font-black uppercase text-xs shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2 hover:opacity-90 leading-none"
+                  style={{ 
+                    backgroundColor: primaryColor,
+                    boxShadow: `0 10px 20px -5px ${primaryColor}40`
+                  }}
+                >
+                  Entendido
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -13,10 +13,14 @@ const withTimeout = <T>(promise: any, timeoutMs: number = 60000): Promise<T> => 
     ]);
 };
 
+let cachedGlobalConfig: SaasGlobalConfig | null = null;
+
 /**
  * Obtiene la configuración y catálogos globales
  */
 export const getSaasGlobalConfig = async (): Promise<SaasGlobalConfig> => {
+    if (cachedGlobalConfig) return cachedGlobalConfig;
+
     const defaultConfig: SaasGlobalConfig = {
         apiToken: '',
         whatsappIconUrl: '',
@@ -66,16 +70,26 @@ export const getSaasGlobalConfig = async (): Promise<SaasGlobalConfig> => {
         const colors = colorsRes.data;
         const videos = videosRes.data;
 
-        return {
+        const configResult = {
             apiToken: baseConfig?.token_maestro_identidad || '',
             whatsappIconUrl: baseConfig?.whatsapp_icon_url || '',
             defaultColors: colors || [],
-            defaultHelpVideos: (videos || []).map((v: any) => ({
-                id: v.id,
-                title: v.titulo,
-                youtubeUrl: v.url_youtube,
-                category: 'TUTORIAL'
-            })),
+            defaultHelpVideos: (videos || []).map((v: any) => {
+                let title = v.titulo || '';
+                let modulo_id = v.modulo_id || '';
+                if (title.includes(' ||MOD_ID:')) {
+                    const parts = title.split(' ||MOD_ID:');
+                    title = parts[0];
+                    modulo_id = parts[1];
+                }
+                return {
+                    id: v.id,
+                    title: title,
+                    youtubeUrl: v.url_youtube,
+                    category: 'TUTORIAL',
+                    modulo_id: modulo_id
+                };
+            }),
             defaultCategoryImages: (cats || []).map((c: any) => ({ id: c.id, name: c.nombre, url: c.url })),
             defaultPaymentImages: (payments || []).map((p: any) => ({ id: p.id, name: p.nombre, url: p.url })),
             defaultMachineImages: (machines || []).map((m: any) => ({ id: m.id, name: m.nombre, url: m.url, type: m.tipo })),
@@ -87,6 +101,8 @@ export const getSaasGlobalConfig = async (): Promise<SaasGlobalConfig> => {
             instancia_bot: baseConfig?.instancia_bot,
             apikey_bot: baseConfig?.apikey_bot
         };
+        cachedGlobalConfig = configResult;
+        return configResult;
     } catch (error) {
         console.error("Error en getSaasGlobalConfig:", error);
         return defaultConfig;
@@ -177,7 +193,7 @@ export const uploadBranchAsset = async (file: File, holdingName: string, branchS
 /**
  * Agrega un item al catálogo global (DB)
  */
-export const addGlobalCatalogItem = async (item: { nombre: string, url?: string, hex?: string, tipo?: string, modulo: string }) => {
+export const addGlobalCatalogItem = async (item: { nombre: string, url?: string, hex?: string, tipo?: string, modulo: string, modulo_id?: string }) => {
     let table = "";
     let payload: any = { nombre: item.nombre.toUpperCase(), activo: true };
 
@@ -202,7 +218,7 @@ export const addGlobalCatalogItem = async (item: { nombre: string, url?: string,
             break;
         case 'VIDEO':
             table = "global_cat_videos_ayuda";
-            payload.titulo = item.nombre;
+            payload.titulo = item.nombre + (item.modulo_id ? " ||MOD_ID:" + item.modulo_id : "");
             payload.url_youtube = item.url;
             delete payload.nombre;
             break;
@@ -228,7 +244,7 @@ export const softDeleteGlobalItem = async (id: string, modulo: string) => {
     if (error) throw error;
 };
 
-export const updateGlobalCatalogItem = async (id: string, modulo: string, item: { nombre: string, url?: string, hex?: string, tipo?: string }) => {
+export const updateGlobalCatalogItem = async (id: string, modulo: string, item: { nombre: string, url?: string, hex?: string, tipo?: string, modulo_id?: string }) => {
     let table = "";
     let payload: any = { nombre: item.nombre.toUpperCase() };
 
@@ -253,7 +269,7 @@ export const updateGlobalCatalogItem = async (id: string, modulo: string, item: 
             break;
         case 'VIDEO':
             table = "global_cat_videos_ayuda";
-            payload.titulo = item.nombre;
+            payload.titulo = item.nombre + (item.modulo_id ? " ||MOD_ID:" + item.modulo_id : "");
             payload.url_youtube = item.url;
             delete payload.nombre;
             break;
@@ -849,4 +865,42 @@ export const adminResetUserPassword = async (userId: string, newPassword: string
     }
 
     return data;
+};
+
+/**
+ * WhatsApp Templates Globales (SaaS Master)
+ */
+export const saasGetWaTemplates = async () => {
+    const { data, error } = await supabase
+        .from('wa_templates')
+        .select('*')
+        .is('sucursal_id', null)
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+};
+
+export const saasSaveWaTemplate = async (template: any) => {
+    const templateData = {
+        ...template,
+        sucursal_id: null,
+        is_active: template.is_active ?? true
+    };
+    const { data, error } = await supabase
+        .from('wa_templates')
+        .upsert(templateData)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+};
+
+export const saasDeleteWaTemplate = async (id: string) => {
+    const { error } = await supabase.from('wa_templates').delete().eq('id', id);
+    if (error) throw error;
+};
+
+export const saasToggleWaTemplate = async (id: string, active: boolean) => {
+    const { error } = await supabase.from('wa_templates').update({ is_active: active }).eq('id', id);
+    if (error) throw error;
 };

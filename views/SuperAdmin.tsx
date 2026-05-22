@@ -19,7 +19,11 @@ import {
     uploadCompanyAsset,
     updateSaasGlobalConfig,
     adminCreateSystemUser,
-    adminResetUserPassword
+    adminResetUserPassword,
+    saasGetWaTemplates,
+    saasSaveWaTemplate,
+    saasDeleteWaTemplate,
+    saasToggleWaTemplate
 } from '../services/saasService';
 import { searchClient } from '../services/clientService';
 import { 
@@ -31,7 +35,9 @@ import {
     SucursalType,
     CashManagementType,
     SYSTEM_MODULES,
-    DEFAULT_BRANCH_MODULES
+    DEFAULT_BRANCH_MODULES,
+    WaTemplate,
+    WaTemplateCategory
 } from '../types';
 import { 
     Building, Globe, Loader2, X, Save, Palette, 
@@ -846,8 +852,9 @@ export const SuperAdmin: React.FC<{
 
     const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
     const countryDropdownRef = useRef<HTMLDivElement>(null);
+    const templateImageRef = useRef<HTMLInputElement>(null);
 
-    const [catalogItem, setCatalogItem] = useState({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA' });
+    const [catalogItem, setCatalogItem] = useState<{ nombre: string; url: string; hex: string; tipo: string; modulo_id?: string }>({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA', modulo_id: '' });
     const [newVideo, setNewVideo] = useState({ title: '', url: '' });
     const [compName, setCompName] = useState('');
     const [compNombreComercial, setCompNombreComercial] = useState('');
@@ -922,8 +929,24 @@ export const SuperAdmin: React.FC<{
         return acc;
     }, {} as Record<string, any>);
 
+    const [waMasterTemplates, setWaMasterTemplates] = useState<WaTemplate[]>([]);
+    const [isWaTemplateModalOpen, setIsWaTemplateModalOpen] = useState(false);
+    const [editingWaTemplate, setEditingWaTemplate] = useState<Partial<WaTemplate> | null>(null);
+    const [isUploadingWaImage, setIsUploadingWaImage] = useState(false);
+
     const [showDiagnostics, setShowDiagnostics] = useState(false);
     const [sessionInfo, setSessionInfo] = useState<any>(null);
+
+    useEffect(() => {
+        try {
+            const sess = localStorage.getItem('sislav_session');
+            if (sess) {
+                setSessionInfo(JSON.parse(sess));
+            }
+        } catch (e) {
+            console.error("Error loading session diagnostics", e);
+        }
+    }, [showDiagnostics]);
 
     useEffect(() => {
         loadData();
@@ -952,10 +975,11 @@ export const SuperAdmin: React.FC<{
 
         try {
             console.log(`⏳ [SuperAdmin] Cargando datos (Intento: ${isRetry ? 'Auto-Reintento' : 'Inicial'})...`);
-            const [cRes, bRes, g] = await Promise.all([
+            const [cRes, bRes, g, waTemplates] = await Promise.all([
                 getSaasCompanies(companiesPage), 
                 getSaasBranches(undefined, branchesPage), 
-                getSaasGlobalConfig()
+                getSaasGlobalConfig(),
+                saasGetWaTemplates()
             ]);
             
             setCompanies(cRes.companies || []);
@@ -963,6 +987,7 @@ export const SuperAdmin: React.FC<{
             setBranches(bRes.branches || []);
             setBranchesTotal(bRes.total || 0);
             setGlobalConfig(g);
+            setWaMasterTemplates(waTemplates || []);
             
             // Eliminamos el auto-reintento agresivo que causaba bucles infinitos si la DB estaba lenta
             if (cRes.companies.length === 0 && view === 'ACCOUNTS') {
@@ -987,6 +1012,38 @@ export const SuperAdmin: React.FC<{
         }
     };
 
+    const handleSaveWaMasterTemplate = async () => {
+        if (!editingWaTemplate?.content || !editingWaTemplate?.category) return;
+        setIsSaving(true);
+        try {
+            await saasSaveWaTemplate({
+                ...editingWaTemplate,
+                sucursal_id: null // Asegurar que es global
+            });
+            const waTemplates = await saasGetWaTemplates();
+            setWaMasterTemplates(waTemplates);
+            setIsWaTemplateModalOpen(false);
+            setEditingWaTemplate(null);
+        } catch (e) {
+            alert("Error al guardar mensaje maestro");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleUploadWaMasterImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setIsUploadingWaImage(true);
+        try {
+            const url = await uploadGlobalAsset(file, `wa_master_assets/${Date.now()}_${file.name}`);
+            setEditingWaTemplate(prev => prev ? { ...prev, image_url: url } : null);
+        } catch (err) {
+            alert("Error al subir imagen");
+        } finally {
+            setIsUploadingWaImage(false);
+        }
+    };
     const resetBranchForm = () => {
         setBrName(''); setBrRazonSocial(''); setBrRuc(''); setBrAddress(''); setBrPhone('');
         setBrSlug(''); setBrModoSunat('0'); setBrSunatUrl('https://apisu.sysventa.com/API_SUNAT/post.php');
@@ -1438,10 +1495,13 @@ export const SuperAdmin: React.FC<{
             } else {
                 await addGlobalCatalogItem({ ...catalogItem, modulo });
             }
-            setCatalogItem({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA' });
+            setCatalogItem({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA', modulo_id: '' });
             setIsCatalogModalOpen(false);
             await loadData();
-        } catch (e) { alert("Error al guardar."); } finally { setIsSaving(false); }
+        } catch (e: any) { 
+            console.error("Error saving catalog item:", e);
+            alert("Error al guardar: " + (e?.message || JSON.stringify(e) || String(e))); 
+        } finally { setIsSaving(false); }
     };
 
     const confirmDeleteCatalogItem = async () => {
@@ -1472,7 +1532,8 @@ export const SuperAdmin: React.FC<{
             nombre: modulo === 'VIDEO' ? item.title : item.nombre,
             url: modulo === 'COLOR' ? item.url_imagen : (modulo === 'VIDEO' ? item.youtubeUrl : item.url),
             hex: item.hex || '#FFFFFF',
-            tipo: item.tipo || 'LAVADORA'
+            tipo: item.tipo || 'LAVADORA',
+            modulo_id: item.modulo_id || ''
         });
         setIsCatalogModalOpen(true);
     };
@@ -1480,7 +1541,7 @@ export const SuperAdmin: React.FC<{
     const startAddingCatalogItem = (modulo: string) => {
         setEditingCatalogId(null);
         setCurrentCatalogModule(modulo);
-        setCatalogItem({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA' });
+        setCatalogItem({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA', modulo_id: '' });
         setIsCatalogModalOpen(true);
     };
 
@@ -2175,7 +2236,14 @@ export const SuperAdmin: React.FC<{
                                                                 </button>
                                                             </div>
                                                         </div>
-                                                        <div className="p-4"><p className="text-[10px] font-bold text-slate-200 uppercase tracking-tight truncate">{video.title}</p></div>
+                                                        <div className="p-4">
+                                                            <p className="text-[10px] font-bold text-slate-200 uppercase tracking-tight truncate">{video.title}</p>
+                                                            {video.modulo_id && (
+                                                                <span className="inline-block mt-1 text-[8px] font-extrabold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                                                                    Promo: {SYSTEM_MODULES.find(m => m.id === video.modulo_id)?.label || video.modulo_id}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
@@ -2241,7 +2309,56 @@ export const SuperAdmin: React.FC<{
                                     </div>
                                 </AccordionItem>
 
-                                <AccordionItem id="COLORES" title="Paleta de Colores/Texturas" icon={<Palette size={20} />} isOpen={activeAccordion === 'COLORES'} onToggle={() => toggleAccordion('COLORES')}>
+                                 <AccordionItem id="WA_TEMPLATES" title="Mensajes WhatsApp (Anti-Bloqueo)" icon={<MessageCircle size={20} />} isOpen={activeAccordion === 'WA_TEMPLATES'} onToggle={() => toggleAccordion('WA_TEMPLATES')}>
+                                     <div className="space-y-6">
+                                         <div className="flex justify-between items-center bg-black/20 p-6 rounded-3xl border border-white/5">
+                                             <div>
+                                                 <h4 className="text-[11px] font-bold text-white uppercase tracking-widest">Plantillas Maestras de Mensaje</h4>
+                                                 <p className="text-[9px] text-slate-500 font-bold uppercase">Mensajes que rotarán para evitar baneos.</p>
+                                             </div>
+                                             <button 
+                                                 onClick={() => { setEditingWaTemplate({ category: 'PROMOCION', is_active: true, content: '' }); setIsWaTemplateModalOpen(true); }}
+                                                 className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-2xl font-bold text-[10px] uppercase shadow-lg transition-all active:scale-95 flex items-center gap-2"
+                                             >
+                                                 <Plus size={16} /> NUEVO MENSAJE
+                                             </button>
+                                         </div>
+                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                             {waMasterTemplates.map(t => (
+                                                 <div key={t.id} className={`bg-slate-900 border ${t.is_active ? 'border-white/10 shadow-lg shadow-indigo-500/10' : 'border-white/5 opacity-40'} p-6 rounded-3xl relative group transition-all`}>
+                                                     <div className="flex items-center justify-between mb-4">
+                                                         <div className="flex items-center gap-2">
+                                                             <span className="bg-indigo-600 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full shadow-sm">{t.category}</span>
+                                                             {t.image_url && <ImageIcon size={14} className="text-emerald-400" />}
+                                                         </div>
+                                                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                             <button onClick={() => { setEditingWaTemplate(t); setIsWaTemplateModalOpen(true); }} className="p-1.5 bg-white/5 hover:bg-indigo-600 text-white rounded-xl transition-all"><Edit size={12}/></button>
+                                                             <button onClick={() => { 
+                                                                 if(confirm('¿Eliminar mensaje maestro?')) {
+                                                                     saasDeleteWaTemplate(t.id).then(() => saasGetWaTemplates().then(setWaMasterTemplates));
+                                                                 }
+                                                             }} className="p-1.5 bg-white/5 hover:bg-red-600 text-white rounded-xl transition-all"><Trash2 size={12}/></button>
+                                                         </div>
+                                                     </div>
+                                                     <p className="text-[11px] font-medium text-slate-300 leading-relaxed italic line-clamp-3">"{t.content}"</p>
+                                                     <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                                                         <span className={`text-[8px] font-bold uppercase ${t.is_active ? 'text-emerald-400' : 'text-slate-500'}`}>{t.is_active ? 'ACTIVO' : 'INACTIVO'}</span>
+                                                         <button 
+                                                             onClick={() => {
+                                                                 saasToggleWaTemplate(t.id, !t.is_active).then(() => setWaMasterTemplates((prev: WaTemplate[]) => prev.map(old => old.id === t.id ? {...old, is_active: !old.is_active} : old)));
+                                                             }}
+                                                             className={`w-8 h-4 rounded-full relative transition-colors ${t.is_active ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                                                         >
+                                                             <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${t.is_active ? 'right-0.5' : 'left-0.5'}`} />
+                                                         </button>
+                                                     </div>
+                                                 </div>
+                                             ))}
+                                         </div>
+                                     </div>
+                                 </AccordionItem>
+
+                                 <AccordionItem id="COLORES" title="Paleta de Colores/Texturas" icon={<Palette size={20} />} isOpen={activeAccordion === 'COLORES'} onToggle={() => toggleAccordion('COLORES')}>
                                     <div className="space-y-6">
                                         <div className="flex justify-between items-center bg-black/20 p-6 rounded-3xl border border-white/5">
                                             <div>
@@ -2924,6 +3041,7 @@ export const SuperAdmin: React.FC<{
                                                                 const isObject = typeof config === 'object';
                                                                 const isActive = isObject ? config.isActive : !!config;
                                                                 const isNew = isObject ? config.isNew : false;
+                                                                const onlyPromoVideo = isObject ? !!config.onlyPromoVideo : false;
                                                                 const allowedRoles = isObject && Array.isArray(config.allowedRoles) ? config.allowedRoles : [];
 
                                                                 return (
@@ -2944,6 +3062,7 @@ export const SuperAdmin: React.FC<{
                                                                                                 [module.id]: {
                                                                                                     isActive: isObject ? prev[module.id].isActive : !!prev[module.id],
                                                                                                     allowedRoles: isObject ? prev[module.id].allowedRoles : [],
+                                                                                                    onlyPromoVideo: isObject ? prev[module.id].onlyPromoVideo : false,
                                                                                                     isNew: !isNew
                                                                                                 }
                                                                                             }));
@@ -2951,6 +3070,27 @@ export const SuperAdmin: React.FC<{
                                                                                         className={`relative w-8 h-4 rounded-full transition-all ${isNew ? 'bg-indigo-500' : 'bg-slate-700'}`}
                                                                                     >
                                                                                         <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isNew ? 'left-4.5' : 'left-0.5'}`} />
+                                                                                    </button>
+                                                                                </div>
+                                                                                <div className="h-6 w-px bg-white/10" />
+                                                                                <div className="flex flex-col items-center gap-1">
+                                                                                    <span className="text-[6px] font-bold text-slate-500 uppercase tracking-widest">VER VIDEO</span>
+                                                                                    <button 
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            setBrModulosConfig(prev => ({
+                                                                                                ...prev,
+                                                                                                [module.id]: {
+                                                                                                    isActive: isObject ? prev[module.id].isActive : !!prev[module.id],
+                                                                                                    allowedRoles: isObject ? prev[module.id].allowedRoles : [],
+                                                                                                    isNew: isObject ? prev[module.id].isNew : false,
+                                                                                                    onlyPromoVideo: !onlyPromoVideo
+                                                                                                }
+                                                                                            }));
+                                                                                        }}
+                                                                                        className={`relative w-8 h-4 rounded-full transition-all ${onlyPromoVideo ? 'bg-amber-500' : 'bg-slate-700'}`}
+                                                                                    >
+                                                                                        <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${onlyPromoVideo ? 'left-4.5' : 'left-0.5'}`} />
                                                                                     </button>
                                                                                 </div>
                                                                                 <div className="h-6 w-px bg-white/10" />
@@ -2964,6 +3104,7 @@ export const SuperAdmin: React.FC<{
                                                                                                 [module.id]: {
                                                                                                     isNew: isObject ? prev[module.id].isNew : false,
                                                                                                     allowedRoles: isObject ? prev[module.id].allowedRoles : [],
+                                                                                                    onlyPromoVideo: isObject ? prev[module.id].onlyPromoVideo : false,
                                                                                                     isActive: !isActive
                                                                                                 }
                                                                                             }));
@@ -2993,6 +3134,7 @@ export const SuperAdmin: React.FC<{
                                                                                                 [module.id]: {
                                                                                                     isActive: isObject ? prev[module.id].isActive : !!prev[module.id],
                                                                                                     isNew: isObject ? prev[module.id].isNew : false,
+                                                                                                    onlyPromoVideo: isObject ? prev[module.id].onlyPromoVideo : false,
                                                                                                     allowedRoles: nextRoles
                                                                                                 }
                                                                                             }));
@@ -3196,12 +3338,32 @@ export const SuperAdmin: React.FC<{
                                         {currentCatalogModule === 'VIDEO' ? 'URL de Youtube' : 'Subir Archivo (IMG/SVG/PNG)'}
                                     </label>
                                     {currentCatalogModule === 'VIDEO' ? (
-                                        <input 
-                                            value={catalogItem.url} 
-                                            onChange={e => setCatalogItem({...catalogItem, url: e.target.value})} 
-                                            className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-4 font-bold text-sm text-white outline-none focus:border-indigo-500 transition-all font-mono"
-                                            placeholder="https://www.youtube.com/watch?v=..."
-                                        />
+                                        <div className="space-y-4">
+                                            <input 
+                                                value={catalogItem.url} 
+                                                onChange={e => setCatalogItem({...catalogItem, url: e.target.value})} 
+                                                className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-4 font-bold text-sm text-white outline-none focus:border-indigo-500 transition-all font-mono"
+                                                placeholder="https://www.youtube.com/watch?v=..."
+                                            />
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Asignar Video Promocional a Módulo (Opcional)</label>
+                                                <div className="relative">
+                                                    <select 
+                                                        value={catalogItem.modulo_id || ''} 
+                                                        onChange={e => setCatalogItem({...catalogItem, modulo_id: e.target.value})} 
+                                                        className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-4 font-bold text-sm text-white outline-none focus:border-indigo-500 transition-all appearance-none"
+                                                    >
+                                                        <option value="">-- Sin Módulo Asignado --</option>
+                                                        {SYSTEM_MODULES.map(mod => (
+                                                            <option key={mod.id} value={mod.id}>
+                                                                {mod.label} ({mod.id})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                        </div>
                                     ) : (
                                         <label className="flex items-center justify-center gap-4 w-full bg-slate-800/50 border-2 border-dashed border-white/10 rounded-2xl p-6 text-sm font-bold uppercase cursor-pointer hover:bg-slate-800 transition-colors text-white group">
                                             {isSaving ? (
@@ -3282,6 +3444,102 @@ export const SuperAdmin: React.FC<{
                                     CANCELAR
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL GESTIÓN DE PLANTILLAS WA MASTER */}
+            {isWaTemplateModalOpen && editingWaTemplate && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 md:p-6 bg-[#050810]/98 backdrop-blur-2xl animate-in fade-in duration-300">
+                    <div className="bg-slate-900 border border-white/10 rounded-[3rem] w-full max-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+                        <div className="p-8 border-b border-white/5 flex justify-between items-center bg-indigo-900/10">
+                            <div>
+                                <h3 className="text-xl font-bold uppercase tracking-tight text-white flex items-center gap-3">
+                                    <MessageCircle className="text-indigo-400" /> {editingWaTemplate.id ? 'Editar Plantilla WA' : 'Nueva Plantilla WA Master'}
+                                </h3>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mt-1">Configuración Global (SAAS MASTER)</p>
+                            </div>
+                            <button onClick={() => setIsWaTemplateModalOpen(false)} className="text-slate-500 hover:text-white transition-colors"><X size={24} /></button>
+                        </div>
+                        <div className="p-8 space-y-6 overflow-y-auto max-h-[70vh] custom-scrollbar">
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Categoría del Mensaje</label>
+                                    <select 
+                                        value={editingWaTemplate.category} 
+                                        onChange={e => setEditingWaTemplate({ ...editingWaTemplate, category: e.target.value as WaTemplateCategory })}
+                                        className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-4 font-bold text-xs text-white outline-none focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+                                    >
+                                        <option value="RECOJO">🔔 RECOJO DE ROPA</option>
+                                        <option value="PROMOCION">🎁 PROMOCIONES</option>
+                                        <option value="CUMPLEANOS">🎂 CUMPLEAÑOS</option>
+                                        <option value="RECORDATORIO">📢 RECORDATORIOS</option>
+                                        <option value="BIENVENIDA">👋 BIENVENIDA</option>
+                                        <option value="PAGO">💰 COBRANZA</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Estado</label>
+                                    <select 
+                                        value={editingWaTemplate.is_active ? '1' : '0'} 
+                                        onChange={e => setEditingWaTemplate({ ...editingWaTemplate, is_active: e.target.value === '1' })}
+                                        className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-4 font-bold text-xs text-white outline-none focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+                                    >
+                                        <option value="1">ACTIVO</option>
+                                        <option value="0">INACTIVO</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Imagen Multimedia (Opcional)</label>
+                                <div className="flex gap-4">
+                                    <div className="flex-1 bg-black/40 border-2 border-dashed border-white/10 rounded-2xl p-1 relative min-h-[140px] flex items-center justify-center overflow-hidden group">
+                                        {isUploadingWaImage ? (
+                                            <Loader2 className="animate-spin text-indigo-400" size={32} />
+                                        ) : editingWaTemplate.image_url ? (
+                                            <>
+                                                <img src={editingWaTemplate.image_url} className="w-full h-full object-contain" />
+                                                <button onClick={() => setEditingWaTemplate({...editingWaTemplate, image_url: ''})} className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-xl shadow-lg hover:scale-110 transition-transform"><Trash2 size={12}/></button>
+                                            </>
+                                        ) : (
+                                            <div className="flex flex-col items-center gap-2 text-slate-600">
+                                                <ImageIcon size={40} strokeWidth={1} />
+                                                <span className="text-[8px] font-bold uppercase">Sin Imagen</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="w-48 flex flex-col gap-3">
+                                        <button onClick={() => templateImageRef.current?.click()} className="w-full py-4 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-2xl font-bold text-[10px] uppercase tracking-widest transition-all">Subir Imagen</button>
+                                        <input type="file" ref={templateImageRef} className="hidden" accept="image/*" onChange={handleUploadWaMasterImage} />
+                                        <p className="text-[9px] font-bold text-slate-500 uppercase leading-relaxed text-center px-2">Las imágenes se enviarán con el texto.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Contenido del Mensaje</label>
+                                <textarea 
+                                    value={editingWaTemplate.content}
+                                    onChange={e => setEditingWaTemplate({ ...editingWaTemplate, content: e.target.value })}
+                                    className="w-full bg-black/40 border-2 border-white/10 rounded-[2rem] p-6 text-sm font-medium text-white outline-none focus:border-indigo-500 transition-all h-40 resize-none font-mono"
+                                    placeholder="Use -nombre- para personalizar..."
+                                />
+                                <div className="flex gap-2">
+                                    <span className="bg-white/5 text-slate-500 text-[8px] font-bold px-2 py-0.5 rounded-lg border border-white/5 tracking-widest">-NOMBRE-</span>
+                                    <span className="bg-white/5 text-slate-500 text-[8px] font-bold px-2 py-0.5 rounded-lg border border-white/5 tracking-widest">-EMPRESA-</span>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={handleSaveWaMasterTemplate}
+                                disabled={isSaving || !editingWaTemplate.content}
+                                className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-indigo-900/20 transition-all active:scale-95 flex items-center justify-center gap-3"
+                            >
+                                {isSaving ? <Loader2 className="animate-spin" /> : <Save size={20} />}
+                                GUARDAR PLANTILLA MAESTRA
+                            </button>
                         </div>
                     </div>
                 </div>

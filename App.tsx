@@ -5,7 +5,7 @@ import {
     CartItem, InvoiceType, OrderStatus, SaasGlobalConfig, Machine, Expense, 
     Supply, Purchase, PaymentMethodConfig, PausedSale, Employee, 
     CampaignStatus, Contact, CampaignTemplate, PickupRequest, SunatResponse,
-    SaasCompany, SaasBranch, UmSaas
+    SaasCompany, SaasBranch, UmSaas, SYSTEM_MODULES
 } from './types';
 import {
     dbGetSucursalBySlug, dbGlobalLogin, setDbBranchContext, getActiveBranchId, getActiveHoldingId, withTimeout, invalidateCache,
@@ -92,7 +92,7 @@ import YapeMonitor from './views/YapeMonitor';
 import DevConfig from './views/DevConfig';
 import WaReminders from './views/WaReminders';
 import { SuperAdmin } from './views/SuperAdmin';
-import { Loader2, X, ShieldAlert, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
+import { Loader2, X, ShieldAlert, CheckCircle2, AlertTriangle, Clock, Play, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from './services/supabaseClient';
@@ -122,6 +122,99 @@ const RefreshCw = ({ size, className }: any) => (
         <path d="M16 16h5v5" />
     </svg>
 );
+
+const PromoVideoView: React.FC<{ promoVideo: any, modId: string, activeSucursal: any }> = ({ promoVideo, modId, activeSucursal }) => {
+    const [iframeLoaded, setIframeLoaded] = useState(false);
+    
+    // Reset iframe loading state when media source URL changes to avoid flashing old context
+    useEffect(() => {
+        setIframeLoaded(false);
+    }, [promoVideo?.youtubeUrl]);
+
+    const activeColor = activeSucursal?.color_primario || '#0054A6';
+    const labelName = SYSTEM_MODULES.find(m => m.id === modId)?.label || 'Video Informativo';
+
+    let ytId = '';
+    const url = promoVideo?.youtubeUrl;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url ? url.match(regExp) : null;
+    if (match && match[2].length === 11) {
+        ytId = match[2];
+    }
+
+    const embedUrl = ytId 
+        ? `https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&enablejsapi=1&rel=0&controls=1`
+        : '';
+
+    return (
+        <div className="flex flex-col items-center justify-center min-h-[82vh] bg-gradient-to-tr from-slate-50 via-indigo-50/15 to-slate-100 p-4 md:p-8 font-sans relative overflow-hidden w-full">
+            {/* Visual ambient glows matching branch identity */}
+            <div 
+                className="absolute top-1/4 left-1/4 w-[280px] h-[280px] rounded-full blur-[90px] pointer-events-none opacity-20" 
+                style={{ backgroundColor: activeColor }}
+            />
+            <div 
+                className="absolute bottom-1/4 right-1/4 w-[200px] h-[200px] rounded-full blur-[70px] pointer-events-none opacity-10" 
+                style={{ backgroundColor: activeColor }}
+            />
+            
+            <div className="relative z-10 w-full max-w-3xl bg-white border border-slate-200/70 p-6 md:p-8 rounded-[2rem] shadow-lg text-center space-y-5 animate-in fade-in zoom-in-95 duration-500">
+                <div className="space-y-2">
+                    <div 
+                        className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-[10px] font-extrabold uppercase tracking-[0.2em] shadow-sm bg-white"
+                        style={{ borderColor: `${activeColor}40`, color: activeColor }}
+                    >
+                        <Sparkles size={11} className="animate-pulse" /> CONTENIDO EXCLUSIVO
+                    </div>
+                    <h1 className="text-xl md:text-2xl font-black uppercase tracking-tight text-slate-800 leading-tight">
+                        Módulo {labelName}
+                    </h1>
+                    <p className="text-slate-500 text-xs md:text-sm font-semibold uppercase tracking-wide max-w-lg mx-auto leading-relaxed">
+                        {promoVideo ? (promoVideo.title || "Descubre cómo funciona esta potente herramienta diseñada para impulsar el crecimiento de tu sucursal.") : "Cargando video de ayuda..."}
+                    </p>
+                </div>
+
+                <div 
+                    className="aspect-video w-full rounded-[1.5rem] overflow-hidden border border-slate-200 shadow-md relative bg-slate-900 group"
+                    style={{ outline: `2px solid ${activeColor}10` }}
+                >
+                    {embedUrl ? (
+                        <>
+                            {!iframeLoaded && (
+                                <div className="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center text-slate-300 gap-3 z-20">
+                                    <Loader2 className="w-8 h-8 text-white animate-spin" style={{ color: activeColor }} />
+                                    <span className="text-xs font-bold uppercase tracking-widest font-mono text-slate-400">Iniciando guía de aprendizaje...</span>
+                                </div>
+                            )}
+
+                            <iframe 
+                                src={embedUrl}
+                                title={promoVideo ? promoVideo.title : 'Guía de video'}
+                                className="w-full h-full border-none relative z-10"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowFullScreen
+                                onLoad={() => setIframeLoaded(true)}
+                            />
+                        </>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full p-6 text-slate-400 gap-3">
+                            <Play size={40} className="text-slate-500 animate-pulse" />
+                            <span className="text-xs font-bold uppercase tracking-widest font-mono">Enlace de video no disponible</span>
+                        </div>
+                    )}
+                </div>
+
+                {embedUrl && (
+                    <div className="flex flex-col items-center justify-center gap-2 pt-1">
+                        <span className="text-[10px] md:text-xs font-semibold bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-100 tracking-wide animate-pulse">
+                            🔈 El video se reproduce automáticamente. Activa el sonido en la barra de YouTube.
+                        </span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 export default function App() {
     const queryClient = useQueryClient();
@@ -1811,6 +1904,20 @@ export default function App() {
         const canManageApp = !!role; 
         const isSaas = role === UserRole.SAAS_MASTER;
 
+        const modId = currentView;
+        const sucursalModCfg = activeSucursal?.modulos_config?.[modId];
+        const onlyPromo = typeof sucursalModCfg === 'object' ? !!sucursalModCfg.onlyPromoVideo : false;
+
+        if (onlyPromo) {
+            const promoVideo = globalConfig?.defaultHelpVideos?.find(v => v.modulo_id === modId) || 
+                               globalConfig?.defaultHelpVideos?.find(v => v.title === 'TODAS LAS FUNCIONES') ||
+                               globalConfig?.defaultHelpVideos?.[0];
+
+            return (
+                <PromoVideoView promoVideo={promoVideo} modId={modId} activeSucursal={activeSucursal} />
+            );
+        }
+
         switch (currentView) {
             case 'view:dashboard': return <Dashboard invoices={invoices} expenses={expenses} products={products} clients={clients} categories={categories} paymentMethods={paymentMethods} company={activeSucursal} employees={employees} machines={machines} onNavigateToPos={() => navigateToPos()} onRefresh={() => refreshData(true)} />;
             case 'view:agenda': return <Agenda invoices={invoices} company={activeSucursal} />;
@@ -2011,7 +2118,32 @@ export default function App() {
                 canManage={canManageApp} 
             />;
             case 'view:payment_methods': return <PaymentMethods methods={paymentMethods} globalPaymentCatalog={globalConfig?.defaultPaymentImages} onSave={async (pm) => { await dbSavePaymentMethod(pm); refreshData(true); }} onUpdate={async (id, pm) => { await dbUpdatePaymentMethod(id, pm); refreshData(true); }} canManage={canManageApp} />;
-            case 'view:wa_campaign': return <WaCampaign clients={clients} company={activeSucursal} globalContacts={waContacts} setGlobalContacts={setWaContacts} globalStatus={waStatus} setGlobalStatus={setWaStatus} globalTemplates={waTemplates} setGlobalTemplates={setWaTemplates} globalDelay={waDelay} setGlobalDelay={setWaDelay} globalImage={waGlobalImage} setGlobalImage={setWaGlobalImage} globalReminderMsg={waReminderMessageState} setGlobalReminderMsg={setWaReminderMessageState} globalReminderTemplates={waReminderTemplates} setGlobalReminderTemplates={setWaReminderTemplates} globalActiveTab={waActiveTab} setGlobalActiveTab={setWaActiveTab} />;
+            case 'view:wa_campaign': return <WaCampaign 
+                clients={clients} 
+                company={activeSucursal} 
+                globalContacts={waContacts} 
+                setGlobalContacts={setWaContacts} 
+                globalStatus={waStatus} 
+                setGlobalStatus={setWaStatus} 
+                globalTemplates={waTemplates} 
+                setGlobalTemplates={setWaTemplates} 
+                globalDelay={waDelay} 
+                setGlobalDelay={setWaDelay} 
+                globalImage={waGlobalImage} 
+                setGlobalImage={setWaGlobalImage} 
+                globalReminderMsg={waReminderMessageState} 
+                setGlobalReminderMsg={setWaReminderMessageState} 
+                globalReminderTemplates={waReminderTemplates} 
+                setGlobalReminderTemplates={setWaReminderTemplates} 
+                globalActiveTab={waActiveTab} 
+                setGlobalActiveTab={setWaActiveTab}
+                isSendingGlobal={isWaRemindersSending}
+                setIsSendingGlobal={setIsWaRemindersSending}
+                progressGlobal={waRemindersProgress}
+                setProgressGlobal={setWaRemindersProgress}
+                metricsGlobal={waRemindersMetrics}
+                setMetricsGlobal={setWaRemindersMetrics}
+            />;
             case 'view:wa_reminders': return <WaReminders 
                 company={activeSucursal} 
                 isSendingGlobal={isWaRemindersSending}

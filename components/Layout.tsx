@@ -446,12 +446,12 @@ const Layout: React.FC<LayoutProps> = ({
               { id: 'view:loyalty', label: 'Fidelización' },
               { id: 'view:bonus_points', label: 'Puntos Bonus' },
               { id: 'view:promotions', label: 'Promociones' },
-              { id: 'view:wa_campaign', label: 'Campaña WA' },
+              { id: 'view:wa_campaign', label: 'Campaña de Marketing' },
             ]) && <NavSection label="Marketing" isSidebarOpen={isSidebarOpen} />}
             <SidebarItem id="view:loyalty" icon={Ticket} label="Fidelización" isVisible={getModuleConfig('view:loyalty').isVisible} badge={getModuleConfig('view:loyalty').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:bonus_points" icon={Star} label="Puntos Bonus" isVisible={getModuleConfig('view:bonus_points').isVisible} badge={getModuleConfig('view:bonus_points').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
             <SidebarItem id="view:promotions" icon={Sparkles} label="Promociones" isVisible={getModuleConfig('view:promotions').isVisible} badge={getModuleConfig('view:promotions').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
-            <SidebarItem id="view:wa_campaign" icon={Megaphone} label="Campaña WA" isVisible={getModuleConfig('view:wa_campaign').isVisible} badge={getModuleConfig('view:wa_campaign').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
+            <SidebarItem id="view:wa_campaign" icon={Megaphone} label="Campaña de Marketing" isVisible={getModuleConfig('view:wa_campaign').isVisible} badge={getModuleConfig('view:wa_campaign').isNew ? 'NUEVO' : undefined} currentView={currentView} sidebarSearch={sidebarSearch} setView={setView} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} isDarkMode={isDarkMode} primaryColor={primaryColorFromDoc} />
 
             {isSectionVisible([
               { id: 'view:modificaciones', label: 'Modificar' },

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, LayoutGrid, List, PieChart, Info, AlertTriangle, Box, Clock, CheckCircle2, ChevronDown, ChevronUp, Hash, User, Shirt, WashingMachine, MessageSquare, Phone, Image as ImageIcon, Mic, ExternalLink, Play, AlertCircle, Ban, Package } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, LayoutGrid, List, PieChart, Info, AlertTriangle, Box, Clock, CheckCircle2, ChevronDown, ChevronUp, Hash, User, Shirt, WashingMachine, MessageSquare, Phone, Image as ImageIcon, Mic, ExternalLink, Play, AlertCircle, Ban, Package, Smartphone, Eye } from 'lucide-react';
 import { Invoice, Company, CartItem, OrderStatus } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendReadyNotification } from '../services/whatsappService';
@@ -18,6 +18,8 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
     const [openOrders, setOpenOrders] = useState<Record<string, boolean>>({});
     const [viewedImage, setViewedImage] = useState<string | null>(null);
     const [isSendingWA, setIsSendingWA] = useState<string | null>(null);
+    const [selectedInvoiceAction, setSelectedInvoiceAction] = useState<Invoice | null>(null);
+    const [showDetailModal, setShowDetailModal] = useState(false);
 
     const currency = company.currencySymbol || 'S/';
     const primaryColor = document.documentElement.style.getPropertyValue('--primary-color') || '#0054A6';
@@ -670,6 +672,100 @@ const Agenda: React.FC<AgendaProps> = ({ invoices, company }) => {
                             />
                             <div className="absolute bottom-10 left-1/2 -translate-x-1/2 px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full text-white text-[10px] font-black uppercase tracking-[0.4em] opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0 z-20">
                                 Click para cerrar
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* INVOICE DETAIL MODAL */}
+            <AnimatePresence>
+                {showDetailModal && selectedInvoiceAction && (
+                    <div className="fixed inset-0 z-[500] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 50 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 50 }}
+                            className="bg-white border border-slate-200 rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl flex flex-col"
+                        >
+                            <div className="p-8 border-b border-slate-100 flex justify-between items-center" style={{ backgroundColor: primaryColor + '08' }}>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl text-white flex items-center justify-center shadow-md shrink-0" style={{ backgroundColor: primaryColor }}>
+                                        <Hash size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-bold uppercase tracking-tight text-slate-800">Orden #{selectedInvoiceAction.ordenNumber || '---'}</h3>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">Detalle del Pedido</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowDetailModal(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-xl transition-all"><X size={20} /></button>
+                            </div>
+                            <div className="p-8 space-y-6 overflow-y-auto max-h-[60vh] custom-scrollbar bg-slate-50/50">
+                                <div className="bg-white p-5 rounded-3xl border border-slate-200/60 shadow-sm space-y-3">
+                                    <div className="flex justify-between items-baseline">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cliente</span>
+                                        <span className="text-sm font-black text-slate-800 uppercase leading-none">{selectedInvoiceAction.client.name}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Teléfono</span>
+                                        <span className="text-xs font-mono font-bold text-slate-600">{selectedInvoiceAction.client.phone || 'S/T'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Estado</span>
+                                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${selectedInvoiceAction.orderStatus === 'LISTO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                            {selectedInvoiceAction.orderStatus}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fecha de Entrega</span>
+                                        <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                            {selectedInvoiceAction.deliveryDate ? new Date(selectedInvoiceAction.deliveryDate).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'No definida'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Prendas y Servicios</h4>
+                                    <div className="bg-white border border-slate-200/60 rounded-3xl overflow-hidden shadow-sm">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="bg-slate-50 border-b border-slate-100">
+                                                <tr>
+                                                    <th className="px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Descripción</th>
+                                                    <th className="px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Cant</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50">
+                                                {(selectedInvoiceAction.items || []).map((item, idx) => (
+                                                    <tr key={idx} className="hover:bg-slate-50/50">
+                                                        <td className="px-5 py-3 font-bold text-slate-700 uppercase">{item.name}</td>
+                                                        <td className="px-5 py-3 text-center font-mono font-bold text-slate-600">{item.quantity}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-5 rounded-3xl border border-slate-200/60 shadow-sm flex justify-between items-center">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Monto Total</span>
+                                    <span className="text-lg font-black text-slate-800 font-mono tracking-tighter" style={{ color: primaryColor }}>
+                                        {currency} {typeof selectedInvoiceAction.totals?.total === 'number' ? selectedInvoiceAction.totals.total.toFixed(2) : '0.00'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="p-8 bg-white border-t border-slate-100 flex gap-4">
+                                <button 
+                                    onClick={() => handleSendWA(selectedInvoiceAction)}
+                                    className="flex-1 py-4 bg-[#25D366] text-white rounded-2xl font-bold text-xs uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
+                                >
+                                    <Smartphone size={16} fill="white" /> Enviar Aviso
+                                </button>
+                                <button 
+                                    onClick={() => setShowDetailModal(false)}
+                                    className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all active:scale-95 text-center"
+                                >
+                                    Cerrar
+                                </button>
                             </div>
                         </motion.div>
                     </div>

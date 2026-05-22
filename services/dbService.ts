@@ -662,6 +662,11 @@ export const dbUploadImage = async (bucket: string, file: File | string | Blob, 
 // --- GESTIÓN DE TICKET CONFIG ---
 
 export const dbGetTicketConfig = async (branchId: string) => {
+    if (!branchId) return null;
+    const cacheKey = `ticket_config_${branchId}`;
+    const cached = getCached(cacheKey, 60000); // 60s TTL
+    if (cached) return cached;
+
     try {
         const { data, error } = await supabase
             .from('sucursal_ticket_config')
@@ -675,6 +680,7 @@ export const dbGetTicketConfig = async (branchId: string) => {
             }
             return null;
         }
+        setCache(cacheKey, data);
         return data;
     } catch (e) {
         return null;
@@ -759,6 +765,10 @@ export const dbGetPopularityData = async () => {
     const branchId = getActiveBranchId();
     if (!branchId) return { topCategories: [], topProducts: [] };
     
+    const cacheKey = `popularity_${branchId}`;
+    const cached = getCached(cacheKey, 60000); // 60s TTL
+    if (cached) return cached;
+    
     try {
         const threeMonthsAgo = new Date();
         threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
@@ -806,7 +816,9 @@ export const dbGetPopularityData = async () => {
             .slice(0, 20)
             .map(entry => entry[0]);
             
-        return { topCategories, topProducts };
+        const result = { topCategories, topProducts };
+        setCache(cacheKey, result);
+        return result;
     } catch (e) {
         console.error("Error fetching popularity data:", e);
         return { topCategories: [], topProducts: [] };
@@ -1103,6 +1115,11 @@ export const dbDeleteClient = async (id: string) => {
 export const dbGetClients = async (page: number = 1, pageSize: number = 100, searchTerm: string = ''): Promise<{ clients: Client[], total: number }> => {
     const branchId = getActiveBranchId();
     if (!branchId) return { clients: [], total: 0 };
+    
+    const cacheKey = `clients_${branchId}_p${page}_s${pageSize}_q${searchTerm}`;
+    const cached = getCached(cacheKey, 30000); // 30s TTL
+    if (cached) return cached;
+
     try {
         const holdingId = await ensureHoldingId(branchId);
         
@@ -1154,7 +1171,9 @@ export const dbGetClients = async (page: number = 1, pageSize: number = 100, sea
             googleMapsUrl: c.google_maps_url 
         }));
         
-        return { clients: mappedClients, total: count || 0 };
+        const result = { clients: mappedClients, total: count || 0 };
+        setCache(cacheKey, result);
+        return result;
     } catch (e) { return { clients: [], total: 0 }; }
 };
 
@@ -1238,11 +1257,18 @@ const mapStatusToDb = (status: string): string => {
 export const dbGetPickupRequests = async (): Promise<PickupRequest[]> => {
     const branchId = getActiveBranchId();
     if (!branchId) return [];
+    
+    const cacheKey = `pickup_requests_${branchId}`;
+    const cached = getCached(cacheKey, 10000); // 10s TTL
+    if (cached) return cached;
+
     try {
         const holdingId = await ensureHoldingId(branchId);
         const { data, error } = await supabase.from('recojos_delivery').select('*, clientes(nombres, latitud, longitud, google_maps_url)').eq('sucursal_id', branchId).eq('empresa_holding_id', holdingId).order('fecha_programada', { ascending: true });
         if (error) return [];
-        return (data || []).map(r => ({ id: r.id, sucursal_id: r.sucursal_id, empresa_holding_id: r.empresa_holding_id, cliente_id: r.cliente_id, clientName: r.clientes?.nombres || 'Cliente', address: r.direccion, phone: r.telefono, scheduledDate: r.fecha_programada, timeRange: r.rango_horario, status: mapStatusFromDb(r.estado_recojo), notes: r.notas, createdAt: r.fecha_registro, registrado_por: r.registrado_por, googleMapsUrl: r.clientes?.google_maps_url, latitude: r.clientes?.latitud ? Number(r.clientes.latitud) : undefined, longitude: r.clientes?.longitud ? Number(r.clientes.longitud) : undefined, isSelfScheduled: r.is_self_scheduled ?? false, isReadByAdmin: r.is_read_by_admin ?? false }));
+        const result = (data || []).map(r => ({ id: r.id, sucursal_id: r.sucursal_id, empresa_holding_id: r.empresa_holding_id, cliente_id: r.cliente_id, clientName: r.clientes?.nombres || 'Cliente', address: r.direccion, phone: r.telefono, scheduledDate: r.fecha_programada, timeRange: r.rango_horario, status: mapStatusFromDb(r.estado_recojo), notes: r.notas, createdAt: r.fecha_registro, registrado_por: r.registrado_por, googleMapsUrl: r.clientes?.google_maps_url, latitude: r.clientes?.latitud ? Number(r.clientes.latitud) : undefined, longitude: r.clientes?.longitud ? Number(r.clientes.longitud) : undefined, isSelfScheduled: r.is_self_scheduled ?? false, isReadByAdmin: r.is_read_by_admin ?? false }));
+        setCache(cacheKey, result);
+        return result;
     } catch (e) { return []; }
 };
 
@@ -2019,6 +2045,10 @@ export const dbGetOrderStats = async (): Promise<{ toCollect: number, toDeliver:
     const branchId = getActiveBranchId();
     if (!branchId) return { toCollect: 0, toDeliver: 0 };
     
+    const cacheKey = `order_stats_${branchId}`;
+    const cached = getCached(cacheKey, 15000); // 15s TTL
+    if (cached) return cached;
+    
     try {
         // Obtenemos todas las ventas no entregadas o con saldo
         // NOTA: Para escalabilidad extrema esto debería ser un RPC o una vista agregada
@@ -2045,7 +2075,9 @@ export const dbGetOrderStats = async (): Promise<{ toCollect: number, toDeliver:
             if (v.estado !== 'ENTREGADO') toDeliver += 1;
         });
 
-        return { toCollect, toDeliver };
+        const result = { toCollect, toDeliver };
+        setCache(cacheKey, result);
+        return result;
     } catch (e) {
         console.error("Error fetching order stats:", e);
         return { toCollect: 0, toDeliver: 0 };
@@ -2055,6 +2087,10 @@ export const dbGetOrderStats = async (): Promise<{ toCollect: number, toDeliver:
 export const dbGetDashboardReportData = async (startDate: string, endDate: string) => {
     const branchId = getActiveBranchId();
     if (!branchId) return { invoices: [], payments: [], expenses: [] };
+
+    const cacheKey = `dashboard_report_${branchId}_${startDate}_${endDate}`;
+    const cached = getCached(cacheKey, 30000); // 30s TTL
+    if (cached) return cached;
 
     try {
         const holdingId = await ensureHoldingId(branchId);
@@ -2106,13 +2142,13 @@ export const dbGetDashboardReportData = async (startDate: string, endDate: strin
             } as any;
         });
 
-        return {
+        const result = {
             invoices: mappedInvoices,
             payments: (pagos || []).map(p => ({
                 ...p,
                 monto: Number(p.monto),
                 metodo_pago_name: p.metodos_pago?.nombre || 'EFECTIVO',
-                venta_codigo: p.ventas?.codigo_orden,
+                venta_codigo: p.metodos_pago?.nombre ? p.ventas?.codigo_orden : p.ventas?.codigo_orden,
                 cliente_nombre: p.ventas?.clientes ? `${p.ventas.clientes.nombres} ${p.ventas.clientes.apellidos}` : 'CLIENTE'
             })),
             expenses: (gastos || []).map(g => ({
@@ -2123,6 +2159,9 @@ export const dbGetDashboardReportData = async (startDate: string, endDate: strin
                 date: g.fecha_gasto
             }))
         };
+        
+        setCache(cacheKey, result);
+        return result;
     } catch (e) {
         console.error("Error in dbGetDashboardReportData:", e);
         return { invoices: [], payments: [], expenses: [] };
@@ -2465,9 +2504,14 @@ export const dbDeletePausedSale = async (id: string) => { await supabase.from('v
 export const dbGetMachines = async (): Promise<Machine[]> => {
     const branchId = getActiveBranchId();
     if (!branchId) return [];
+    
+    const cacheKey = `machines_${branchId}`;
+    const cached = getCached(cacheKey, 10000); // 10s TTL
+    if (cached) return cached;
+    
     const { data, error } = await supabase.from('maquinas').select('*').eq('sucursal_id', branchId).eq('activo', true);
     if (error) return [];
-    return (data || []).map(m => ({
+    const result = (data || []).map(m => ({
         id: m.id,
         sucursal_id: m.sucursal_id,
         empresa_holding_id: m.empresa_holding_id,
@@ -2488,6 +2532,9 @@ export const dbGetMachines = async (): Promise<Machine[]> => {
         activo: m.activo,
         estado: m.estado
     }));
+    
+    setCache(cacheKey, result);
+    return result;
 };
 
 export const dbSaveMachine = async (m: any) => {
@@ -2996,6 +3043,10 @@ export const dbGetActiveItems = async (): Promise<any[]> => {
     const branchId = getActiveBranchId();
     if (!branchId) return [];
     
+    const cacheKey = `active_items_${branchId}`;
+    const cached = getCached(cacheKey, 10000); // 10s TTL
+    if (cached) return cached;
+    
     // Join with ventas to filter by sucursal_id
     const { data } = await supabase.from('items_venta')
         .select('id, venta_id, estado, ventas!inner(sucursal_id, estado)')
@@ -3003,11 +3054,14 @@ export const dbGetActiveItems = async (): Promise<any[]> => {
         .neq('ventas.estado', 'CANCELADO')
         .in('estado', ['EN_LAVADO', 'EN_SECADO']);
         
-    return (data || []).map(it => ({
+    const result = (data || []).map(it => ({
         id: it.id,
         venta_id: it.venta_id,
         estado: it.estado
     }));
+    
+    setCache(cacheKey, result);
+    return result;
 };
 
 export const dbSyncMachines = async () => {

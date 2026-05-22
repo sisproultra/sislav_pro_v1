@@ -358,7 +358,7 @@ export interface PickupRequest extends BaseEntity {
     recogido_at?: string;
 }
 
-export interface GlobalHelpVideo { id: string; title: string; youtubeUrl: string; category?: string; }
+export interface GlobalHelpVideo { id: string; title: string; youtubeUrl: string; category?: string; modulo_id?: string; }
 export interface GlobalCategoryImage { id: string; name: string; url: string; }
 export interface GlobalPaymentImage { id: string; name: string; url: string; }
 export interface GlobalColor {
@@ -560,7 +560,7 @@ export const SYSTEM_MODULES: PermissionDefinition[] = [
     { id: 'view:loyalty', label: 'Fidelización', description: 'Cupones y programas de lealtad', category: 'MARKETING' },
     { id: 'view:bonus_points', label: 'Puntos Bonus', description: 'Gestión de puntos y canjes', category: 'MARKETING' },
     { id: 'view:promotions', label: 'Promociones', description: 'Ofertas, packs y descuentos', category: 'MARKETING' },
-    { id: 'view:wa_campaign', label: 'Campaña WA', description: 'Marketing masivo por WhatsApp', category: 'MARKETING' },
+    { id: 'view:wa_campaign', label: 'Campaña de Marketing', description: 'Marketing masivo por WhatsApp', category: 'MARKETING' },
     { id: 'view:wa_reminders', label: 'Recordatorio', description: 'Recordatorios de recojo de prendas', category: 'PRINCIPAL' },
     
     { id: 'view:modificaciones', label: 'Modificar', description: 'Edición de tickets y boletas', category: 'ADMINISTRACIÓN' },
