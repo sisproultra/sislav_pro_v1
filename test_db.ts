@@ -4,8 +4,26 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+const cleanUrl = (urlStr: string) => {
+    if (!urlStr) return '';
+    try {
+        let trimmed = urlStr.trim().replace(/['"]/g, '');
+        if (!trimmed.toLowerCase().startsWith('http')) {
+            trimmed = `https://${trimmed}`;
+        }
+        const parsed = new URL(trimmed);
+        let cleanPath = parsed.pathname.replace(/\/rest\/v1\/?$/, '');
+        if (cleanPath === '/') cleanPath = '';
+        return `${parsed.origin}${cleanPath}`;
+    } catch (e) {
+        return urlStr.trim().replace(/\/$/, '').split('/rest/v1')[0];
+    }
+};
+
+const rawUrl = process.env.VITE_SUPABASE_URL || '';
+const rawKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = cleanUrl(rawUrl);
+const supabaseAnonKey = rawKey.replace(/['"]/g, '').trim();
 
 if (!supabaseUrl || !supabaseAnonKey) {
     console.error('❌ Error: Faltan variables de entorno VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY');
@@ -15,20 +33,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function testQuery() {
-    const username = 'lavaflash';
-    console.log(`🚀 Buscando en usuarios_login por username: ${username}...`);
+    console.log(`🚀 Buscando en usuarios_login para inspeccionar columnas...`);
     const { data, error } = await supabase
         .from("usuarios_login")
         .select("*")
-        .eq("username", username)
-        .maybeSingle();
+        .limit(1);
 
     if (error) {
         console.error('❌ Error:', error);
-    } else if (!data) {
-        console.warn('⚠️ No se encontró el usuario en usuarios_login');
+    } else if (!data || data.length === 0) {
+        console.warn('⚠️ No se encontraron registros en usuarios_login');
     } else {
-        console.log('✅ Usuario encontrado en usuarios_login:', data);
+        console.log('✅ Registro encontrado. Columnas:', Object.keys(data[0]));
+        console.log('✅ Ejemplo de registro:', data[0]);
     }
 }
 

@@ -20,8 +20,28 @@ async function startServer() {
   });
 
   // Configuración de Supabase Admin (Backend)
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://yvgshdypqanlcgxdyvls.supabase.co';
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'N/A';
+  const rawUrl = (process.env.VITE_SUPABASE_URL || 'https://yvgshdypqanlcgxdyvls.supabase.co').replace(/['"]/g, '').trim();
+  const rawKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || 'N/A').replace(/['"]/g, '').trim();
+
+  // URL Cleansing logic matching client
+  const cleanUrl = (urlStr: string) => {
+    if (!urlStr) return '';
+    try {
+      let trimmed = urlStr.trim();
+      if (!trimmed.toLowerCase().startsWith('http')) {
+        trimmed = `https://${trimmed}`;
+      }
+      const parsed = new URL(trimmed);
+      let cleanPath = parsed.pathname.replace(/\/rest\/v1\/?$/, '');
+      if (cleanPath === '/') cleanPath = '';
+      return `${parsed.origin}${cleanPath}`;
+    } catch (e) {
+      return urlStr.trim().replace(/\/$/, '').split('/rest/v1')[0];
+    }
+  };
+
+  const supabaseUrl = cleanUrl(rawUrl);
+  const supabaseServiceKey = rawKey;
 
   if (!process.env.VITE_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     console.log('ℹ️ Nota: SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY no configurados en el servidor.');
@@ -217,12 +237,49 @@ async function startServer() {
       // 5. Configurar expiración a 10 minutos (en milisegundos)
       const expiresAt = Date.now() + 10 * 60 * 1000;
 
-      // 6. Actualizar contraseña del usuario en Supabase Auth con los flags correspondientes
+      // 6. Preparar número limpio para historial
+      let cleanPhone = telefono.replace(/\D/g, '');
+
+      // 7. Cargar metadatos actuales del usuario de Supabase Auth para no sobreescribir otros valores e iniciar historial
+      let currentMetadata: any = {};
+      let recoveryHistory: any[] = [];
+      try {
+        const { data: authUserData, error: getUserError } = await supabaseAdmin.auth.admin.getUser(userRecord.id);
+        if (!getUserError && authUserData?.user) {
+          currentMetadata = authUserData.user.user_metadata || {};
+          if (Array.isArray(currentMetadata.recovery_history)) {
+            recoveryHistory = [...currentMetadata.recovery_history];
+          }
+        }
+      } catch (e: any) {
+        console.warn("⚠️ No se pudieron restaurar metadatos anteriores, se crearán de cero:", e.message);
+      }
+
+      // Crear nueva entrada para el historial de recuperación
+      const newHistoryEntry = {
+        id: Math.random().toString(36).substring(2, 9),
+        timestamp: new Date().toISOString(),
+        temp_password: tempPassword,
+        expires_at: new Date(expiresAt).toISOString(),
+        phone: cleanPhone,
+        status: 'pending'
+      };
+      recoveryHistory.push(newHistoryEntry);
+
+      // Limitar historial a los últimos 10 logs
+      if (recoveryHistory.length > 10) {
+        recoveryHistory = recoveryHistory.slice(-10);
+      }
+
+      // 8. Actualizar contraseña del usuario en Supabase Auth con los flags y el historial correspondientes
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userRecord.id, {
         password: tempPassword,
         user_metadata: {
+          ...currentMetadata,
           temp_password_active: true,
-          temp_password_expires_at: expiresAt
+          temp_password_expires_at: expiresAt,
+          temp_password_raw: tempPassword, // Guardado para auditoría de soporte administrativo
+          recovery_history: recoveryHistory
         }
       });
 
@@ -230,7 +287,17 @@ async function startServer() {
         throw new Error(`No se pudo actualizar la contraseña temporal: ${updateError.message}`);
       }
 
-      // 7. Cargar configuración de WhatsApp de saas_configuracion_global
+      // Sincronizar el password_hash en la tabla local usuarios_login para contingencias
+      try {
+        await supabaseAdmin
+          .from('usuarios_login')
+          .update({ password_hash: tempPassword })
+          .eq('id', userRecord.id);
+      } catch (dbErr) {
+        console.warn("⚠️ No se pudo actualizar el password_hash local:", dbErr);
+      }
+
+      // 9. Cargar configuración de WhatsApp de saas_configuracion_global
       const { data: globalConfig } = await supabaseAdmin
         .from('saas_configuracion_global')
         .select('*')
@@ -244,6 +311,25 @@ async function startServer() {
 
       if (!baseUrl || !apiKey || !instance) {
         console.warn('⚠️ Configuración de WhatsApp incompleta en saas_configuracion_global.');
+        
+        // Actualizar estado en el historial como sin configurar/offline_mode
+        if (recoveryHistory.length > 0) {
+          recoveryHistory[recoveryHistory.length - 1].status = 'offline_mode';
+          try {
+            await supabaseAdmin.auth.admin.updateUserById(userRecord.id, {
+              user_metadata: {
+                ...currentMetadata,
+                temp_password_active: true,
+                temp_password_expires_at: expiresAt,
+                temp_password_raw: tempPassword,
+                recovery_history: recoveryHistory
+              }
+            });
+          } catch (logErr) {
+            console.warn("⚠️ Error guardando estado offline en historial:", logErr);
+          }
+        }
+
         return res.json({ 
           success: true, 
           offline: true, 
@@ -252,8 +338,7 @@ async function startServer() {
         });
       }
 
-      // 8. Formatear el número de teléfono con el código de país
-      let cleanPhone = telefono.replace(/\D/g, '');
+      // 10. Formatear el número de teléfono con el código de país
       if (cleanPhone.length === 9) {
         const countryCode = (globalConfig?.whatsapp_cod_pais || '51').replace(/\D/g, '') || '51';
         cleanPhone = `${countryCode}${cleanPhone}`;
@@ -261,10 +346,10 @@ async function startServer() {
         cleanPhone = `51${cleanPhone}`;
       }
 
-      // 9. Construir el mensaje de WhatsApp solicitado de forma profesional
-      const bodyText = `🔑 *SISLAV - RECUPERACIÓN DE CONTRASEÑA* 🔑\n\nHola *${userRecord.nombre_completo.trim().toUpperCase()}*,\n\nHemos generado una contraseña momentánea para tu acceso al sistema:\n\n👤 *Usuario:* \`${userRecord.username}\`\n🔐 *Contraseña Temporal:* *${tempPassword}*\n\n⏱️ _Esta clave expirará en 10 minutos por motivos de seguridad._\n\nAl ingresar con esta contraseña temporal, el sistema solicitará obligatoriamente que definas tu nueva contraseña permanente para continuar.`;
+      // 11. Construir el mensaje de WhatsApp solicitado de forma profesional
+      const bodyText = `🔑 *SISLAV - RECUPERACION DE CONTRASEÑA* 🔑\n\nHola *${userRecord.nombre_completo.trim().toUpperCase()}*,\n\nHemos generado una contraseña momentánea para tu acceso al sistema:\n\n👤 *Usuario:* \`${userRecord.username}\`\n🔐 *Contraseña Temporal:* *${tempPassword}*\n\n⏱️ _Esta clave expirará en 10 minutos por motivos de seguridad._\n\nAl ingresar con esta contraseña temporal, el sistema solicitará obligatoriamente que definas tu nueva contraseña permanente para continuar.`;
 
-      // 10. Despachar mensaje a la API de Evolution
+      // 12. Despachar mensaje a la API de Evolution
       const response = await fetch(`${baseUrl}/message/sendText/${instance}`, {
         method: 'POST',
         headers: {
@@ -279,7 +364,40 @@ async function startServer() {
 
       if (!response.ok) {
         console.error(`⚠️ Evolution API falló con status: ${response.status}`);
+        
+        // Actualizar historial como fallido
+        if (recoveryHistory.length > 0) {
+          recoveryHistory[recoveryHistory.length - 1].status = 'failed';
+          try {
+            await supabaseAdmin.auth.admin.updateUserById(userRecord.id, {
+              user_metadata: {
+                ...currentMetadata,
+                temp_password_active: true,
+                temp_password_expires_at: expiresAt,
+                temp_password_raw: tempPassword,
+                recovery_history: recoveryHistory
+              }
+            });
+          } catch (logErr) {}
+        }
+
         return res.status(500).json({ error: 'Fallo al despachar el mensaje de WhatsApp. Intente nuevamente.' });
+      }
+
+      // Actualizar historial como enviado
+      if (recoveryHistory.length > 0) {
+        recoveryHistory[recoveryHistory.length - 1].status = 'sent';
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(userRecord.id, {
+            user_metadata: {
+              ...currentMetadata,
+              temp_password_active: true,
+              temp_password_expires_at: expiresAt,
+              temp_password_raw: tempPassword,
+              recovery_history: recoveryHistory
+            }
+          });
+        } catch (logErr) {}
       }
 
       // Enmascarar teléfono
