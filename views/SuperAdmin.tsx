@@ -861,6 +861,10 @@ export const SuperAdmin: React.FC<{
     const [compRuc, setCompRuc] = useState('');
     const [compOwner, setCompOwner] = useState('');
     const [compPhone, setCompPhone] = useState('');
+    const [compPhoneCode, setCompPhoneCode] = useState('+51');
+    const [compPhoneBody, setCompPhoneBody] = useState('');
+    const [isCompPhoneCountryDropdownOpen, setIsCompPhoneCountryDropdownOpen] = useState(false);
+    const compPhoneCountryDropdownRef = useRef<HTMLDivElement>(null);
     const [compEmail, setCompEmail] = useState('');
     const [compPassword, setCompPassword] = useState('');
     const [compLogoUrl, setCompLogoUrl] = useState('');
@@ -956,6 +960,9 @@ export const SuperAdmin: React.FC<{
         const handleClickOutside = (event: MouseEvent) => {
             if (countryDropdownRef.current && !countryDropdownRef.current.contains(event.target as Node)) {
                 setIsCountryDropdownOpen(false);
+            }
+            if (compPhoneCountryDropdownRef.current && !compPhoneCountryDropdownRef.current.contains(event.target as Node)) {
+                setIsCompPhoneCountryDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -1241,7 +1248,23 @@ export const SuperAdmin: React.FC<{
         setCompNombreComercial(company.nombre_comercial || '');
         setCompRuc(company.ruc);
         setCompOwner(company.ownerName);
-        setCompPhone(company.phone);
+        
+        // Parsear el código de país del teléfono
+        const rawPhone = company.phone || '';
+        let matchedCode = '+51';
+        let matchedBody = rawPhone;
+        const sortedCodes = [...LATAM_CODES].sort((a, b) => b.code.length - a.code.length);
+        for (const item of sortedCodes) {
+            if (rawPhone.startsWith(item.code)) {
+                matchedCode = item.code;
+                matchedBody = rawPhone.substring(item.code.length).trim();
+                break;
+            }
+        }
+        setCompPhoneCode(matchedCode);
+        setCompPhoneBody(matchedBody);
+        setCompPhone(rawPhone);
+
         setCompEmail(company.email || '');
         setCompLogoUrl(company.logoUrl || '');
         setCompFaviconUrl(company.faviconUrl || '');
@@ -1261,6 +1284,8 @@ export const SuperAdmin: React.FC<{
         setCompRuc(''); 
         setCompOwner(''); 
         setCompPhone(''); 
+        setCompPhoneCode('+51');
+        setCompPhoneBody('');
         setCompEmail(''); 
         setCompPassword('');
         setCompLogoUrl('');
@@ -1291,7 +1316,7 @@ export const SuperAdmin: React.FC<{
                 nombre_comercial: compNombreComercial,
                 ruc: compRuc, 
                 ownerName: compOwner, 
-                phone: compPhone, 
+                phone: (compPhoneCode + compPhoneBody).trim(), 
                 email: compEmail, 
                 password: compPassword,
                 logoUrl: compLogoUrl,
@@ -1646,6 +1671,7 @@ export const SuperAdmin: React.FC<{
     };
 
     const selectedCountry = LATAM_CODES.find(c => c.code === globalWaCodPais) || LATAM_CODES[0];
+    const selectedCompPhoneCountry = LATAM_CODES.find(c => c.code === compPhoneCode) || LATAM_CODES[0];
 
     if (loading) return <div className="h-screen bg-slate-950 flex flex-col items-center justify-center text-indigo-500 gap-4">
         <Loader2 className="animate-spin" size={48} />
@@ -2501,7 +2527,60 @@ export const SuperAdmin: React.FC<{
                                 <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Razón Social</label><input required value={compName} onChange={e => setCompName(e.target.value.toUpperCase())} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20 uppercase" placeholder="LAVANDERIA SAC" /></div>
                                 <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1 text-indigo-400">Nombre Comercial (PWA)</label><input value={compNombreComercial} onChange={e => setCompNombreComercial(e.target.value.toUpperCase())} className="w-full bg-slate-800 border-2 border-indigo-500/30 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-black outline-none focus:ring-4 focus:ring-indigo-600/20 uppercase shadow-[0_0_15px_rgba(79,70,229,0.1)]" placeholder="BRIGTH & CLEAN" /></div>
                                 <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Representante</label><input required value={compOwner} onChange={e => setCompOwner(e.target.value.toUpperCase())} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20 uppercase" placeholder="JUAN PEREZ" /></div>
-                                <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Teléfono</label><input required value={compPhone} onChange={e => setCompPhone(e.target.value)} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20" placeholder="999888777" /></div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Teléfono</label>
+                                    <div className="flex gap-2 relative">
+                                        {/* Selector de Prefijo de País */}
+                                        <div className="relative w-36 shrink-0" ref={compPhoneCountryDropdownRef}>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setIsCompPhoneCountryDropdownOpen(!isCompPhoneCountryDropdownOpen)} 
+                                                className="h-full w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-3 py-3 md:py-4 font-bold text-xs md:text-sm text-white flex items-center justify-between outline-none focus:ring-4 focus:ring-indigo-600/20 transition-all select-none"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <img 
+                                                        src={`https://flagcdn.com/w20/${selectedCompPhoneCountry.iso}.png`} 
+                                                        className="w-5 h-auto rounded-sm shadow-sm shrink-0" 
+                                                        alt="flag" 
+                                                    />
+                                                    <span className="text-white font-bold">{compPhoneCode}</span>
+                                                </div>
+                                                <ChevronDown size={16} className={`text-slate-400 transition-transform shrink-0 ${isCompPhoneCountryDropdownOpen ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            {isCompPhoneCountryDropdownOpen && (
+                                                <div className="absolute top-full mt-2 left-0 w-64 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl z-[110] overflow-hidden animate-in slide-in-from-top-2">
+                                                    <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                                                        {LATAM_CODES.map(c => (
+                                                            <button 
+                                                                key={c.code} 
+                                                                type="button" 
+                                                                onClick={() => { 
+                                                                    setCompPhoneCode(c.code); 
+                                                                    setIsCompPhoneCountryDropdownOpen(false); 
+                                                                }} 
+                                                                className="w-full px-4 py-2.5 hover:bg-white/5 flex items-center justify-between text-left transition-colors border-b border-white/5 last:border-0 group select-none"
+                                                            >
+                                                                <div className="flex items-center gap-2">
+                                                                    <img src={`https://flagcdn.com/w20/${c.iso}.png`} className="w-5 h-auto rounded-sm shadow-sm" alt="flag" />
+                                                                    <span className="font-bold text-xs text-white">{c.name}</span>
+                                                                </div>
+                                                                <span className="text-[10px] font-bold text-slate-400 group-hover:text-indigo-400">{c.code}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* Input del Número de Teléfono */}
+                                        <input 
+                                            required 
+                                            value={compPhoneBody} 
+                                            onChange={e => setCompPhoneBody(e.target.value.replace(/\D/g, ''))} 
+                                            className="flex-1 bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20" 
+                                            placeholder="999888777" 
+                                        />
+                                    </div>
+                                </div>
                                 <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Correo Admin</label><input required type="email" value={compEmail} onChange={e => setCompEmail(e.target.value.toLowerCase())} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20 lowercase" placeholder="admin@empresa.com" /></div>
                                 <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Pin Acceso Maestro</label><input required={!isEditingCompany} type="password" value={compPassword} onChange={e => setCompPassword(e.target.value)} className="w-full bg-slate-800 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white font-bold outline-none focus:ring-4 focus:ring-indigo-600/20" placeholder={isEditingCompany ? "Dejar en blanco para mantener" : "••••••"} /></div>
                             </div>

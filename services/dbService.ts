@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { formatOrderNumber, getNextLetter } from '../utils/calculations';
 import { fixEncoding } from '../utils/stringUtils';
+import { getSaasGlobalConfig } from './saasService';
 
 export const withTimeout = <T>(promise: any, timeoutMs: number = 15000): Promise<T> => {
     return Promise.race([
@@ -162,6 +163,18 @@ export const dbGlobalLogin = async (username: string, pass: string, expectedSucu
             console.error("Auth error:", authError?.message);
             return null;
         }
+
+        // VERIFICAR CONTRASEÑA TEMPORAL Y SU EXPIRACIÓN (10 MINUTOS)
+        const isTempActive = signInData.user.user_metadata?.temp_password_active === true;
+        const tempExpiresAt = signInData.user.user_metadata?.temp_password_expires_at;
+        
+        if (isTempActive && tempExpiresAt) {
+            if (Date.now() > tempExpiresAt) {
+                await supabase.auth.signOut();
+                throw new Error("EXPIRED_TEMP_PASSWORD: La contraseña temporal de 10 minutos ha expirado. Por favor, solicite una nueva de recuperación.");
+            }
+        }
+
         authData = signInData;
 
         // 2. Obtener perfil extendido de la tabla usuarios_login VALIDANDO LA SUCURSAL
@@ -201,6 +214,7 @@ export const dbGlobalLogin = async (username: string, pass: string, expectedSucu
                 holding_id: data.empresa_id,
                 holding_name: data.sucursales?.empresas_holding?.nombre_empresa,
                 sucursal_id: data.sucursal_id,
+                isTempPasswordActive: isTempActive,
                 sucursal_data: data.sucursales ? normalizeSucursal(data.sucursales) : null,
                 permissions: data.permisos_map || data.permisos_json || {}
             }
@@ -2557,6 +2571,7 @@ export const dbSaveMachine = async (m: any) => {
         estado: 'OPERATIVO'
     }).select().single();
     if (error) throw error;
+    invalidateCache(`machines_${branchId}`);
     return data;
 };
 
@@ -2571,8 +2586,177 @@ export const dbUpdateMachine = async (id: string, updates: Partial<Machine>) => 
     if (updates.totalCycles !== undefined) payload.total_ciclos = updates.totalCycles;
     if (updates.totalKg !== undefined) payload.total_kg = updates.totalKg;
     if (updates.totalMinutes !== undefined) payload.total_minutos = updates.totalMinutes;
+    if (updates.imageUrl !== undefined) payload.url_imagen = updates.imageUrl;
+    if (updates.maintenanceIntervalHours !== undefined) payload.intervalo_mantenimiento_horas = updates.maintenanceIntervalHours;
+    if (updates.maintenanceIntervalKg !== undefined) payload.intervalo_mantenimiento_kg = updates.maintenanceIntervalKg;
+    if (updates.maintenanceIntervalCycles !== undefined) payload.intervalo_mantenimiento_ciclos = updates.maintenanceIntervalCycles;
+    
     const { error } = await supabase.from('maquinas').update(payload).eq('id', id);
     if (error) throw error;
+
+    const branchId = getActiveBranchId();
+    if (branchId) {
+        invalidateCache(`machines_${branchId}`);
+    }
+
+    // Verificar y enviar alerta de mantenimiento de manera asíncrona sin bloquear la UI
+    checkAndSendMachineMaintenanceAlert(id).catch(err => {
+        console.error("⚠️ Falló verificar/enviar alerta de mantenimiento para la máquina:", err);
+    });
+};
+
+export const checkAndSendMachineMaintenanceAlert = async (machineId: string) => {
+    try {
+        // 1. Obtener detalles del equipo
+        const { data: machine, error: mErr } = await supabase
+            .from('maquinas')
+            .select('*')
+            .eq('id', machineId)
+            .single();
+
+        if (mErr || !machine) {
+            console.warn("⚠️ No se pudo obtener la máquina para verificar alertas:", mErr);
+            return;
+        }
+
+        const empresaHoldingId = machine.empresa_holding_id;
+        if (!empresaHoldingId) {
+            console.warn("⚠️ El equipo no cuenta con empresa_holding_id asociado.");
+            return;
+        }
+
+        // 2. Obtener el teléfono de contacto de empresas_holding
+        const { data: holding, error: hErr } = await supabase
+            .from('empresas_holding')
+            .select('*')
+            .eq('id', empresaHoldingId)
+            .single();
+
+        if (hErr || !holding) {
+            console.warn("⚠️ No se pudo obtener la empresa holding para alertas:", hErr);
+            return;
+        }
+
+        const phone = holding.telefono_contacto || holding.telefono;
+        if (!phone) {
+            console.warn("⚠️ La empresa holding no tiene configurado ningún teléfono de contacto.");
+            return;
+        }
+
+        // 3. Cargar la configuración global de WhatsApp (Evolution API)
+        const globalConfig = await getSaasGlobalConfig();
+        const baseUrl = globalConfig.url_bot;
+        const apiKey = globalConfig.apikey_bot;
+        const instance = globalConfig.instancia_bot;
+
+        if (!baseUrl || !apiKey || !instance) {
+            console.warn("⚠️ Configuración global de bot de WhatsApp incompleta en saas_configuracion_global.");
+            return;
+        }
+
+        // 4. Evaluar límites y porcentajes de mantenimiento
+        const hoursUsed = (machine.total_minutos || 0) / 60;
+        const maxHours = machine.intervalo_mantenimiento_horas || 0;
+        const totalKg = machine.total_kg || 0;
+        const maxKg = machine.intervalo_mantenimiento_kg || 0;
+        const totalCycles = machine.total_ciclos || 0;
+        const maxCycles = machine.intervalo_mantenimiento_ciclos || 0;
+
+        let alertType: 'hours' | 'kg' | 'cycles' | null = null;
+        let percentageUsed = 0;
+        let currentVal = 0;
+        let limitVal = 0;
+        let concept = '';
+
+        if (maxKg > 0) {
+            const kgPercent = (totalKg / maxKg) * 100;
+            if (kgPercent >= 90) {
+                alertType = 'kg';
+                percentageUsed = kgPercent;
+                currentVal = totalKg;
+                limitVal = maxKg;
+                concept = 'KILOS';
+            }
+        }
+
+        if (!alertType && maxHours > 0) {
+            const hPercent = (hoursUsed / maxHours) * 100;
+            if (hPercent >= 90) {
+                alertType = 'hours';
+                percentageUsed = hPercent;
+                currentVal = hoursUsed;
+                limitVal = maxHours;
+                concept = 'HORAS DE TRABAJO';
+            }
+        }
+
+        if (!alertType && maxCycles > 0) {
+            const cPercent = (totalCycles / maxCycles) * 100;
+            if (cPercent >= 90) {
+                alertType = 'cycles';
+                percentageUsed = cPercent;
+                currentVal = totalCycles;
+                limitVal = maxCycles;
+                concept = 'CICLOS';
+            }
+        }
+
+        if (!alertType) {
+            // El uso actual está por debajo del 90% del límite de mantenimiento
+            return;
+        }
+
+        // 5. Evitar reenvío de alertas duplicadas (usando localStorage con llave ID + tipo + límite para que si cambia de valor se pueda evaluar de nuevo)
+        const stateKey = `machine_alert_sent_${machineId}_${alertType}_${limitVal}`;
+        const alreadySent = localStorage.getItem(stateKey);
+        if (alreadySent === 'true') {
+            console.log(`ℹ️ Alerta para equipo ${machine.nombre} ya fue enviada a ${phone} para el umbral actual.`);
+            return;
+        }
+
+        // 6. Construir y dar formato al mensaje
+        const isExceeded = percentageUsed >= 100;
+        const prefix = isExceeded ? '⚠️ MANTENIMIENTO VENCIDO ⚠️' : '🚨 ALERTA DE MANTENIMIENTO PRÓXIMO 🚨';
+        const message = `${prefix}\n\n*Empresa:* ${holding.nombre_empresa?.toUpperCase() || ''}\n*Equipo:* ${machine.nombre?.toUpperCase()} (${machine.tipo})\n*Concepto:* ${concept}\n*Uso Actual:* ${currentVal.toFixed(1)} / ${limitVal.toFixed(1)} (${percentageUsed.toFixed(1)}%)\n\nEl equipo ha ${isExceeded ? 'superado' : 'alcanzado el 90% de'} su límite configurado de ${concept.toLowerCase()}. Por favor, programe un servicio técnico y mantenimiento preventivo a la brevedad para garantizar su óptimo funcionamiento.`;
+
+        // Preparar el número para Evolution API
+        let cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.length === 9) {
+            const countryCode = (globalConfig.whatsapp_cod_pais || '51').replace(/\D/g, '') || '51';
+            cleanPhone = `${countryCode}${cleanPhone}`;
+        } else if (!phone.startsWith('+') && !cleanPhone.startsWith('51') && cleanPhone.length === 9) {
+            cleanPhone = `51${cleanPhone}`;
+        }
+
+        console.log(`🚀 [Alerta Mantenimiento] Enviando mensaje a ${cleanPhone} de la máquina ${machine.nombre}`);
+
+        const response = await fetch('/api/whatsapp/send', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                baseUrl,
+                apiKey,
+                instance,
+                phoneNumber: cleanPhone,
+                text: message
+            })
+        });
+
+        if (response.ok) {
+            const resData = await response.json();
+            if (resData.success) {
+                localStorage.setItem(stateKey, 'true');
+                console.log(`✅ [Alerta Mantenimiento Enviada] Registro guardado para máquina ${machine.nombre}`);
+            }
+        } else {
+            console.warn("⚠️ Servidor falló al despachar mensaje de WhatsApp de alerta:", response.statusText);
+        }
+
+    } catch (e) {
+        console.error("❌ Falló el ejecutor de alertas de máquina:", e);
+    }
 };
 
 export const dbGetMachineImages = async (): Promise<MachineImage[]> => {
@@ -3031,6 +3215,11 @@ export const dbUpdateItemStatus = async (orderId: string, itemIds: string[], sta
                     total_kg: (machine.total_kg || 0) + (calculatedKg || 0), 
                     total_minutos: (machine.total_minutos || 0) + (duration || 30) 
                 }).eq('id', machineId);
+
+                // Disparar validación de alerta de mantenimiento
+                checkAndSendMachineMaintenanceAlert(machineId).catch(err => {
+                    console.error("⚠️ Falló verificar/enviar alerta de mantenimiento para la máquina durante proceso:", err);
+                });
             }
         }
     } catch (e) {

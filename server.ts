@@ -169,6 +169,133 @@ async function startServer() {
     }
   });
 
+  // Endpoint: Password Recovery via WhatsApp
+  app.post('/api/auth/recover-password', async (req, res) => {
+    const { username, sucursalId } = req.body;
+
+    if (!username || !sucursalId) {
+      return res.status(400).json({ error: 'El nombre de usuario y sucursalId son requeridos' });
+    }
+
+    try {
+      console.log(`🚀 Solicitando recuperación de contraseña para: ${username} en sucursal: ${sucursalId}`);
+
+      if (!supabaseAdmin) {
+        throw new Error('Supabase Admin no inicializado en el servidor.');
+      }
+
+      // 1. Encontrar el empleado en la tabla usuarios_login
+      const { data: userRecord, error: userError } = await supabaseAdmin
+        .from('usuarios_login')
+        .select('id, username, nombre_completo, telefono, sucursal_id, empresa_id, activo')
+        .eq('username', username.trim().toLowerCase())
+        .maybeSingle();
+
+      if (userError || !userRecord) {
+        return res.status(404).json({ error: `El usuario "${username}" no existe o no tiene un perfil configurado en esta sucursal.` });
+      }
+
+      // 2. Verificar si está activo
+      if (!userRecord.activo) {
+        return res.status(400).json({ error: `El usuario "${username}" está desactivado. Contacte a soporte o administración.` });
+      }
+
+      // 3. Validar teléfono
+      const telefono = userRecord.telefono ? userRecord.telefono.trim() : '';
+      if (!telefono) {
+        return res.status(400).json({ 
+          error: `No tienes un número de teléfono de WhatsApp asociado a tu perfil de empleado. Por favor, solicita a tu administrador que actualice tu perfil agregando tu número de WhatsApp.` 
+        });
+      }
+
+      // 4. Generar contraseña momentánea (1 Letra Mayúscula + 4 números)
+      const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      const randomLetter = letters.charAt(Math.floor(Math.random() * letters.length));
+      const randomNumber = Math.floor(1000 + Math.random() * 9000).toString();
+      const tempPassword = randomLetter + randomNumber;
+
+      // 5. Configurar expiración a 10 minutos (en milisegundos)
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+
+      // 6. Actualizar contraseña del usuario en Supabase Auth con los flags correspondientes
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userRecord.id, {
+        password: tempPassword,
+        user_metadata: {
+          temp_password_active: true,
+          temp_password_expires_at: expiresAt
+        }
+      });
+
+      if (updateError) {
+        throw new Error(`No se pudo actualizar la contraseña temporal: ${updateError.message}`);
+      }
+
+      // 7. Cargar configuración de WhatsApp de saas_configuracion_global
+      const { data: globalConfig } = await supabaseAdmin
+        .from('saas_configuracion_global')
+        .select('*')
+        .order('id')
+        .limit(1)
+        .maybeSingle();
+
+      const baseUrl = globalConfig?.url_bot;
+      const apiKey = globalConfig?.apikey_bot;
+      const instance = globalConfig?.instancia_bot;
+
+      if (!baseUrl || !apiKey || !instance) {
+        console.warn('⚠️ Configuración de WhatsApp incompleta en saas_configuracion_global.');
+        return res.json({ 
+          success: true, 
+          offline: true, 
+          tempPassword,
+          message: 'Contraseña temporal generada pero WhatsApp no está configurado.' 
+        });
+      }
+
+      // 8. Formatear el número de teléfono con el código de país
+      let cleanPhone = telefono.replace(/\D/g, '');
+      if (cleanPhone.length === 9) {
+        const countryCode = (globalConfig?.whatsapp_cod_pais || '51').replace(/\D/g, '') || '51';
+        cleanPhone = `${countryCode}${cleanPhone}`;
+      } else if (!telefono.startsWith('+') && !cleanPhone.startsWith('51') && cleanPhone.length === 9) {
+        cleanPhone = `51${cleanPhone}`;
+      }
+
+      // 9. Construir el mensaje de WhatsApp solicitado de forma profesional
+      const bodyText = `🔑 *SISLAV - RECUPERACIÓN DE CONTRASEÑA* 🔑\n\nHola *${userRecord.nombre_completo.trim().toUpperCase()}*,\n\nHemos generado una contraseña momentánea para tu acceso al sistema:\n\n👤 *Usuario:* \`${userRecord.username}\`\n🔐 *Contraseña Temporal:* *${tempPassword}*\n\n⏱️ _Esta clave expirará en 10 minutos por motivos de seguridad._\n\nAl ingresar con esta contraseña temporal, el sistema solicitará obligatoriamente que definas tu nueva contraseña permanente para continuar.`;
+
+      // 10. Despachar mensaje a la API de Evolution
+      const response = await fetch(`${baseUrl}/message/sendText/${instance}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey
+        },
+        body: JSON.stringify({
+          number: cleanPhone,
+          text: bodyText
+        })
+      });
+
+      if (!response.ok) {
+        console.error(`⚠️ Evolution API falló con status: ${response.status}`);
+        return res.status(500).json({ error: 'Fallo al despachar el mensaje de WhatsApp. Intente nuevamente.' });
+      }
+
+      // Enmascarar teléfono
+      const maskedPhone = telefono.length > 4 
+        ? `${telefono.substring(0, 3)}***${telefono.substring(telefono.length - 2)}` 
+        : telefono;
+
+      console.log(`✅ Contraseña temporal enviada correctamente a ${cleanPhone}`);
+      res.json({ success: true, maskedPhone });
+
+    } catch (error: any) {
+      console.error('❌ Error en password recovery API:', error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Endpoint: Dynamic Manifest for PWA
   app.get('/manifest.json', async (req, res) => {
     const slug = req.query.s as string;

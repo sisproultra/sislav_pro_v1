@@ -19,6 +19,7 @@ export interface AuthSession {
         sucursal_id?: string;
         isMasterBypass?: boolean;
         masterPassword?: string;
+        isTempPasswordActive?: boolean;
         sucursal_data?: any;
         permissions?: Record<string, boolean>;
     };

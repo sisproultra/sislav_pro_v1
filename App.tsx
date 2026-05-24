@@ -92,7 +92,7 @@ import YapeMonitor from './views/YapeMonitor';
 import DevConfig from './views/DevConfig';
 import WaReminders from './views/WaReminders';
 import { SuperAdmin } from './views/SuperAdmin';
-import { Loader2, X, ShieldAlert, CheckCircle2, AlertTriangle, Clock, Play, Sparkles } from 'lucide-react';
+import { Loader2, X, ShieldAlert, CheckCircle2, AlertTriangle, Clock, Play, Sparkles, Lock, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from './services/supabaseClient';
@@ -265,6 +265,12 @@ export default function App() {
 
     const [isCashOpeningModalOpen, setIsCashOpeningModalOpen] = useState(false);
     const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+    // Estados para la Force Reset de contraseñas temporales
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [resetLoading, setResetLoading] = useState(false);
+    const [resetError, setResetError] = useState('');
 
     const checkCajaOpen = useCallback((action: () => void) => {
         // Si aún está resolviendo sesión global o cargando sesión de caja, las acciones se encolan
@@ -2257,6 +2263,153 @@ export default function App() {
     }
 
     if (trackingId) return <Tracking id={trackingId} />;
+
+    // INTERCEPTAR Y FORZAR ACTUALIZACIÓN DE CONTRASEÑA SI ES TEMPORAL
+    if (authSession?.user?.isTempPasswordActive) {
+        return (
+            <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden font-sans">
+                {/* Capas decorativas de luces ambientales */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+                    <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-indigo-600 rounded-full blur-[120px] animate-pulse"></div>
+                    <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-rose-600 rounded-full blur-[120px] animate-pulse delay-1000"></div>
+                </div>
+
+                <div className="max-w-md w-full relative z-10">
+                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden transition-all duration-300">
+                        <div className="h-2 w-full bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 animate-pulse"></div>
+                        
+                        <div className="p-10 text-center">
+                            <div className="w-16 h-16 bg-red-600/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-red-500/30">
+                                <Lock size={28} className="text-red-400 animate-bounce" />
+                            </div>
+
+                            <h1 className="text-2xl font-black text-white uppercase tracking-tight text-center mb-2">
+                                Actualizar Contraseña
+                            </h1>
+                            <p className="text-slate-400 text-xs text-center leading-relaxed mb-6">
+                                Hola, <span className="font-extrabold text-indigo-400">{authSession.user.name.toUpperCase()}</span>. Has ingresado usando la contraseña momentánea enviada por WhatsApp. Por seguridad, debes cambiarla de inmediato por una nueva antes de entrar al sistema.
+                            </p>
+
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                if (newPassword.length < 5) {
+                                    setResetError('La contraseña debe tener al menos 5 caracteres.');
+                                    return;
+                                }
+                                if (newPassword !== confirmPassword) {
+                                    setResetError('La nueva contraseña y su confirmación no coinciden.');
+                                    return;
+                                }
+
+                                setResetLoading(true);
+                                setResetError('');
+
+                                try {
+                                    // 1. Ejecutar el cambio de clave en Supabase Auth
+                                    const { error } = await supabase.auth.updateUser({
+                                        password: newPassword,
+                                        data: {
+                                            temp_password_active: false,
+                                            temp_password_expires_at: null
+                                        }
+                                    });
+
+                                    if (error) throw error;
+
+                                    // Guardar el hash local de concordancia en la tabla de usuarios_login por si fuera necesario
+                                    try {
+                                        await supabase
+                                            .from('usuarios_login')
+                                            .update({ password_hash: newPassword })
+                                            .eq('id', authSession.user.id);
+                                    } catch (dbErr) {
+                                        console.warn("DB password_hash update bypassed:", dbErr);
+                                    }
+
+                                    // 2. Actualizar el estado para habilitar el dashboard
+                                    const updatedSession = {
+                                        ...authSession,
+                                        user: {
+                                            ...authSession.user,
+                                            isTempPasswordActive: false
+                                        }
+                                    };
+                                    setAuthSession(updatedSession);
+                                    localStorage.setItem('sislav_auth_session', JSON.stringify(updatedSession));
+                                    
+                                } catch (err: any) {
+                                    console.error("Error setting password:", err);
+                                    setResetError(err.message || 'Ocurrió un error al establecer la nueva contraseña.');
+                                } finally {
+                                    setResetLoading(false);
+                                }
+                            }} className="space-y-5 text-left">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                                        Nueva Contraseña
+                                    </label>
+                                    <div className="relative">
+                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                        <input
+                                            type="password"
+                                            required
+                                            value={newPassword}
+                                            onChange={e => setNewPassword(e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl py-3.5 pl-11 pr-4 text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-bold text-sm text-center"
+                                            placeholder="Ingresa tu nueva clave"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                                        Confirmación Nueva Contraseña
+                                    </label>
+                                    <div className="relative">
+                                        <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                        <input
+                                            type="password"
+                                            required
+                                            value={confirmPassword}
+                                            onChange={e => setConfirmPassword(e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl py-3.5 pl-11 pr-4 text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-bold text-sm text-center"
+                                            placeholder="Ingresa tu nueva clave nuevamente"
+                                        />
+                                    </div>
+                                </div>
+
+                                {resetError && (
+                                    <div className="text-red-400 text-[10px] font-bold uppercase text-center bg-red-500/10 p-4 rounded-xl border border-red-500/20 leading-relaxed font-sans">
+                                        <AlertTriangle className="inline mr-1" size={12} /> {resetError}
+                                    </div>
+                                )}
+
+                                <button
+                                    type="submit"
+                                    disabled={resetLoading}
+                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 mt-6"
+                                >
+                                    {resetLoading ? (
+                                        <Loader2 className="animate-spin" size={14} />
+                                    ) : (
+                                        'Establecer Contraseña y Entrar'
+                                    )}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={handleLogout}
+                                    className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all mt-2"
+                                >
+                                    Cerrar Sesión / Cancelar
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (authSession?.user?.role === UserRole.DELIVERY) {
         return <LogisticsDriverPOS 

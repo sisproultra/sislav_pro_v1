@@ -24,6 +24,14 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
     return saved === 'dark' ? true : false;
   });
 
+  // Estados para recuperación de contraseñas por WhatsApp (Evolution API)
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [recoveryUsername, setRecoveryUsername] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryError, setRecoveryError] = useState('');
+  const [recoverySuccess, setRecoverySuccess] = useState('');
+
   const brandingStatus = (window as any).__BRANDING_STATUS__;
 
   useEffect(() => {
@@ -57,8 +65,15 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
     setError('');
     try {
       await onLogin(user, pass);
+      setFailedAttempts(0); // Reiniciar en login exitoso
     } catch (e: any) {
-      setError(e.message || "Credenciales incorrectas");
+      const isExpiredTemp = e.message?.includes('EXPIRED_TEMP_PASSWORD');
+      if (isExpiredTemp) {
+        setError(e.message.replace('EXPIRED_TEMP_PASSWORD: ', ''));
+      } else {
+        setError(e.message || "Credenciales incorrectas");
+      }
+      setFailedAttempts(prev => prev + 1);
     } finally {
       setIsLoading(false);
     }
@@ -158,6 +173,24 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
               </div>
             )}
 
+            {failedAttempts >= 3 && (
+              <div className="flex justify-center pt-1 animate-in fade-in slide-in-from-top-2 duration-300">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecoveryUsername(user);
+                    setRecoveryError('');
+                    setRecoverySuccess('');
+                    setShowRecoveryModal(true);
+                  }}
+                  className="px-5 py-2.5 rounded-xl border-2 border-dashed border-red-500/30 bg-red-500/5 hover:bg-red-500/10 text-red-500 hover:text-red-400 text-[10px] font-extrabold uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2"
+                >
+                  <Lock size={12} className="animate-pulse text-red-500" />
+                  ¿Me olvidé mi contraseña?
+                </button>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={isLoading}
@@ -206,6 +239,132 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
           </a>
         </div>
       </div>
+
+      {/* MODAL DE RECUPERACIÓN DE CONTRASEÑA POR WHATSAPP */}
+      {showRecoveryModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-white/10 w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="h-1.5 w-full bg-gradient-to-r from-red-500 via-orange-500 to-red-500"></div>
+            
+            <div className="p-8">
+              <h2 className="text-lg font-bold text-white uppercase tracking-tight text-center mb-1">Recuperar Contraseña</h2>
+              <p className="text-red-400 text-[8px] font-bold uppercase tracking-widest text-center mb-6">Envío seguro por WhatsApp</p>
+              
+              {recoverySuccess ? (
+                <div className="space-y-6 text-center py-2">
+                  <div className="w-12 h-12 bg-gradient-to-tr from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto text-white shadow-lg shadow-emerald-500/20 animate-bounce">
+                    <ShieldCheck size={28} />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-white uppercase tracking-wide">¡Contraseña temporal generada!</p>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Se ha enviado un mensaje con tu contraseña de 5 dígitos al WhatsApp registrado: <span className="font-extrabold text-indigo-400 font-mono text-sm">{recoverySuccess}</span>
+                    </p>
+                    <p className="text-[10px] text-slate-400 bg-black/40 p-3 rounded-xl border border-white/5 leading-normal mt-2">
+                      ⚠️ Esta contraseña momentánea es válida por <span className="text-amber-400 font-bold">10 minutos</span>. Al entrar, el sistema te forzará a actualizarla por una propia.
+                    </p>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRecoveryModal(false);
+                      setPass('');
+                    }}
+                    className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all"
+                  >
+                    Entendido, Volver
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-[11px] text-slate-300 leading-relaxed text-center">
+                    Ingresa tu nombre de usuario para recibir automáticamente una contraseña momentánea (1 Letra Mayúscula + 4 Números) vía WhatsApp.
+                  </p>
+                  
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Usuario</label>
+                    <div className="relative group/rec">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/rec:text-indigo-400 transition-colors" size={16} />
+                      <input
+                        type="text"
+                        required
+                        placeholder="ej: pepe"
+                        value={recoveryUsername}
+                        onChange={e => setRecoveryUsername(e.target.value.toLowerCase().trim())}
+                        className="w-full bg-black/40 border border-white/5 rounded-xl py-3.5 pl-11 pr-4 text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-bold placeholder:text-slate-600 text-xs text-center"
+                      />
+                    </div>
+                  </div>
+                  
+                  {recoveryError && (
+                    <div className="text-red-400 text-[10px] font-bold uppercase text-center bg-red-500/10 p-4 rounded-xl border border-red-500/25 leading-normal">
+                      <AlertTriangle className="inline mr-1 mb-0.5" size={10} /> {recoveryError}
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2.5 pt-2">
+                    <button
+                      type="button"
+                      disabled={recoveryLoading}
+                      onClick={() => setShowRecoveryModal(false)}
+                      className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-[9px] uppercase tracking-widest transition-all"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={recoveryLoading}
+                      onClick={async () => {
+                        if (!recoveryUsername) {
+                          setRecoveryError('Ingresa tu nombre de usuario.');
+                          return;
+                        }
+                        
+                        setRecoveryLoading(true);
+                        setRecoveryError('');
+                        
+                        try {
+                          const res = await fetch('/api/auth/recover-password', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                              username: recoveryUsername,
+                              sucursalId: localSucursal?.id
+                            })
+                          });
+                          
+                          const data = await res.json();
+                          if (res.ok && data.success) {
+                            setRecoverySuccess(data.maskedPhone || 'Registrado');
+                          } else {
+                            setRecoveryError(data.error || 'No se pudo procesar la solicitud.');
+                          }
+                        } catch (err: any) {
+                          console.error("Recovery err:", err);
+                          setRecoveryError('Error de red. Intenta nuevamente.');
+                        } finally {
+                          setRecoveryLoading(false);
+                        }
+                      }}
+                      className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-[9px] uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      {recoveryLoading ? (
+                        <Loader2 className="animate-spin" size={14} />
+                      ) : (
+                        'Recuperar'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
