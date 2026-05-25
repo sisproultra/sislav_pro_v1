@@ -2228,7 +2228,13 @@ export default function App() {
         setIsMasterMode(true);
         setShowMasterLogin(false);
     }} onCancel={() => setShowMasterLogin(false)} />;
-    if (isMasterMode) return <SuperAdmin onLogout={handleLogout} onSelectTenant={handleSelectTenant} onSelectOwner={handleSelectOwner} />;
+    if (isMasterMode) {
+        return (
+            <Suspense fallback={<ModuleLoadingSkeleton />}>
+                <SuperAdmin onLogout={handleLogout} onSelectTenant={handleSelectTenant} onSelectOwner={handleSelectOwner} />
+            </Suspense>
+        );
+    }
     
     if (isOwnerPath && !authSession) {
         return <OwnerLogin 
@@ -2243,32 +2249,36 @@ export default function App() {
     }
 
     if (authSession?.user?.role === UserRole.OWNER && currentView === 'view:owner_dashboard') {
-        return <OwnerDashboard 
-            session={authSession} 
-            isDarkMode={darkMode}
-            toggleTheme={toggleDarkMode}
-            onLogout={handleLogout} 
-            onSelectBranch={(b) => {
-                const normalized = normalizeSucursal(b);
-                const holdingId = normalized.empresa_holding_id 
-                               || normalized.empresa_id 
-                               || b.empresa_id;  // fallback directo al objeto original
-                
-                // Sincronización proactiva para dueños (Fix RLS)
-                if (authSession?.user) {
-                    dbSyncOwnerProfile(
-                        authSession.user.id, 
-                        authSession.user.username, 
-                        holdingId, 
-                        authSession.user.holding_name || normalized.holding_name || ''
-                    );
-                }
+        return (
+            <Suspense fallback={<ModuleLoadingSkeleton />}>
+                <OwnerDashboard 
+                    session={authSession} 
+                    isDarkMode={darkMode}
+                    toggleTheme={toggleDarkMode}
+                    onLogout={handleLogout} 
+                    onSelectBranch={(b) => {
+                        const normalized = normalizeSucursal(b);
+                        const holdingId = normalized.empresa_holding_id 
+                                       || normalized.empresa_id 
+                                       || b.empresa_id;  // fallback directo al objeto original
+                        
+                        // Sincronización proactiva para dueños (Fix RLS)
+                        if (authSession?.user) {
+                            dbSyncOwnerProfile(
+                                authSession.user.id, 
+                                authSession.user.username, 
+                                holdingId, 
+                                authSession.user.holding_name || normalized.holding_name || ''
+                            );
+                        }
 
-                setActiveSucursal(normalized);
-                setDbBranchContext(normalized.id, holdingId);
-                setCurrentView('view:dashboard');
-            }} 
-        />;
+                        setActiveSucursal(normalized);
+                        setDbBranchContext(normalized.id, holdingId);
+                        setCurrentView('view:dashboard');
+                    }} 
+                />
+            </Suspense>
+        );
     }
 
     if (trackingId) return <Tracking id={trackingId} />;
@@ -2476,36 +2486,44 @@ export default function App() {
     }
     if (!activeSucursal) {
         if (authSession?.user?.role === UserRole.SAAS_MASTER) {
-            return <SuperAdmin onLogout={handleLogout} onSelectTenant={handleSelectTenant} onSelectOwner={handleSelectOwner} />;
+            return (
+                <Suspense fallback={<ModuleLoadingSkeleton />}>
+                    <SuperAdmin onLogout={handleLogout} onSelectTenant={handleSelectTenant} onSelectOwner={handleSelectOwner} />
+                </Suspense>
+            );
         }
         if (authSession?.user?.role === UserRole.OWNER) {
-            return <OwnerDashboard 
-                session={authSession} 
-                isDarkMode={darkMode}
-                toggleTheme={toggleDarkMode}
-                onLogout={handleLogout} 
-                onSelectBranch={(b) => {
-                    console.log("OWNER selecting branch (initial):", b);
-                    const normalized = normalizeSucursal(b);
-                    const holdingId = normalized.empresa_holding_id 
-                                   || normalized.empresa_id 
-                                   || b.empresa_id;  // fallback directo al objeto original
-                    
-                    // Sincronización proactiva para dueños (Fix RLS)
-                    if (authSession?.user) {
-                        dbSyncOwnerProfile(
-                            authSession.user.id, 
-                            authSession.user.username, 
-                            holdingId, 
-                            authSession.user.holding_name || normalized.holding_name || ''
-                        );
-                    }
+            return (
+                <Suspense fallback={<ModuleLoadingSkeleton />}>
+                    <OwnerDashboard 
+                        session={authSession} 
+                        isDarkMode={darkMode}
+                        toggleTheme={toggleDarkMode}
+                        onLogout={handleLogout} 
+                        onSelectBranch={(b) => {
+                            console.log("OWNER selecting branch (initial):", b);
+                            const normalized = normalizeSucursal(b);
+                            const holdingId = normalized.empresa_holding_id 
+                                           || normalized.empresa_id 
+                                           || b.empresa_id;  // fallback directo al objeto original
+                            
+                            // Sincronización proactiva para dueños (Fix RLS)
+                            if (authSession?.user) {
+                                dbSyncOwnerProfile(
+                                    authSession.user.id, 
+                                    authSession.user.username, 
+                                    holdingId, 
+                                    authSession.user.holding_name || normalized.holding_name || ''
+                                );
+                            }
 
-                    setActiveSucursal(normalized);
-                    setDbBranchContext(normalized.id, holdingId);
-                    setCurrentView('view:dashboard');
-                }} 
-            />;
+                            setActiveSucursal(normalized);
+                            setDbBranchContext(normalized.id, holdingId);
+                            setCurrentView('view:dashboard');
+                        }} 
+                    />
+                </Suspense>
+            );
         }
         return <MasterLogin onLoginSuccess={(session) => {
             setAuthSession(session);

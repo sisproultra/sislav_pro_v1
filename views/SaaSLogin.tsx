@@ -242,27 +242,41 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
 
       {/* MODAL DE RECUPERACIÓN DE CONTRASEÑA POR WHATSAPP */}
       {showRecoveryModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-white/10 w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="h-1.5 w-full bg-gradient-to-r from-red-500 via-orange-500 to-red-500"></div>
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-bg2 border border-text/10 w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div 
+              className="h-1.5 w-full"
+              style={{ background: `linear-gradient(90deg, ${brandPrimary}, ${brandSecondary})` }}
+            />
             
             <div className="p-8">
-              <h2 className="text-lg font-bold text-white uppercase tracking-tight text-center mb-1">Recuperar Contraseña</h2>
-              <p className="text-red-400 text-[8px] font-bold uppercase tracking-widest text-center mb-6">Envío seguro por WhatsApp</p>
+              <h2 className="text-lg font-bold text-text uppercase tracking-tight text-center mb-1">Recuperar Contraseña</h2>
+              <p 
+                className="text-[8px] font-bold uppercase tracking-widest text-center mb-6"
+                style={{ color: brandPrimary }}
+              >
+                Envío seguro por WhatsApp
+              </p>
               
               {recoverySuccess ? (
                 <div className="space-y-6 text-center py-2">
-                  <div className="w-12 h-12 bg-gradient-to-tr from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto text-white shadow-lg shadow-emerald-500/20 animate-bounce">
+                  <div 
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto text-white shadow-lg animate-bounce"
+                    style={{ 
+                      background: `linear-gradient(135deg, ${brandPrimary}, ${brandSecondary})`,
+                      boxShadow: `0 10px 20px -5px ${brandPrimary}80`
+                    }}
+                  >
                     <ShieldCheck size={28} />
                   </div>
                   
                   <div className="space-y-2">
-                    <p className="text-xs font-bold text-white uppercase tracking-wide">¡Contraseña temporal generada!</p>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      Se ha enviado un mensaje con tu contraseña de 5 dígitos al WhatsApp registrado: <span className="font-extrabold text-indigo-400 font-mono text-sm">{recoverySuccess}</span>
+                    <p className="text-xs font-bold text-text uppercase tracking-wide">¡Contraseña temporal generada!</p>
+                    <p className="text-xs text-text2 leading-relaxed">
+                      Se ha enviado un mensaje con tu contraseña de 5 dígitos al WhatsApp registrado: <span className="font-extrabold font-mono text-sm" style={{ color: brandPrimary }}>{recoverySuccess}</span>
                     </p>
-                    <p className="text-[10px] text-slate-400 bg-black/40 p-3 rounded-xl border border-white/5 leading-normal mt-2">
-                      ⚠️ Esta contraseña momentánea es válida por <span className="text-amber-400 font-bold">10 minutos</span>. Al entrar, el sistema te forzará a actualizarla por una propia.
+                    <p className="text-[10px] text-text2 bg-bg3/60 p-3 rounded-xl border border-text/5 leading-normal mt-2">
+                      ⚠️ Esta contraseña momentánea es válida por <span className="font-bold" style={{ color: brandSecondary }}>10 minutos</span>. Al entrar, el sistema te forzará a actualizarla por una propia.
                     </p>
                   </div>
                   
@@ -272,34 +286,35 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
                       setShowRecoveryModal(false);
                       setPass('');
                     }}
-                    className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all"
+                    className="w-full py-4 bg-bg3 hover:bg-bg3/80 text-text font-bold text-[10px] uppercase tracking-widest transition-all rounded-xl border border-text/5 active:scale-95"
                   >
                     Entendido, Volver
                   </button>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-[11px] text-slate-300 leading-relaxed text-center">
+                  <p className="text-[11px] text-text2 leading-relaxed text-center">
                     Ingresa tu nombre de usuario para recibir automáticamente una contraseña momentánea (1 Letra Mayúscula + 4 Números) vía WhatsApp.
                   </p>
                   
                   <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">Usuario</label>
+                    <label className="text-[9px] font-bold text-text3 uppercase tracking-widest ml-1">Usuario</label>
                     <div className="relative group/rec">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/rec:text-indigo-400 transition-colors" size={16} />
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 text-text3 group-focus-within/rec:text-brand-primary transition-colors" size={16} />
                       <input
                         type="text"
                         required
                         placeholder="ej: pepe"
                         value={recoveryUsername}
                         onChange={e => setRecoveryUsername(e.target.value.toLowerCase().trim())}
-                        className="w-full bg-black/40 border border-white/5 rounded-xl py-3.5 pl-11 pr-4 text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-bold placeholder:text-slate-600 text-xs text-center"
+                        className="w-full bg-bg3/50 border border-text/10 rounded-xl py-3.5 pl-11 pr-4 text-text outline-none focus:ring-2 transition-all font-bold placeholder:text-text3 text-xs text-center"
+                        style={{ '--tw-ring-color': brandPrimary } as any}
                       />
                     </div>
                   </div>
                   
                   {recoveryError && (
-                    <div className="text-red-400 text-[10px] font-bold uppercase text-center bg-red-500/10 p-4 rounded-xl border border-red-500/25 leading-normal">
+                    <div className="text-rose-500 text-[10px] font-bold uppercase text-center bg-rose-500/10 p-4 rounded-xl border border-rose-500/20 leading-normal">
                       <AlertTriangle className="inline mr-1 mb-0.5" size={10} /> {recoveryError}
                     </div>
                   )}
@@ -309,7 +324,7 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
                       type="button"
                       disabled={recoveryLoading}
                       onClick={() => setShowRecoveryModal(false)}
-                      className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-[9px] uppercase tracking-widest transition-all"
+                      className="flex-1 py-3 bg-bg3 hover:bg-bg3/80 text-text2 rounded-xl border border-text/5 font-bold text-[9px] uppercase tracking-widest transition-all active:scale-95"
                     >
                       Cancelar
                     </button>
@@ -350,7 +365,11 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
                           setRecoveryLoading(false);
                         }
                       }}
-                      className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-[9px] uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      className="flex-1 py-3 text-white rounded-xl font-bold text-[9px] uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-50 active:scale-95"
+                      style={{ 
+                        background: `linear-gradient(135deg, ${brandPrimary}, ${brandSecondary})`,
+                        boxShadow: `0 10px 20px -5px ${brandPrimary}50`
+                      }}
                     >
                       {recoveryLoading ? (
                         <Loader2 className="animate-spin" size={14} />

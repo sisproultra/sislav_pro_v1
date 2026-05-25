@@ -17,6 +17,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/auth/recover-password",
+      "destination": "/api/recover-password.ts"
+    },
+    {
       "source": "/api/whatsapp-send",
       "destination": "/api/whatsapp-send.ts"
     },
