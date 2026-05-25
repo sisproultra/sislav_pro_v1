@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { 
     AuthSession, UserRole, Sucursal, Product, Client, Invoice, Category, 
     CartItem, InvoiceType, OrderStatus, SaasGlobalConfig, Machine, Expense, 
@@ -59,39 +59,51 @@ import SaaSLogin from './views/SaaSLogin';
 import { applyDynamicManifest } from './utils/pwaUtils';
 import { VersionGuard } from './components/VersionGuard';
 import OwnerLogin from './views/OwnerLogin';
-import OwnerDashboard from './views/OwnerDashboard';
 import InvoiceReceipt from './components/InvoiceReceipt';
 import Layout from './components/Layout';
-import PointOfSale from './views/PointOfSale';
-import MyOrders from './views/MyOrders';
 import TenantSelector from './components/TenantSelector';
 import MasterLogin from './views/MasterLogin';
-import Dashboard from './views/Dashboard';
-import Agenda from './views/Agenda';
-import Tracking from './views/Tracking';
-import Inventory from './views/Inventory';
-import Clients from './views/Clients';
-import Employees from './views/Employees';
-import Accounting from './views/Accounting';
-import Expenses from './views/Expenses';
-import Machines from './views/Machines';
-import CallCenter from './views/CallCenter';
-import Delivery from './views/Delivery';
-import Supplies from './views/Supplies';
-import Purchases from './views/Purchases';
-import Loyalty from './views/Loyalty';
-import BonusPoints from './views/BonusPoints';
-import Promotions from './views/Promotions';
-import Categories from './views/Categories';
-import PaymentMethods from './views/PaymentMethods';
-import Reports from './views/Reports';
-import Settings from './views/Settings';
-import SalesHistory from './views/SalesHistory';
-import MyReports from './views/MyReports';
-import YapeMonitor from './views/YapeMonitor';
-import DevConfig from './views/DevConfig';
-import WaReminders from './views/WaReminders';
-import { SuperAdmin } from './views/SuperAdmin';
+import LogisticsLogin from './views/LogisticsLogin';
+
+// Lazy loaded views for instant loading and code splitting
+const OwnerDashboard = lazy(() => import('./views/OwnerDashboard'));
+const PointOfSale = lazy(() => import('./views/PointOfSale'));
+const MyOrders = lazy(() => import('./views/MyOrders'));
+const Dashboard = lazy(() => import('./views/Dashboard'));
+const Agenda = lazy(() => import('./views/Agenda'));
+const Tracking = lazy(() => import('./views/Tracking'));
+const Inventory = lazy(() => import('./views/Inventory'));
+const Clients = lazy(() => import('./views/Clients'));
+const Employees = lazy(() => import('./views/Employees'));
+const Accounting = lazy(() => import('./views/Accounting'));
+const Expenses = lazy(() => import('./views/Expenses'));
+const Machines = lazy(() => import('./views/Machines'));
+const CallCenter = lazy(() => import('./views/CallCenter'));
+const Delivery = lazy(() => import('./views/Delivery'));
+const Supplies = lazy(() => import('./views/Supplies'));
+const Purchases = lazy(() => import('./views/Purchases'));
+const Loyalty = lazy(() => import('./views/Loyalty'));
+const BonusPoints = lazy(() => import('./views/BonusPoints'));
+const Promotions = lazy(() => import('./views/Promotions'));
+const Categories = lazy(() => import('./views/Categories'));
+const PaymentMethods = lazy(() => import('./views/PaymentMethods'));
+const Reports = lazy(() => import('./views/Reports'));
+const Settings = lazy(() => import('./views/Settings'));
+const SalesHistory = lazy(() => import('./views/SalesHistory'));
+const MyReports = lazy(() => import('./views/MyReports'));
+const YapeMonitor = lazy(() => import('./views/YapeMonitor'));
+const DevConfig = lazy(() => import('./views/DevConfig'));
+const WaReminders = lazy(() => import('./views/WaReminders'));
+const SuperAdmin = lazy(() => import('./views/SuperAdmin').then(m => ({ default: m.SuperAdmin })));
+const Operations = lazy(() => import('./views/Operations'));
+const WaCampaign = lazy(() => import('./views/WaCampaign'));
+const PackageInventory = lazy(() => import('./views/PackageInventory'));
+const LogisticsHub = lazy(() => import('./views/LogisticsHub'));
+const LogisticsDriverPOS = lazy(() => import('./views/LogisticsDriverPOS'));
+const CashClosingView = lazy(() => import('./views/CashClosing'));
+const ProductCounting = lazy(() => import('./views/ProductCounting'));
+const Modificaciones = lazy(() => import('./views/Modificaciones'));
+
 import { Loader2, X, ShieldAlert, CheckCircle2, AlertTriangle, Clock, Play, Sparkles, Lock, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
@@ -99,18 +111,9 @@ import { supabase } from './services/supabaseClient';
 import { DebugOverlay } from './components/DebugOverlay';
 import InventoryModal from './components/InventoryModal';
 import ClientModal from './components/ClientModal';
-import Operations from './views/Operations';
-import WaCampaign from './views/WaCampaign';
-import PackageInventory from './views/PackageInventory';
-import LogisticsHub from './views/LogisticsHub';
-import LogisticsDriverPOS from './views/LogisticsDriverPOS';
-import LogisticsLogin from './views/LogisticsLogin';
 import PurchaseModal from './components/PurchaseModal';
 import SupplyModal from './components/SupplyModal';
 import FastOrderTaker from './components/FastOrderTaker';
-import CashClosingView from './views/CashClosing';
-import ProductCounting from './views/ProductCounting';
-import Modificaciones from './views/Modificaciones';
 
 import CashOpeningModal from './components/CashOpeningModal';
 
@@ -1199,6 +1202,7 @@ export default function App() {
         queryKey: ['invoices', activeSucursal?.id, invoicesPage, invoicesSearch],
         queryFn: () => dbGetInvoices(invoicesPage, 50, invoicesSearch),
         enabled: !!activeSucursal?.id,
+        staleTime: 30 * 1000, // 30 segundos de vigencia de caché para evitar re-fetching excesivo al navegar
     });
 
     const { data: orderStatsRes } = useQuery({
@@ -1206,6 +1210,7 @@ export default function App() {
         queryFn: dbGetOrderStats,
         enabled: !!activeSucursal?.id,
         refetchInterval: 30000,
+        staleTime: 15 * 1000,
     });
 
     useEffect(() => {
@@ -1229,6 +1234,7 @@ export default function App() {
         queryFn: dbGetMachines,
         enabled: !!activeSucursal?.id,
         refetchInterval: 15000, // Refetch every 15s as fallback
+        staleTime: 30 * 1000, // Sincronizado por Realtime, seguro mantener en caché
     });
 
     const { data: activeItems = [] } = useQuery({
@@ -1236,6 +1242,7 @@ export default function App() {
         queryFn: dbGetActiveItems,
         enabled: !!activeSucursal?.id,
         refetchInterval: 15000, // Refetch every 15s as fallback
+        staleTime: 30 * 1000, // Sincronizado por Realtime, seguro mantener en caché
     });
 
     const { data: expensesData, isLoading: isLoadingExpenses } = useQuery({
@@ -2555,7 +2562,14 @@ export default function App() {
             {isLoadingData && <div className="absolute top-2 right-6 z-[100] flex items-center gap-2 bg-indigo-600 text-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest shadow-lg animate-pulse"><RefreshCw size={10} className="animate-spin" /> Sincronizando</div>}
             
             <div className="h-full overflow-hidden">
-                {renderView()}
+                <Suspense fallback={
+                    <div className="h-full w-full flex flex-col items-center justify-center p-12 bg-slate-50 dark:bg-slate-900 min-h-[400px]">
+                        <Loader2 className="animate-spin text-indigo-500 mb-4" size={48} />
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cargando Módulo...</p>
+                    </div>
+                }>
+                    {renderView()}
+                </Suspense>
             </div>
 
             {showCobranzaModal && globalConfig?.bannerCobro && (

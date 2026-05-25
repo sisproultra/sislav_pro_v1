@@ -23,13 +23,20 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    chunkSizeWarningLimit: 2000,
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
-          'ui-vendor': ['lucide-react', 'recharts', 'leaflet', 'react-leaflet'],
-          'utils-vendor': ['xlsx', 'jspdf', 'jspdf-autotable']
+          'supabase-vendor': ['@supabase/supabase-js'],
+          'query-vendor': ['@tanstack/react-query'],
+          'recharts-vendor': ['recharts'],
+          'maps-vendor': ['leaflet', 'react-leaflet'],
+          'xlsx-vendor': ['xlsx'],
+          'pdf-vendor': ['jspdf', 'jspdf-autotable'],
+          'motion-vendor': ['motion'],
+          'bwip-vendor': ['bwip-js'],
+          'genai-vendor': ['@google/genai']
         }
       }
     }
