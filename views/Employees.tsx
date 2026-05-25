@@ -2,7 +2,53 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Employee, UserRole, SYSTEM_MODULES, PermissionMap, getRoleDefaultPermissions, DEFAULT_BRANCH_MODULES } from '../types';
 import { dbUploadImage, getActiveBranchId } from '../services/dbService';
-import { User, Shield, Phone, Plus, Save, X, Camera, Lock, Upload, Trash2, Loader2, Check, AlertCircle, RotateCw, ShieldAlert, Copy, Edit2, Ban } from 'lucide-react';
+import { User, Shield, Phone, Plus, Save, X, Camera, Lock, Upload, Trash2, Loader2, Check, AlertCircle, RotateCw, ShieldAlert, Copy, Edit2, Ban, ChevronDown } from 'lucide-react';
+
+const COUNTRY_CODES = [
+  { code: '+51', name: 'Perú', flag: '🇵🇪' },
+  { code: '+34', name: 'España', flag: '🇪🇸' },
+  { code: '+52', name: 'México', flag: '🇲🇽' },
+  { code: '+57', name: 'Colombia', flag: '🇨🇴' },
+  { code: '+56', name: 'Chile', flag: '🇨🇱' },
+  { code: '+54', name: 'Argentina', flag: '🇦🇷' },
+  { code: '+593', name: 'Ecuador', flag: '🇪🇨' },
+  { code: '+591', name: 'Bolivia', flag: '🇧🇴' },
+  { code: '+58', name: 'Venezuela', flag: '🇻🇪' },
+  { code: '+506', name: 'Costa Rica', flag: '🇨🇷' },
+  { code: '+507', name: 'Panamá', flag: '🇵🇦' },
+  { code: '+502', name: 'Guatemala', flag: '🇬🇹' },
+  { code: '+504', name: 'Honduras', flag: '🇭🇳' },
+  { code: '+505', name: 'Nicaragua', flag: '🇳🇮' },
+  { code: '+503', name: 'El Salvador', flag: '🇸🇻' },
+  { code: '+595', name: 'Paraguay', flag: '🇵🇾' },
+  { code: '+598', name: 'Uruguay', flag: '🇺🇾' },
+  { code: '+1', name: 'USA / Canadá / RD', flag: '🇺🇸' }
+];
+
+const parsePhone = (rawPhone: string) => {
+  if (!rawPhone) return { countryCode: '+51', nationalPhone: '' };
+  
+  const workingPhone = rawPhone.trim();
+  const sortedCodes = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length);
+  
+  for (const item of sortedCodes) {
+    if (workingPhone.startsWith(item.code)) {
+      return {
+        countryCode: item.code,
+        nationalPhone: workingPhone.slice(item.code.length).replace(/\s/g, '')
+      };
+    }
+    const cleanCode = item.code.replace('+', '');
+    if (workingPhone.startsWith(cleanCode)) {
+      return {
+        countryCode: item.code,
+        nationalPhone: workingPhone.slice(cleanCode.length).replace(/\s/g, '')
+      };
+    }
+  }
+  
+  return { countryCode: '+51', nationalPhone: workingPhone.replace(/\D/g, '') };
+};
 
 interface EmployeesProps {
   employees: Employee[];
@@ -23,7 +69,8 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>(UserRole.OPERARIO);
-  const [phone, setPhone] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState('+51');
+  const [nationalPhone, setNationalPhone] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   
   const [customPermissions, setCustomPermissions] = useState<PermissionMap>({});
@@ -58,7 +105,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
           username,
           password,
           role,
-          phone,
+          phone: nationalPhone ? `${selectedCountry}${nationalPhone}` : '',
           photoUrl,
           isActive: editingEmployee ? editingEmployee.isActive : true,
           permissions: customPermissions
@@ -80,7 +127,8 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
     setUsername('');
     setPassword('');
     setRole(UserRole.OPERARIO);
-    setPhone('');
+    setSelectedCountry('+51');
+    setNationalPhone('');
     setPhotoUrl('');
     setCustomPermissions({});
     setEditingEmployee(null);
@@ -93,7 +141,9 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
     setUsername(emp.username);
     setPassword(emp.password || '');
     setRole(emp.role as UserRole);
-    setPhone(emp.phone || '');
+    const parsed = parsePhone(emp.phone || '');
+    setSelectedCountry(parsed.countryCode);
+    setNationalPhone(parsed.nationalPhone);
     setPhotoUrl(emp.photoUrl || '');
     setCustomPermissions(emp.permissions || getRoleDefaultPermissions(emp.role as UserRole, company?.modulos_config || {}));
     setIsModalOpen(true);
@@ -380,9 +430,32 @@ const Employees: React.FC<EmployeesProps> = ({ employees, onSave, onDelete, onHa
                         </div>
                         <div className="space-y-1">
                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Teléfono</label>
-                           <div className="relative">
-                               <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
-                               <input value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-3 text-sm font-bold outline-none focus:bg-white focus:border-indigo-500 transition-all shadow-inner" placeholder="999888777" />
+                           <div className="flex gap-2">
+                              <div className="w-[124px] shrink-0 relative">
+                                 <select 
+                                    value={selectedCountry} 
+                                    onChange={e => setSelectedCountry(e.target.value)} 
+                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-3 py-3 text-xs md:text-sm font-bold bg-white text-slate-700 outline-none focus:bg-white focus:border-indigo-500 transition-all shadow-inner appearance-none cursor-pointer"
+                                 >
+                                    {COUNTRY_CODES.map(c => (
+                                       <option key={c.code} value={c.code}>
+                                          {c.flag} {c.code} ({c.name})
+                                       </option>
+                                    ))}
+                                 </select>
+                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                    <ChevronDown size={14} />
+                                 </div>
+                              </div>
+                              <div className="flex-1 relative">
+                                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
+                                 <input 
+                                    value={nationalPhone} 
+                                    onChange={e => setNationalPhone(e.target.value.replace(/\D/g, ''))} 
+                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-3 text-sm font-bold outline-none focus:bg-white focus:border-indigo-500 transition-all shadow-inner" 
+                                    placeholder="999888777" 
+                                 />
+                              </div>
                            </div>
                         </div>
                      </form>
