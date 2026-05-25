@@ -193,12 +193,12 @@ async function startServer() {
   app.post('/api/auth/recover-password', async (req, res) => {
     const { username, sucursalId } = req.body;
 
-    if (!username || !sucursalId) {
-      return res.status(400).json({ error: 'El nombre de usuario y sucursalId son requeridos' });
+    if (!username) {
+      return res.status(400).json({ error: 'El nombre de usuario es requerido' });
     }
 
     try {
-      console.log(`🚀 Solicitando recuperación de contraseña para: ${username} en sucursal: ${sucursalId}`);
+      console.log(`🚀 Solicitando recuperación de contraseña para: ${username} (sucursal opcional: ${sucursalId})`);
 
       if (!supabaseAdmin) {
         throw new Error('Supabase Admin no inicializado en el servidor.');

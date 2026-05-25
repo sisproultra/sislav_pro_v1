@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    console.log(`🚀 [Vercel API Recovery] Solicitando recuperación de contraseña para: ${username} en sucursal: ${sucursalId}`);
+    console.log(`🚀 [Vercel API Recovery Native] Solicitando recuperación de contraseña para: ${username} (sucursal: ${sucursalId})`);
 
     // Configuración de Supabase Admin
     const rawUrl = (process.env.VITE_SUPABASE_URL || 'https://yvgshdypqanlcgxdyvls.supabase.co').replace(/['"]/g, '').trim();
@@ -58,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .maybeSingle();
 
     if (userError || !userRecord) {
-      return res.status(404).json({ error: `El usuario "${username}" no existe o no tiene un perfil configurado en esta sucursal.` });
+      return res.status(404).json({ error: `El usuario "${username}" no existe o no tiene un perfil configurado.` });
     }
 
     // 2. Verificar si está activo
@@ -124,7 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ...currentMetadata,
         temp_password_active: true,
         temp_password_expires_at: expiresAt,
-        temp_password_raw: tempPassword, // Guardado para auditoría de soporte administrativo
+        temp_password_raw: tempPassword, // Guardado para soporte
         recovery_history: recoveryHistory
       }
     });
@@ -192,13 +192,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       cleanPhone = `51${cleanPhone}`;
     }
 
-    // 11. Construir el mensaje de WhatsApp solicitado de forma profesional
+    // 11. Mensaje de WhatsApp
     const bodyText = `🔑 *SISLAV - RECUPERACION DE CONTRASEÑA* 🔑\n\nHola *${userRecord.nombre_completo.trim().toUpperCase()}*,\n\nHemos generado una contraseña momentánea para tu acceso al sistema:\n\n👤 *Usuario:* \`${userRecord.username}\`\n🔐 *Contraseña Temporal:* *${tempPassword}*\n\n⏱️ _Esta clave expirará en 10 minutos por motivos de seguridad._\n\nAl ingresar con esta contraseña temporal, el sistema solicitará obligatoriamente que definas tu nueva contraseña permanente para continuar.`;
 
     const finalBaseUrl = baseUrl.trim().startsWith('http') ? baseUrl.trim() : `https://${baseUrl.trim()}`;
     const finalEndpoint = `${finalBaseUrl}/message/sendText/${instance}`;
 
-    // 12. Despachar mensaje a la API de Evolution
+    // 12. Enviar a Evolution API
     const response = await fetch(finalEndpoint, {
       method: 'POST',
       headers: {
@@ -214,7 +214,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!response.ok) {
       console.error(`⚠️ Evolution API falló con status: ${response.status}`);
       
-      // Actualizar historial como fallido
       if (recoveryHistory.length > 0) {
         recoveryHistory[recoveryHistory.length - 1].status = 'failed';
         try {
@@ -233,7 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Fallo al despachar el mensaje de WhatsApp. Intente nuevamente.' });
     }
 
-    // Actualizar historial como enviado
+    // Guardar estado exitoso
     if (recoveryHistory.length > 0) {
       recoveryHistory[recoveryHistory.length - 1].status = 'sent';
       try {
@@ -249,16 +248,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch (logErr) {}
     }
 
-    // Enmascarar teléfono
     const maskedPhone = telefono.length > 4 
       ? `${telefono.substring(0, 3)}***${telefono.substring(telefono.length - 2)}` 
       : telefono;
 
-    console.log(`✅ Contraseña temporal enviada correctamente a ${cleanPhone}`);
     return res.status(200).json({ success: true, maskedPhone });
 
   } catch (error: any) {
-    console.error(`❌ [Vercel API Recovery Exception]: ${error.message}`);
+    console.error(`❌ [Vercel API Recovery Native Exception]: ${error.message}`);
     return res.status(500).json({ error: error.message || 'Error interno al recuperar contraseña' });
   }
 }

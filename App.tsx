@@ -1131,7 +1131,7 @@ export default function App() {
     const { data: productsData, isLoading: isLoadingProducts } = useQuery({
         queryKey: ['products', activeSucursal?.id],
         queryFn: dbGetProducts,
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 5 * 60 * 1000
     });
 
@@ -1196,21 +1196,21 @@ export default function App() {
     const { data: clientsRes, isLoading: isLoadingClients } = useQuery({
         queryKey: ['clients', activeSucursal?.id, clientsPage, clientsSearch],
         queryFn: () => dbGetClients(clientsPage, 100, clientsSearch),
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 60 * 1000
     });
 
     const { data: invoicesRes, isLoading: isLoadingInvoices } = useQuery({
         queryKey: ['invoices', activeSucursal?.id, invoicesPage, invoicesSearch],
         queryFn: () => dbGetInvoices(invoicesPage, 50, invoicesSearch),
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 30 * 1000, // 30 segundos de vigencia de caché para evitar re-fetching excesivo al navegar
     });
 
     const { data: orderStatsRes } = useQuery({
         queryKey: ['orderStats', activeSucursal?.id],
         queryFn: dbGetOrderStats,
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         refetchInterval: 30000,
         staleTime: 15 * 1000,
     });
@@ -1227,14 +1227,14 @@ export default function App() {
     const { data: categoriesData, isLoading: isLoadingCategories } = useQuery({
         queryKey: ['categories', activeSucursal?.id],
         queryFn: dbGetCategories,
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 5 * 60 * 1000
     });
 
     const { data: machinesData, isLoading: isLoadingMachines } = useQuery({
         queryKey: ['machines', activeSucursal?.id],
         queryFn: dbGetMachines,
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         refetchInterval: 15000, // Refetch every 15s as fallback
         staleTime: 30 * 1000, // Sincronizado por Realtime, seguro mantener en caché
     });
@@ -1242,7 +1242,7 @@ export default function App() {
     const { data: activeItems = [] } = useQuery({
         queryKey: ['activeItems', activeSucursal?.id],
         queryFn: dbGetActiveItems,
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         refetchInterval: 15000, // Refetch every 15s as fallback
         staleTime: 30 * 1000, // Sincronizado por Realtime, seguro mantener en caché
     });
@@ -1250,49 +1250,49 @@ export default function App() {
     const { data: expensesData, isLoading: isLoadingExpenses } = useQuery({
         queryKey: ['expenses', activeSucursal?.id],
         queryFn: () => dbGetExpenses(),
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 60 * 1000
     });
 
     const { data: suppliesData, isLoading: isLoadingSupplies } = useQuery({
         queryKey: ['supplies', activeSucursal?.id],
         queryFn: dbGetSupplies,
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 2 * 60 * 1000
     });
 
     const { data: purchasesData, isLoading: isLoadingPurchases } = useQuery({
         queryKey: ['purchases', activeSucursal?.id],
         queryFn: dbGetPurchases,
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 2 * 60 * 1000
     });
 
     const { data: ticketConfig } = useQuery({
         queryKey: ['ticketConfig', activeSucursal?.id],
         queryFn: () => activeSucursal?.id ? dbGetTicketConfig(activeSucursal.id) : null,
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 10 * 60 * 1000
     });
 
     const { data: paymentMethodsData, isLoading: isLoadingPaymentMethods } = useQuery({
         queryKey: ['paymentMethods', activeSucursal?.id],
         queryFn: dbGetPaymentMethods,
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 5 * 60 * 1000
     });
 
     const { data: pausedSalesData, isLoading: isLoadingPausedSales } = useQuery({
         queryKey: ['pausedSales', activeSucursal?.id],
         queryFn: dbGetPausedSales,
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 30 * 1000
     });
 
     const { data: employeesData, isLoading: isLoadingEmployees } = useQuery({
         queryKey: ['employees', activeSucursal?.id],
         queryFn: dbGetEmployees,
-        enabled: !!activeSucursal?.id,
+        enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 2 * 60 * 1000
     });
 
