@@ -21,7 +21,14 @@ async function startServer() {
 
   // Configuración de Supabase Admin (Backend)
   const rawUrl = (process.env.VITE_SUPABASE_URL || 'https://yvgshdypqanlcgxdyvls.supabase.co').replace(/['"]/g, '').trim();
-  const rawKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || 'N/A').replace(/['"]/g, '').trim();
+  const rawKey = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 
+    process.env.SUPABASE_SERVICE_KEY || 
+    process.env.SUPABASE_SECRET_KEY || 
+    process.env.SERVICE_ROLE_KEY || 
+    process.env.SUPABASE_ADMIN_KEY || 
+    'N/A'
+  ).replace(/['"]/g, '').trim();
 
   // URL Cleansing logic matching client
   const cleanUrl = (urlStr: string) => {
@@ -43,8 +50,8 @@ async function startServer() {
   const supabaseUrl = cleanUrl(rawUrl);
   const supabaseServiceKey = rawKey;
 
-  if (!process.env.VITE_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.log('ℹ️ Nota: SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY no configurados en el servidor.');
+  if (!process.env.VITE_SUPABASE_URL || supabaseServiceKey === 'N/A') {
+    console.log('ℹ️ Nota: VITE_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY no configurados completamente en el servidor.');
   }
 
   const supabaseAdmin = (supabaseUrl && supabaseServiceKey && supabaseServiceKey !== 'N/A') 

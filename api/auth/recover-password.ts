@@ -34,13 +34,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Configuración de Supabase Admin
     const rawUrl = (process.env.VITE_SUPABASE_URL || 'https://yvgshdypqanlcgxdyvls.supabase.co').replace(/['"]/g, '').trim();
-    const rawKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || 'N/A').replace(/['"]/g, '').trim();
+    const rawKey = (
+      process.env.SUPABASE_SERVICE_ROLE_KEY || 
+      process.env.SUPABASE_SERVICE_KEY || 
+      process.env.SUPABASE_SECRET_KEY || 
+      process.env.SERVICE_ROLE_KEY || 
+      process.env.SUPABASE_ADMIN_KEY || 
+      'N/A'
+    ).replace(/['"]/g, '').trim();
 
     const supabaseUrl = cleanUrl(rawUrl);
     const supabaseServiceKey = rawKey;
 
     if (!supabaseUrl || !supabaseServiceKey || supabaseServiceKey === 'N/A') {
-      return res.status(500).json({ error: 'Supabase Admin credentials are not configured on the server.' });
+      return res.status(500).json({ 
+        error: 'Las credenciales de administración administrativa (SUPABASE_SERVICE_ROLE_KEY) no están configuradas en el servidor de Vercel. Por favor, ingrese al panel de Vercel, en la sección de Settings -> Environment Variables, y agregue la variable "SUPABASE_SERVICE_ROLE_KEY" con la clave Service Role de su proyecto de Supabase.' 
+      });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {

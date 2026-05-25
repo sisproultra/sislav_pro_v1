@@ -775,31 +775,10 @@ export default function App() {
             }, 5000); // 5s de margen
 
             try {
-                // OPTIMIZATION: Fetch global config but don't block if we have cache
+                // OPTIMIZATION: Load cached global config immediately, but do NOT fetch from API until authenticated
                 const cachedConfig = localStorage.getItem('sislav_global_config');
-                const hasCachedConfig = !!cachedConfig;
-                
-                if (hasCachedConfig) {
+                if (cachedConfig) {
                     setGlobalConfig(JSON.parse(cachedConfig));
-                }
-
-                const gConfigPromise = getSaasGlobalConfig();
-
-                if (!hasCachedConfig) {
-                    console.log("📦 Obteniendo configuración global (BLOQUEANTE)...");
-                    const gConfig = await withTimeout<any>(gConfigPromise, 6000).catch(() => null);
-                    if (gConfig) {
-                        setGlobalConfig(gConfig);
-                        localStorage.setItem('sislav_global_config', JSON.stringify(gConfig));
-                    }
-                } else {
-                    console.log("📦 Actualizando configuración global en segundo plano...");
-                    gConfigPromise.then(gConfig => {
-                        if (gConfig) {
-                            setGlobalConfig(gConfig);
-                            localStorage.setItem('sislav_global_config', JSON.stringify(gConfig));
-                        }
-                    }).catch(() => {});
                 }
 
                 // PERSISTENCE: Session and Sucursal are now handled in useState initializers
@@ -876,6 +855,41 @@ export default function App() {
         resolvePortal();
     }, []);
 
+    // Fetch and load remote global configuration only when the user is fully authenticated to avoid 401 Unauthorized errors on login screen
+    useEffect(() => {
+        if (!authSession) return;
+
+        const fetchGlobalConfig = async () => {
+            try {
+                const cachedConfig = localStorage.getItem('sislav_global_config');
+                const hasCachedConfig = !!cachedConfig;
+
+                const gConfigPromise = getSaasGlobalConfig();
+
+                if (!hasCachedConfig) {
+                    console.log("📦 Obteniendo configuración global (BLOQUEANTE post-autenticación)...");
+                    const gConfig = await withTimeout<any>(gConfigPromise, 8000).catch(() => null);
+                    if (gConfig) {
+                        setGlobalConfig(gConfig);
+                        localStorage.setItem('sislav_global_config', JSON.stringify(gConfig));
+                    }
+                } else {
+                    console.log("📦 Actualizando configuración global en segundo plano...");
+                    gConfigPromise.then(gConfig => {
+                        if (gConfig) {
+                            setGlobalConfig(gConfig);
+                            localStorage.setItem('sislav_global_config', JSON.stringify(gConfig));
+                        }
+                    }).catch(() => {});
+                }
+            } catch (err) {
+                console.error("Error al cargar configuración global:", err);
+            }
+        };
+
+        fetchGlobalConfig();
+    }, [authSession]);
+
     const executeBotCheckIn = useCallback(async () => {
         if (!activeSucursal || !globalConfig) return;
         
@@ -939,7 +953,7 @@ export default function App() {
     }, [activeSucursal, hasClosedCobranza]);
 
     useEffect(() => {
-        if (!activeSucursal?.id) return;
+        if (!activeSucursal?.id || !authSession) return;
         const fetchWaConfig = async () => {
             const waConfig = await dbGetWaCampaignConfig();
             if (waConfig) {
@@ -950,12 +964,12 @@ export default function App() {
             }
         };
         fetchWaConfig();
-    }, [activeSucursal?.id]);
+    }, [activeSucursal?.id, authSession]);
 
     // REAL-TIME SUBSCRIPTIONS
     useEffect(() => {
         const branchId = activeSucursal?.id;
-        if (!branchId) return;
+        if (!branchId || !authSession) return;
 
         console.log(`📡 Iniciando suscripción Realtime para sede: ${branchId}`);
 
