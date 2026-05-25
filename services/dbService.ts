@@ -42,17 +42,12 @@ export const getPeruTimestamp = () => {
 };
 
 const getCached = (key: string, ttlMs: number = 30000) => {
-    const entry = queryCache.get(key);
-    if (!entry) return null;
-    if (Date.now() - entry.timestamp > ttlMs) {
-        queryCache.delete(key);
-        return null;
-    }
-    return entry.data;
+    // Desactivamos el caché manual en favor del cache unificado de React Query
+    return null;
 };
 
 export const setCache = (key: string, data: any) => {
-    queryCache.set(key, { data, timestamp: Date.now() });
+    // No-op: React Query gestiona la memoria y el caché de forma unificada
 };
 
 export const invalidateCache = (prefix: string) => {

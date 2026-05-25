@@ -32,28 +32,6 @@ export const SUPABASE_ANON_KEY = rawKey;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Test de conexión inmediato para diagnóstico
-(async () => {
-  console.log("🔌 [Supabase] Iniciando conexión...", { 
-    url: SUPABASE_URL,
-    keyPrefix: SUPABASE_ANON_KEY.substring(0, 10) + "..."
-  });
-  
-  try {
-    // Intentamos una operación mínima para validar el path
-    const { error } = await supabase.from('_test_connection_').select('count', { count: 'exact', head: true }).limit(1);
-    // PGRST116 o 404 (Relation not found) es BUENA SEÑAL (el path es válido)
-    // PGRST125 es MALA SEÑAL (el path es inválido)
-    if (error && error.code === 'PGRST125') {
-      console.error("🚨 [Supabase] ERROR CRÍTICO DE PATH (PGRST125). La URL configurada parece incorrecta o mal formada.");
-    } else {
-      console.log("✅ [Supabase] Estructura de URL validada (Path OK).");
-    }
-  } catch (e) {
-    console.warn("⚠️ [Supabase] No se pudo realizar el test de pre-conexión:", e);
-  }
-})();
-
 export const initTenantClient = (config: TenantConfig): any => {
   console.log(`🔗 SISLAV POWER conectado: ${config.name} (${config.id})`);
   // En este entorno web, el cliente es único.

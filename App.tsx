@@ -104,6 +104,8 @@ const CashClosingView = lazy(() => import('./views/CashClosing'));
 const ProductCounting = lazy(() => import('./views/ProductCounting'));
 const Modificaciones = lazy(() => import('./views/Modificaciones'));
 
+import { ModuleLoadingSkeleton } from './components/ModuleLoadingSkeleton';
+
 import { Loader2, X, ShieldAlert, CheckCircle2, AlertTriangle, Clock, Play, Sparkles, Lock, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
@@ -2562,13 +2564,16 @@ export default function App() {
             {isLoadingData && <div className="absolute top-2 right-6 z-[100] flex items-center gap-2 bg-indigo-600 text-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest shadow-lg animate-pulse"><RefreshCw size={10} className="animate-spin" /> Sincronizando</div>}
             
             <div className="h-full overflow-hidden">
-                <Suspense fallback={
-                    <div className="h-full w-full flex flex-col items-center justify-center p-12 bg-slate-50 dark:bg-slate-900 min-h-[400px]">
-                        <Loader2 className="animate-spin text-indigo-500 mb-4" size={48} />
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cargando Módulo...</p>
-                    </div>
-                }>
-                    {renderView()}
+                <Suspense fallback={<ModuleLoadingSkeleton />}>
+                    <motion.div
+                        key={currentView}
+                        initial={{ opacity: 0, y: 3 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        className="h-full w-full"
+                    >
+                        {renderView()}
+                    </motion.div>
                 </Suspense>
             </div>
 
