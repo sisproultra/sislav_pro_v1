@@ -31,6 +31,7 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [recoveryError, setRecoveryError] = useState('');
   const [recoverySuccess, setRecoverySuccess] = useState('');
+  const [recoveryTempPassword, setRecoveryTempPassword] = useState('');
 
   const brandingStatus = (window as any).__BRANDING_STATUS__;
 
@@ -272,9 +273,22 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
                   
                   <div className="space-y-2">
                     <p className="text-xs font-bold text-text uppercase tracking-wide">¡Contraseña temporal generada!</p>
-                    <p className="text-xs text-text2 leading-relaxed">
-                      Se ha enviado un mensaje con tu contraseña de 5 dígitos al WhatsApp registrado: <span className="font-extrabold font-mono text-sm" style={{ color: brandPrimary }}>{recoverySuccess}</span>
-                    </p>
+                    
+                    {recoveryTempPassword ? (
+                      <div className="space-y-3">
+                        <p className="text-xs text-text2 leading-relaxed">
+                          Debido a que tu usuario no cuenta con un número de WhatsApp registrado, o el bot está temporalmente inactivo, tu contraseña temporal se muestra directamente aquí:
+                        </p>
+                        <div className="bg-bg3 border border-text/10 p-4 rounded-xl font-mono text-2xl font-extrabold tracking-widest inline-block select-all" style={{ color: brandPrimary }}>
+                          {recoveryTempPassword}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-text2 leading-relaxed">
+                        Se ha enviado un mensaje con tu contraseña de 5 dígitos al WhatsApp registrado: <span className="font-extrabold font-mono text-sm" style={{ color: brandPrimary }}>{recoverySuccess}</span>
+                      </p>
+                    )}
+                    
                     <p className="text-[10px] text-text2 bg-bg3/60 p-3 rounded-xl border border-text/5 leading-normal mt-2">
                       ⚠️ Esta contraseña momentánea es válida por <span className="font-bold" style={{ color: brandSecondary }}>10 minutos</span>. Al entrar, el sistema te forzará a actualizarla por una propia.
                     </p>
@@ -285,6 +299,9 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
                     onClick={() => {
                       setShowRecoveryModal(false);
                       setPass('');
+                      setRecoveryTempPassword('');
+                      setRecoverySuccess('');
+                      setRecoveryUsername('');
                     }}
                     className="w-full py-4 bg-bg3 hover:bg-bg3/80 text-text font-bold text-[10px] uppercase tracking-widest transition-all rounded-xl border border-text/5 active:scale-95"
                   >
@@ -323,7 +340,13 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
                     <button
                       type="button"
                       disabled={recoveryLoading}
-                      onClick={() => setShowRecoveryModal(false)}
+                      onClick={() => {
+                        setShowRecoveryModal(false);
+                        setRecoveryTempPassword('');
+                        setRecoverySuccess('');
+                        setRecoveryUsername('');
+                        setRecoveryError('');
+                      }}
                       className="flex-1 py-3 bg-bg3 hover:bg-bg3/80 text-text2 rounded-xl border border-text/5 font-bold text-[9px] uppercase tracking-widest transition-all active:scale-95"
                     >
                       Cancelar
@@ -354,6 +377,9 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
                           
                           const data = await res.json();
                           if (res.ok && data.success) {
+                            if (data.tempPassword) {
+                              setRecoveryTempPassword(data.tempPassword);
+                            }
                             setRecoverySuccess(data.maskedPhone || 'Registrado');
                           } else {
                             setRecoveryError(data.error || 'No se pudo procesar la solicitud.');

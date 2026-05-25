@@ -66,8 +66,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq('username', username.trim().toLowerCase())
       .maybeSingle();
 
-    if (userError || !userRecord) {
-      return res.status(404).json({ error: `El usuario "${username}" no existe o no tiene un perfil configurado.` });
+    if (userError) {
+      console.error("❌ Error de consulta en usuarios_login de Supabase:", userError);
+      return res.status(500).json({ 
+        error: `Error de base de datos en Supabase: [${userError.code}] ${userError.message}. Verifique la clave SUPABASE_SERVICE_ROLE_KEY en Settings del panel de Vercel.` 
+      });
+    }
+
+    if (!userRecord) {
+      return res.status(404).json({ error: `El usuario "${username}" no existe o no tiene un perfil configurado en la base de datos.` });
     }
 
     // 2. Verificar si está activo
@@ -75,13 +82,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: `El usuario "${username}" está desactivado. Contacte a soporte o administración.` });
     }
 
-    // 3. Validar teléfono
+    // 3. Validar teléfono (Si no tiene, operará en modo offline mostrando la clave en pantalla)
     const telefono = userRecord.telefono ? userRecord.telefono.trim() : '';
-    if (!telefono) {
-      return res.status(400).json({ 
-        error: `No tienes un número de teléfono de WhatsApp asociado a tu perfil de empleado. Por favor, solicita a tu administrador que actualice tu perfil agregando tu número de WhatsApp.` 
-      });
-    }
+    const hasPhone = telefono.length > 0;
 
     // 4. Generar contraseña momentánea (1 Letra Mayúscula + 4 números)
     const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -93,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const expiresAt = Date.now() + 10 * 60 * 1000;
 
     // 6. Preparar número limpio para historial
-    let cleanPhone = telefono.replace(/\D/g, '');
+    let cleanPhone = hasPhone ? telefono.replace(/\D/g, '') : '';
 
     // 7. Cargar metadatos actuales del usuario de Supabase Auth para no sobreescribir otros valores e iniciar historial
     let currentMetadata: any = {};
@@ -116,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       timestamp: new Date().toISOString(),
       temp_password: tempPassword,
       expires_at: new Date(expiresAt).toISOString(),
-      phone: cleanPhone,
+      phone: cleanPhone || 'Sin teléfono',
       status: 'pending'
     };
     recoveryHistory.push(newHistoryEntry);
@@ -139,7 +142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (updateError) {
-      throw new Error(`No se pudo actualizar la contraseña temporal: ${updateError.message}`);
+      throw new Error(`No se pudo actualizar la contraseña temporal en Supabase Auth: ${updateError.message}`);
     }
 
     // Sincronizar el password_hash en la tabla local usuarios_login para contingencias
@@ -150,6 +153,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('id', userRecord.id);
     } catch (dbErr) {
       console.warn("⚠️ No se pudo actualizar el password_hash local:", dbErr);
+    }
+
+    // Si no tiene teléfono configurado, retornamos modo offline inmediatamente mostrando la clave en pantalla
+    if (!hasPhone) {
+      if (recoveryHistory.length > 0) {
+        recoveryHistory[recoveryHistory.length - 1].status = 'offline_mode';
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(userRecord.id, {
+            user_metadata: {
+              ...currentMetadata,
+              temp_password_active: true,
+              temp_password_expires_at: expiresAt,
+              temp_password_raw: tempPassword,
+              recovery_history: recoveryHistory
+            }
+          });
+        } catch (logErr) {}
+      }
+
+      return res.status(200).json({ 
+        success: true, 
+        offline: true, 
+        tempPassword,
+        message: 'No tienes un número de WhatsApp asociado a tu perfil, por lo que se generará la contraseña directamente en esta pantalla.' 
+      });
     }
 
     // 9. Cargar configuración de WhatsApp de saas_configuracion_global
@@ -189,7 +217,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: true, 
         offline: true, 
         tempPassword,
-        message: 'Contraseña temporal generada pero WhatsApp no está configurado.' 
+        message: 'Contraseña temporal generada. WhatsApp no configurado en este servidor.' 
       });
     }
 
@@ -207,24 +235,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const finalBaseUrl = baseUrl.trim().startsWith('http') ? baseUrl.trim() : `https://${baseUrl.trim()}`;
     const finalEndpoint = `${finalBaseUrl}/message/sendText/${instance}`;
 
-    // 12. Enviar a Evolution API
-    const response = await fetch(finalEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': apiKey
-      },
-      body: JSON.stringify({
-        number: cleanPhone,
-        text: bodyText
-      })
-    });
+    // 12. Enviar a Evolution API con bloque try-catch seguro
+    try {
+      const response = await fetch(finalEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey
+        },
+        body: JSON.stringify({
+          number: cleanPhone,
+          text: bodyText
+        })
+      });
 
-    if (!response.ok) {
-      console.error(`⚠️ Evolution API falló con status: ${response.status}`);
-      
+      if (!response.ok) {
+        console.error(`⚠️ Evolution API falló con status: ${response.status}`);
+        
+        if (recoveryHistory.length > 0) {
+          recoveryHistory[recoveryHistory.length - 1].status = 'offline_mode';
+          try {
+            await supabaseAdmin.auth.admin.updateUserById(userRecord.id, {
+              user_metadata: {
+                ...currentMetadata,
+                temp_password_active: true,
+                temp_password_expires_at: expiresAt,
+                temp_password_raw: tempPassword,
+                recovery_history: recoveryHistory
+              }
+            });
+          } catch (logErr) {}
+        }
+
+        return res.status(200).json({ 
+          success: true, 
+          offline: true, 
+          tempPassword,
+          message: 'Fallo de entrega de WhatsApp. Contraseña temporal mostrada en pantalla.' 
+        });
+      }
+
+      // Guardar estado exitoso
       if (recoveryHistory.length > 0) {
-        recoveryHistory[recoveryHistory.length - 1].status = 'failed';
+        recoveryHistory[recoveryHistory.length - 1].status = 'sent';
         try {
           await supabaseAdmin.auth.admin.updateUserById(userRecord.id, {
             user_metadata: {
@@ -238,30 +291,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch (logErr) {}
       }
 
-      return res.status(500).json({ error: 'Fallo al despachar el mensaje de WhatsApp. Intente nuevamente.' });
+      const maskedPhone = telefono.length > 4 
+        ? `${telefono.substring(0, 3)}***${telefono.substring(telefono.length - 2)}` 
+        : telefono;
+
+      return res.status(200).json({ success: true, maskedPhone });
+
+    } catch (waError: any) {
+      console.error(`⚠️ Error enviando WhatsApp: ${waError.message}`);
+      
+      if (recoveryHistory.length > 0) {
+        recoveryHistory[recoveryHistory.length - 1].status = 'offline_mode';
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(userRecord.id, {
+            user_metadata: {
+              ...currentMetadata,
+              temp_password_active: true,
+              temp_password_expires_at: expiresAt,
+              temp_password_raw: tempPassword,
+              recovery_history: recoveryHistory
+            }
+          });
+        } catch (logErr) {}
+      }
+
+      return res.status(200).json({ 
+        success: true, 
+        offline: true, 
+        tempPassword,
+        message: 'Bot de WhatsApp desconectado o de baja. Contraseña mostrada en pantalla.' 
+      });
     }
-
-    // Guardar estado exitoso
-    if (recoveryHistory.length > 0) {
-      recoveryHistory[recoveryHistory.length - 1].status = 'sent';
-      try {
-        await supabaseAdmin.auth.admin.updateUserById(userRecord.id, {
-          user_metadata: {
-            ...currentMetadata,
-            temp_password_active: true,
-            temp_password_expires_at: expiresAt,
-            temp_password_raw: tempPassword,
-            recovery_history: recoveryHistory
-          }
-        });
-      } catch (logErr) {}
-    }
-
-    const maskedPhone = telefono.length > 4 
-      ? `${telefono.substring(0, 3)}***${telefono.substring(telefono.length - 2)}` 
-      : telefono;
-
-    return res.status(200).json({ success: true, maskedPhone });
 
   } catch (error: any) {
     console.error(`❌ [Vercel API Recovery Native Exception]: ${error.message}`);
