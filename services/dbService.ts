@@ -79,6 +79,19 @@ export const getActiveBranchId = () => {
     if (stored) return stored;
     if (activeBranchId) return activeBranchId;
     
+    // FALLBACK: Intentar recuperar de la sesión del usuario
+    const sessionStr = localStorage.getItem('sislav_auth_session');
+    if (sessionStr) {
+        try {
+            const parsed = JSON.parse(sessionStr);
+            if (parsed?.user?.sucursal_id) {
+                activeBranchId = parsed.user.sucursal_id;
+                localStorage.setItem('sislav_active_branch_uuid', parsed.user.sucursal_id);
+                return parsed.user.sucursal_id;
+            }
+        } catch (e) {}
+    }
+
     // Fallback de respaldo desde el objeto de sucursal persistido
     const storedSucursal = localStorage.getItem('sislav_active_sucursal');
     if (storedSucursal) {
@@ -97,6 +110,20 @@ export const getActiveHoldingId = () => {
     const stored = localStorage.getItem('sislav_active_holding_uuid');
     if (stored) return stored;
     if (activeHoldingId) return activeHoldingId;
+
+    // FALLBACK: Intentar recuperar de la sesión del usuario
+    const sessionStr = localStorage.getItem('sislav_auth_session');
+    if (sessionStr) {
+        try {
+            const parsed = JSON.parse(sessionStr);
+            const hid = parsed?.user?.holding_id || parsed?.user?.empresa_holding_id;
+            if (hid) {
+                activeHoldingId = hid;
+                localStorage.setItem('sislav_active_holding_uuid', hid);
+                return hid;
+            }
+        } catch (e) {}
+    }
 
     // Fallback de respaldo desde el objeto de sucursal persistido
     const storedSucursal = localStorage.getItem('sislav_active_sucursal');
@@ -215,9 +242,11 @@ export const dbGlobalLogin = async (username: string, pass: string, expectedSucu
             }
         };
         
-        if (data.sucursales) {
-            setDbBranchContext(data.sucursal_id, data.empresa_id, data.id);
-        }
+        setDbBranchContext(
+            data.sucursal_id || expectedSucursalId, 
+            data.empresa_id || data.empresa_holding_id, 
+            data.id
+        );
 
         localStorage.setItem('sislav_current_user_name', data.nombre_completo);
         localStorage.setItem('sislav_current_user_role', data.rol);
@@ -1065,8 +1094,8 @@ export const dbCreateClient = async (client: any): Promise<Client> => {
         email: client.email, 
         direccion: client.address?.toUpperCase() || '-', 
         google_maps_url: client.google_maps_url, 
-        latitud: client.latitud, 
-        longitud: client.longitud, 
+        latitud: client.latitud !== undefined ? client.latitud : client.latitude, 
+        longitud: client.longitud !== undefined ? client.longitud : client.longitude, 
         mensaje_alerta: client.alertMessage, 
         color_alerta: client.alertColor, 
         cumpleanos: client.birthday || null, 
@@ -1264,18 +1293,116 @@ const mapStatusToDb = (status: string): string => {
 // --- RECOJOS ---
 
 export const dbGetPickupRequests = async (): Promise<PickupRequest[]> => {
-    const branchId = getActiveBranchId();
-    if (!branchId) return [];
+    let branchId = getActiveBranchId();
+    let holdingId = getActiveHoldingId();
     
-    const cacheKey = `pickup_requests_${branchId}`;
-    const cached = getCached(cacheKey, 10000); // 10s TTL
+    if (!branchId && !holdingId) return [];
+    
+    const cacheKey = `pickup_requests_${branchId || 'all'}_h_${holdingId || 'all'}`;
+    const cached = getCached(cacheKey, 30000); // 30s TTL to optimize egress
     if (cached) return cached;
 
     try {
-        const holdingId = await ensureHoldingId(branchId);
-        const { data, error } = await supabase.from('recojos_delivery').select('*, clientes(nombres, latitud, longitud, google_maps_url)').eq('sucursal_id', branchId).eq('empresa_holding_id', holdingId).order('fecha_programada', { ascending: true });
+        if (!holdingId && branchId) {
+            holdingId = await ensureHoldingId(branchId);
+        }
+        if (!holdingId) return [];
+
+        let query = supabase.from('recojos_delivery').select('*, clientes(nombres, latitud, longitud, google_maps_url), chofer:usuarios_login!chofer_id(id, nombre_completo, username)').eq('empresa_holding_id', holdingId);
+        
+        // Si no es un chofer (DELIVERY) y tenemos branchId, filtramos estrictamente por sucursal_id
+        const sessionStr = localStorage.getItem('sislav_auth_session');
+        let isDriver = false;
+        if (sessionStr) {
+            try {
+                const parsed = JSON.parse(sessionStr);
+                isDriver = parsed?.user?.role === 'DELIVERY';
+            } catch (e) {}
+        }
+        if (!isDriver) {
+            isDriver = localStorage.getItem('sislav_current_user_role') === 'DELIVERY';
+        }
+        
+        if (!isDriver && branchId && branchId !== 'default') {
+            query = query.eq('sucursal_id', branchId);
+        }
+
+        const { data, error } = await query.order('fecha_programada', { ascending: true });
         if (error) return [];
-        const result = (data || []).map(r => ({ id: r.id, sucursal_id: r.sucursal_id, empresa_holding_id: r.empresa_holding_id, cliente_id: r.cliente_id, clientName: r.clientes?.nombres || 'Cliente', address: r.direccion, phone: r.telefono, scheduledDate: r.fecha_programada, timeRange: r.rango_horario, status: mapStatusFromDb(r.estado_recojo), notes: r.notas, createdAt: r.fecha_registro, registrado_por: r.registrado_por, googleMapsUrl: r.clientes?.google_maps_url, latitude: r.clientes?.latitud ? Number(r.clientes.latitud) : undefined, longitude: r.clientes?.longitud ? Number(r.clientes.longitud) : undefined, isSelfScheduled: r.is_self_scheduled ?? false, isReadByAdmin: r.is_read_by_admin ?? false }));
+        const result = (data || []).map(r => {
+            let parsedChoferId = r.chofer_id || r.chofer_nombre || '';
+            let parsedNotes = r.notas || '';
+            let parsedPriority = 'NORMAL';
+
+            let tempNotes = parsedNotes;
+            let found = true;
+            while (found) {
+                found = false;
+                const matchChofer = tempNotes.match(/^\[CHOFER_ID:([^\]]+)\]\s*(.*)/s);
+                if (matchChofer) {
+                    parsedChoferId = matchChofer[1];
+                    tempNotes = matchChofer[2];
+                    found = true;
+                }
+                const matchPriority = tempNotes.match(/^\[PRIORITY:([^\]]+)\]\s*(.*)/s);
+                if (matchPriority) {
+                    parsedPriority = matchPriority[1];
+                    tempNotes = matchPriority[2];
+                    found = true;
+                }
+                const matchPrioridad = tempNotes.match(/^\[PRIORIDAD:([^\]]+)\]\s*(.*)/s);
+                if (matchPrioridad) {
+                    parsedPriority = matchPrioridad[1];
+                    tempNotes = matchPrioridad[2];
+                    found = true;
+                }
+            }
+            parsedNotes = tempNotes;
+
+            return {
+                id: r.id,
+                sucursal_id: r.sucursal_id,
+                empresa_holding_id: r.empresa_holding_id,
+                cliente_id: r.cliente_id,
+                clientName: r.clientes?.nombres || 'Cliente',
+                address: r.direccion,
+                phone: r.telefono,
+                scheduledDate: r.fecha_programada,
+                timeRange: r.rango_horario,
+                status: mapStatusFromDb(r.estado_recojo),
+                notes: parsedNotes,
+                chofer_id: parsedChoferId,
+                chofer_name: r.chofer?.nombre_completo || r.chofer?.username || r.chofer_nombre || '',
+                createdAt: r.fecha_registro,
+                registrado_por: r.registrado_por,
+                googleMapsUrl: r.clientes?.google_maps_url,
+                latitude: (() => {
+                    if (r.clientes?.latitud) return Number(r.clientes.latitud);
+                    const mapsUrl = r.clientes?.google_maps_url;
+                    if (mapsUrl) {
+                        const atMatch = mapsUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+                        if (atMatch) return parseFloat(atMatch[1]);
+                        const qMatch = mapsUrl.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+                        if (qMatch) return parseFloat(qMatch[1]);
+                    }
+                    return undefined;
+                })(),
+                longitude: (() => {
+                    if (r.clientes?.longitud) return Number(r.clientes.longitud);
+                    const mapsUrl = r.clientes?.google_maps_url;
+                    if (mapsUrl) {
+                        const atMatch = mapsUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+                        if (atMatch) return parseFloat(atMatch[2]);
+                        const qMatch = mapsUrl.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+                        if (qMatch) return parseFloat(qMatch[2]);
+                    }
+                    return undefined;
+                })(),
+                isSelfScheduled: r.is_self_scheduled ?? false,
+                isReadByAdmin: r.is_read_by_admin ?? false,
+                priority: parsedPriority as 'NORMAL' | 'ALTA'
+            };
+        });
         setCache(cacheKey, result);
         return result;
     } catch (e) { return []; }
@@ -1295,6 +1422,25 @@ export const dbCreatePickupRequest = async (pickup: any) => {
     
     const user = localStorage.getItem('sislav_current_user_name') || 'CLIENTE_FINAL';
     
+    let choferId = pickup.chofer_id;
+    let finalNotes = pickup.notes || '';
+    if (finalNotes && finalNotes.startsWith('[CHOFER_ID:')) {
+        const match = finalNotes.match(/^\[CHOFER_ID:([^\]]+)\]\s*(.*)/s);
+        if (match) {
+            choferId = match[1];
+            finalNotes = match[2];
+        }
+    }
+    
+    // Si la prioridad es ALTA, la añadimos como tag en las notas de la base de datos
+    if (pickup.priority === 'ALTA' && !finalNotes.includes('[PRIORITY:ALTA]')) {
+        finalNotes = `[PRIORITY:ALTA] ${finalNotes}`;
+    }
+    // Si hay un chofer_id y no está ya pre-codificado, lo re-codificamos
+    if (choferId && !finalNotes.includes('[CHOFER_ID:')) {
+        finalNotes = `[CHOFER_ID:${choferId}] ${finalNotes}`;
+    }
+
     const payload: any = { 
         sucursal_id: branchId, 
         empresa_holding_id: holdingId, 
@@ -1304,7 +1450,8 @@ export const dbCreatePickupRequest = async (pickup: any) => {
         fecha_programada: pickup.scheduledDate, 
         rango_horario: pickup.timeRange, 
         estado_recojo: mapStatusToDb(pickup.status), 
-        notas: pickup.notes, 
+        notas: finalNotes, 
+        chofer_id: choferId || null,
         registrado_por: user 
     };
     
@@ -1312,6 +1459,7 @@ export const dbCreatePickupRequest = async (pickup: any) => {
     if (pickup.isReadByAdmin !== undefined) payload.is_read_by_admin = pickup.isReadByAdmin;
     const { data, error } = await supabase.from('recojos_delivery').insert(payload).select().single();
     if (error) throw error;
+    invalidateCache('pickup_requests_');
     return data;
 };
 
@@ -1321,15 +1469,64 @@ export const dbUpdatePickupRequest = async (id: string, updates: any) => {
     if (updates.phone) payload.telefono = updates.phone;
     if (updates.scheduledDate) payload.fecha_programada = updates.scheduledDate;
     if (updates.timeRange) payload.rango_horario = updates.timeRange;
-    if (updates.notes) payload.notas = updates.notes;
+    
+    let choferId = updates.chofer_id;
+    let finalNotes = updates.notes;
+    let priority = updates.priority;
+
+    if (finalNotes !== undefined) {
+        let cleanText = finalNotes;
+        let found = true;
+        while (found) {
+            found = false;
+            if (typeof cleanText === 'string') {
+                const matchCh = cleanText.match(/^\[CHOFER_ID:([^\]]+)\]\s*(.*)/s);
+                if (matchCh) {
+                    choferId = matchCh[1];
+                    cleanText = matchCh[2];
+                    found = true;
+                }
+                const matchPr = cleanText.match(/^\[PRIORITY:([^\]]+)\]\s*(.*)/s);
+                if (matchPr) {
+                    priority = matchPr[1];
+                    cleanText = matchPr[2];
+                    found = true;
+                }
+                const matchPrd = cleanText.match(/^\[PRIORIDAD:([^\]]+)\]\s*(.*)/s);
+                if (matchPrd) {
+                    priority = matchPrd[1];
+                    cleanText = matchPrd[2];
+                    found = true;
+                }
+            }
+        }
+
+        let mergedNotes = cleanText;
+        if (priority === 'ALTA') {
+            mergedNotes = `[PRIORITY:ALTA] ${mergedNotes}`;
+        }
+        if (choferId) {
+            mergedNotes = `[CHOFER_ID:${choferId}] ${mergedNotes}`;
+        }
+        payload.notas = mergedNotes;
+    } else if (priority !== undefined || choferId !== undefined) {
+        // Si no se actualizaron las notas pero sí el chofer o la prioridad, tendríamos que reconfigurarla de alguna manera, 
+        // pero CallCenter siempre envía notes en sus actualizaciones. Por si acaso, si hay choferId lo guardamos en chofer_id:
+    }
+    
+    if (choferId) {
+        payload.chofer_id = choferId;
+    }
     if (updates.status) payload.estado_recojo = mapStatusToDb(updates.status);
     const { error = null } = await supabase.from('recojos_delivery').update(payload).eq('id', id);
     if (error) throw error;
+    invalidateCache('pickup_requests_');
 };
 
 export const dbUpdatePickupRequestStatus = async (id: string, status: string) => {
     const { error } = await supabase.from('recojos_delivery').update({ estado_recojo: mapStatusToDb(status) }).eq('id', id);
     if (error) throw error;
+    invalidateCache('pickup_requests_');
 };
 
 export const dbUpdateSunatResponse = async (ventaId: string, response: SunatResponse) => {
@@ -1349,10 +1546,14 @@ export const dbUpdateSunatResponse = async (ventaId: string, response: SunatResp
 export const dbDeletePickupRequest = async (id: string) => {
     const { error } = await supabase.from('recojos_delivery').update({ estado_recojo: 'CANCELADO' }).eq('id', id);
     if (error) throw error;
+    invalidateCache('pickup_requests_');
 };
 
 export const dbMarkPickupAsRead = async (id: string) => {
-    try { await supabase.from('recojos_delivery').update({ is_read_by_admin: true }).eq('id', id); } catch (e) {}
+    try { 
+        await supabase.from('recojos_delivery').update({ is_read_by_admin: true }).eq('id', id); 
+        invalidateCache('pickup_requests_');
+    } catch (e) {}
 };
 
 // --- VENTAS ---
@@ -1455,8 +1656,9 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
         .from('cierres_caja')
         .select('id')
         .eq('sucursal_id', branchId)
-        .eq('usuario_id', userId)
         .eq('estado', 'ABIERTO')
+        .order('fecha_apertura', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
     let currentConfig = { ...company };
@@ -1840,7 +2042,7 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
     if (!branchId) return { invoices: [], total: 0 };
 
     const cacheKey = `invoices_${branchId}_p${page}_s${pageSize}_q${searchTerm}`;
-    const cached = getCached(cacheKey, 15000); // 15s TTL for invoices
+    const cached = getCached(cacheKey, 30000); // 30s TTL for invoices to optimize egress
     if (cached) return cached;
     try {
         const holdingId = await ensureHoldingId(branchId);
@@ -1850,7 +2052,7 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
 
         let query = supabase
             .from('ventas')
-            .select('*, clientes(*), items_venta(*)', { count: 'exact' })
+            .select('*, clientes(id, sucursal_id, empresa_holding_id, tipo_documento, dni, nombres, apellidos, telefono, direccion, razon_social, ruc, email, puntos, google_maps_url, latitud, longitud), items_venta(*)', { count: 'exact' })
             .eq('sucursal_id', branchId)
             .eq('empresa_holding_id', holdingId);
 
@@ -2107,7 +2309,7 @@ export const dbGetDashboardReportData = async (startDate: string, endDate: strin
         // 1. Obtener Ventas en el rango (usando fecha_recepcion o fecha)
         const { data: ventas, error: vError } = await supabase
             .from('ventas')
-            .select('*, clientes(*), items_venta(*)')
+            .select('*, clientes(id, nombres, apellidos), items_venta(*)')
             .eq('sucursal_id', branchId)
             .neq('estado', 'CANCELADO')
             .gte('fecha_recepcion', `${startDate}T00:00:00.000Z`)
@@ -2356,6 +2558,14 @@ export const dbAddPayment = async (ventaId: string, amount: number, methodName: 
         userId = sessionData.session?.user?.id || null;
     }
 
+    let finalCashSessionId = pCashSessionId;
+    if (!finalCashSessionId) {
+        const activeSession = await dbGetActiveCashClosing();
+        if (activeSession) {
+            finalCashSessionId = activeSession.id;
+        }
+    }
+
     const { error: payError } = await supabase.from('pagos_venta').insert({ 
         venta_id: ventaId, 
         metodo_pago_id: metodoId, 
@@ -2365,7 +2575,7 @@ export const dbAddPayment = async (ventaId: string, amount: number, methodName: 
         sucursal_id: branchId,
         empresa_holding_id: holdingId,
         fecha_pago: getPeruTimestamp(),
-        cash_session_id: pCashSessionId || null
+        cash_session_id: finalCashSessionId || null
     });
     if (payError) throw payError;
 
@@ -2833,6 +3043,14 @@ export const dbSaveExpense = async (exp: Omit<Expense, 'id'>) => {
         userId = sessionData.session?.user?.id || null;
     }
 
+    let finalCashSessionId = exp.cash_session_id;
+    if (!finalCashSessionId) {
+        const activeSession = await dbGetActiveCashClosing();
+        if (activeSession) {
+            finalCashSessionId = activeSession.id;
+        }
+    }
+
     const { data, error } = await supabase.from('egresos').insert({
         sucursal_id: exp.sucursal_id,
         empresa_holding_id: holdingId,
@@ -2844,7 +3062,7 @@ export const dbSaveExpense = async (exp: Omit<Expense, 'id'>) => {
         registrado_por: exp.usuarioRegistro,
         usuario_id: userId,
         fecha_gasto: exp.date,
-        cash_session_id: exp.cash_session_id || null
+        cash_session_id: finalCashSessionId || null
     }).select().single();
 
     if (error) throw error;

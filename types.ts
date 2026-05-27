@@ -346,6 +346,8 @@ export interface PickupRequest extends BaseEntity {
     timeRange: string;
     status: string;
     cliente_id?: string;
+    chofer_id?: string;
+    chofer_name?: string;
     createdAt?: string;
     isSelfScheduled?: boolean;
     isReadByAdmin?: boolean;

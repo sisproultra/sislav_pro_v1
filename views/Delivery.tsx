@@ -115,7 +115,7 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
             dbGetGuiasRemision({ chofer_id: userId! })
         ]);
 
-        setPickups(pData);
+        setPickups(pData.filter(p => p.chofer_id === userId));
         setInvoices(iData);
 
         // Mapear guías para que funcionen con el mapa
@@ -407,7 +407,7 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
                     onClick={() => { setMainMode('CALL_CENTER'); setSelectedItemId(null); }}
                     className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${mainMode === 'CALL_CENTER' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}
                 >
-                    <Headphones size={16} /> CALL CENTER
+                    <Headphones size={16} /> AGENDADOS
                 </button>
                 <button 
                     onClick={() => { setMainMode('LOGISTICS_HUB'); setSelectedItemId(null); }}
@@ -474,7 +474,26 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
                                 <div className="flex items-center gap-2 text-[9px] md:text-[10px] font-bold text-slate-400 uppercase mt-1"><Clock size={10}/> {p.timeRange}</div>
                                 <p className="text-[9px] font-medium text-slate-500 uppercase mt-1 truncate">{p.address}</p>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); handleCall(p.phone); }} className="p-2 md:p-2.5 bg-slate-900 text-white rounded-xl shadow-md"><Phone size={16}/></button>
+                            <div className="flex gap-2 shrink-0">
+                                {p.phone && (
+                                    <button onClick={(e) => { e.stopPropagation(); handleCall(p.phone); }} className="p-2 md:p-2.5 bg-slate-900 text-white rounded-xl shadow-md" title="Llamar Cliente"><Phone size={16}/></button>
+                                )}
+                                <button 
+                                    onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        handleItemSelect(p.id); 
+                                        if (window.innerWidth < 768) setMobileView('map');
+                                    }} 
+                                    className={`p-2 md:p-2.5 rounded-xl shadow-md border transition-all ${
+                                        p.latitude && p.longitude 
+                                            ? 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-600' 
+                                            : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-400'
+                                    }`}
+                                    title={p.latitude && p.longitude ? "Ver en Mapa" : "Ubicación sin coordenadas, abrir mapa general"}
+                                >
+                                    <MapIcon size={16}/>
+                                </button>
+                            </div>
                         </div>
                         {p.status === 'IN_ROUTE' ? (
                             <button onClick={(e) => { e.stopPropagation(); onConvertToOrder(p); }} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold text-[10px] md:text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"><Shirt size={16} /> RECOGER PRENDAS</button>
@@ -493,7 +512,24 @@ const Delivery: React.FC<DeliveryProps> = ({ onConvertToOrder, company }) => {
                                 <p className="text-[9px] font-medium text-slate-500 uppercase mt-1 truncate">{inv.client.address}</p>
                             </div>
                             <div className="flex gap-2 shrink-0">
-                                <button onClick={(e) => { e.stopPropagation(); handleCall(inv.client.phone || ''); }} className="p-2 md:p-2.5 bg-slate-900 text-white rounded-xl shadow-md"><Phone size={16}/></button>
+                                {inv.client.phone && (
+                                    <button onClick={(e) => { e.stopPropagation(); handleCall(inv.client.phone || ''); }} className="p-2 md:p-2.5 bg-slate-900 text-white rounded-xl shadow-md" title="Llamar Cliente"><Phone size={16}/></button>
+                                )}
+                                <button 
+                                    onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        handleItemSelect(inv.id); 
+                                        if (window.innerWidth < 768) setMobileView('map');
+                                    }} 
+                                    className={`p-2 md:p-2.5 rounded-xl shadow-md border transition-all ${
+                                        inv.client.latitude && inv.client.longitude 
+                                            ? 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-600' 
+                                            : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-400'
+                                    }`}
+                                    title={inv.client.latitude && inv.client.longitude ? "Ver en Mapa" : "Ubicación sin coordenadas, abrir mapa general"}
+                                >
+                                    <MapIcon size={16}/>
+                                </button>
                             </div>
                         </div>
                         {inv.orderStatus === 'EN_RUTA' ? (

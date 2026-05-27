@@ -6,7 +6,7 @@ import {
     LogOut, Smartphone, Box, Navigation, QrCode, Camera, X,
     Headphones, Repeat, Phone, Hash, CheckCircle, Image as ImageIcon,
     CheckCheck, ShieldCheck, ExternalLink, Gauge, Locate, List, Shirt, PackageCheck,
-    BellRing, Sparkles
+    BellRing, Sparkles, Map as MapIcon, Compass, AlertOctagon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GuiaRemision, OrderStatus, PickupRequest, Invoice, Company } from '../types';
@@ -17,6 +17,7 @@ import {
 } from '../services/dbService';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import LeafletMap from '../components/LeafletMap';
 
 interface LogisticsDriverPOSProps {
     onLogout: () => void;
@@ -26,12 +27,78 @@ interface LogisticsDriverPOSProps {
 import { applyDynamicManifest } from '../utils/pwaUtils';
 
 const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onConvertToOrder }) => {
+    const currentUserId = getActiveUserId();
     const [mainMode, setMainMode] = useState<'LOGISTICS_HUB' | 'CALL_CENTER'>('LOGISTICS_HUB');
     const [guias, setGuias] = useState<GuiaRemision[]>([]);
     const [pickups, setPickups] = useState<PickupRequest[]>([]);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'PENDIENTES' | 'HISTORIAL' | 'RECOJOS' | 'ENTREGAS'>('PENDIENTES');
+    
+    // Map states
+    const [showMapModal, setShowMapModal] = useState(false);
+    const [selectedPickupForMap, setSelectedPickupForMap] = useState<PickupRequest | null>(null);
+    const [driverLocation, setDriverLocation] = useState<{ lat: number, lng: number } | null>(null);
+
+    useEffect(() => {
+        if (showMapModal && navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    setDriverLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                },
+                (err) => {
+                    console.log("Error getting driver location:", err);
+                }
+            );
+        }
+    }, [showMapModal]);
+    
+    const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+    const [activeRoute, setActiveRoute] = useState<{ path: [number, number][]; distance: number; duration: number } | null>(null);
+
+    useEffect(() => {
+        if (!selectedPickupForMap || !driverLocation) {
+            setActiveRoute(null);
+            return;
+        }
+
+        const lat = selectedPickupForMap.latitude;
+        const lng = selectedPickupForMap.longitude;
+        if (!lat || !lng) {
+            setActiveRoute(null);
+            return;
+        }
+
+        const controller = new AbortController();
+        const signal = controller.signal;
+
+        const calculateRoute = async () => {
+            setIsCalculatingRoute(true);
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${driverLocation.lng},${driverLocation.lat};${lng},${lat}?overview=full&geometries=geojson`;
+                const res = await fetch(url, { signal });
+                const data = await res.json();
+                
+                if (!signal.aborted && data.code === 'Ok' && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const coordinates: [number, number][] = route.geometry.coordinates.map((coord: any) => [coord[1], coord[0]]);
+                    setActiveRoute({ path: coordinates, distance: route.distance, duration: route.duration });
+                }
+            } catch (e: any) {
+                if (e.name !== 'AbortError') {
+                    console.error("Error calculating driver map route:", e);
+                }
+            } finally {
+                setIsCalculatingRoute(false);
+            }
+        };
+
+        calculateRoute();
+
+        return () => {
+            controller.abort();
+        };
+    }, [selectedPickupForMap, driverLocation]);
     
     const [selectedGuia, setSelectedGuia] = useState<GuiaRemision | null>(null);
     const [guiaItems, setGuiaItems] = useState<any[]>([]);
@@ -178,7 +245,33 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
             setGuias(filteredGuias);
 
             // Call Center - Pickups
-            setPickups(pData.filter(p => p.status !== 'COMPLETED' && p.status !== 'CANCELLED'));
+            const sortedPickups = [...pData].sort((a, b) => {
+                const statusWeight: Record<string, number> = {
+                    'IN_ROUTE': 1,
+                    'PENDING': 2,
+                    'COMPLETED': 3,
+                    'CANCELLED': 4
+                };
+                const wA = statusWeight[a.status] || 5;
+                const wB = statusWeight[b.status] || 5;
+                if (wA !== wB) return wA - wB;
+
+                // Priority sort: ALTA (urgente) first
+                const pA = a.priority === 'ALTA' ? 1 : 2;
+                const pB = b.priority === 'ALTA' ? 1 : 2;
+                if (pA !== pB) return pA - pB;
+                
+                // Secondary sort: scheduledDate ascending
+                const dateA = a.scheduledDate || '';
+                const dateB = b.scheduledDate || '';
+                if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+                // Tertiary sort: timeRange ascending
+                const timeA = a.timeRange || '';
+                const timeB = b.timeRange || '';
+                return timeA.localeCompare(timeB);
+            });
+            setPickups(sortedPickups);
 
             // Call Center - Invoices (Deliveries)
             const filteredInvoices = iData.filter(i => {
@@ -579,7 +672,7 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
                     onClick={() => { setMainMode('CALL_CENTER'); setActiveTab('RECOJOS'); }}
                     className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${mainMode === 'CALL_CENTER' ? 'bg-white text-slate-900 shadow-md' : 'text-white/40 hover:text-white'}`}
                 >
-                    <Headphones size={14} /> CALL CENTER
+                    <Headphones size={14} /> AGENDADOS
                 </button>
             </div>
 
@@ -793,25 +886,141 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
                         )}
 
                         {/* CALL CENTER - RECOJOS */}
-                        {mainMode === 'CALL_CENTER' && activeTab === 'RECOJOS' && pickups.map(p => (
-                            <div key={p.id} className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 space-y-3">
-                                <div className="flex justify-between items-start">
-                                    <div className="min-w-0 flex-1">
-                                        <h3 className="font-black text-slate-800 uppercase leading-none text-xs">{p.clientName}</h3>
-                                        <div className="flex items-center gap-2 text-[8px] font-bold text-slate-400 uppercase mt-1.5"><Clock size={10}/> {p.timeRange}</div>
-                                        <p className="text-[9px] font-bold text-slate-500 uppercase mt-1.5 line-clamp-1"><MapPin size={10} className="inline mr-1" /> {p.address}</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <a href={`tel:${p.phone}`} className="p-2.5 bg-slate-900 text-white rounded-xl shadow-lg"><Phone size={14}/></a>
-                                    </div>
-                                </div>
-                                {p.status === 'IN_ROUTE' ? (
-                                    <button onClick={() => handleFinishPickup(p)} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all"><Shirt size={16} /> RECOGER PRENDAS</button>
-                                ) : (
-                                    <button onClick={() => handleStartRoutePickup(p)} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl"><Navigation size={16} /> INICIAR RUTA</button>
+                        {mainMode === 'CALL_CENTER' && activeTab === 'RECOJOS' && (
+                            <div className="w-full flex flex-col gap-2.5 px-1 pb-4">
+                                {/* Header banner / button for integrated map */}
+                                {pickups.filter(p => p.latitude && p.longitude).length > 0 && (
+                                    <button 
+                                        onClick={() => { setSelectedPickupForMap(null); setShowMapModal(true); }}
+                                        className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-2xl py-3 px-4 font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all text-center"
+                                    >
+                                        <MapIcon size={14} className="animate-pulse" /> VER RUTA EN MAPA INTEGRADO
+                                    </button>
                                 )}
+
+                                {pickups.map(p => {
+                                    const isAssignedToMe = p.chofer_id === currentUserId;
+                                    const isHighPriority = p.priority === 'ALTA';
+                                    
+                                    return (
+                                        <div 
+                                            key={p.id} 
+                                            className={`bg-white rounded-2xl border p-3.5 transition-all flex flex-col gap-2 shadow-sm hover:shadow ${
+                                                p.status === 'IN_ROUTE' 
+                                                    ? 'border-l-4 border-l-indigo-600 border-indigo-150 ring-1 ring-indigo-50 bg-indigo-50/5' 
+                                                    : isHighPriority 
+                                                    ? 'border-l-4 border-l-rose-500 border-slate-150 bg-rose-50/5' 
+                                                    : isAssignedToMe 
+                                                    ? 'border-l-4 border-l-indigo-400 border-slate-150'
+                                                    : 'border-l-4 border-l-slate-200 border-slate-150'
+                                            }`}
+                                        >
+                                            <div className="flex justify-between items-start gap-2.5">
+                                                <div className="min-w-0 flex-1 space-y-1">
+                                                    <div className="flex flex-wrap items-center gap-1">
+                                                        {/* Priority Alert Tag */}
+                                                        {isHighPriority && p.status === 'PENDING' && (
+                                                            <span className="text-[7.5px] font-black bg-rose-50 text-rose-600 border border-rose-100 px-1.5 py-0.5 rounded uppercase flex items-center gap-0.5 animate-pulse shrink-0">
+                                                                <AlertOctagon size={10} /> URGENTE
+                                                            </span>
+                                                        )}
+
+                                                        {/* Status Badge */}
+                                                        {p.status === 'IN_ROUTE' && <span className="text-[7.5px] font-black bg-indigo-600 text-white px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">EN RUTA</span>}
+                                                        {p.status === 'PENDING' && !isHighPriority && <span className="text-[7.5px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">PENDIENTE</span>}
+                                                        {p.status === 'COMPLETED' && <span className="text-[7.5px] font-black bg-emerald-500 text-white px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">RECOGIDO</span>}
+                                                        {p.status === 'CANCELLED' && <span className="text-[7.5px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">CANCELADO</span>}
+                                                        
+                                                        {/* Assignment Badge */}
+                                                        {isAssignedToMe ? (
+                                                            <span className="text-[7.5px] font-black bg-indigo-50 text-indigo-600 border border-indigo-100 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">MÍO</span>
+                                                        ) : p.chofer_name ? (
+                                                            <span className="text-[7.5px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase tracking-wider truncate max-w-[80px] shrink-0" title={p.chofer_name}>CHOFER: {p.chofer_name}</span>
+                                                        ) : (
+                                                            <span className="text-[7.5px] font-black bg-amber-50 text-amber-600 border border-amber-100 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">SIN ASIGNAR</span>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <h3 className="font-extrabold text-slate-800 uppercase leading-snug text-xs tracking-tight">{p.clientName}</h3>
+                                                    
+                                                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[8px] font-black text-slate-400 uppercase tracking-wide">
+                                                        <span className="flex items-center gap-0.5"><Calendar size={9} className="text-slate-350" /> {p.scheduledDate ? format(new Date(p.scheduledDate + 'T12:00:00'), 'dd/MM') : 'Sin Fecha'}</span>
+                                                        <span className="flex items-center gap-0.5"><Clock size={9} className="text-slate-350" /> {p.timeRange}</span>
+                                                    </div>
+                                                    
+                                                    <p className="text-[8.5px] font-extrabold text-slate-500 uppercase leading-normal line-clamp-1 flex items-center gap-0.5">
+                                                        <MapPin size={10} className="text-slate-400 shrink-0" /> {p.address}
+                                                    </p>
+
+                                                    {p.notes && (
+                                                        <p className="text-[8px] font-bold text-slate-500 bg-slate-50 border border-slate-100/75 rounded-lg py-1 px-1.5 line-clamp-2">
+                                                            <span className="text-slate-400">NOTAS:</span> {p.notes}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                
+                                                {/* Side Control buttons */}
+                                                <div className="flex flex-col gap-1.5 shrink-0 justify-center">
+                                                    {p.phone && (
+                                                        <a 
+                                                            href={`tel:${p.phone}`} 
+                                                            className="p-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all flex items-center justify-center shadow-sm"
+                                                            title="Llamar Cliente"
+                                                        >
+                                                            <Phone size={12}/>
+                                                        </a>
+                                                    )}
+                                                    
+                                                    <button 
+                                                        onClick={() => { setSelectedPickupForMap(p); setShowMapModal(true); }}
+                                                        className={`p-1.5 rounded-xl transition-all flex items-center justify-center shadow-sm border ${
+                                                            p.latitude && p.longitude 
+                                                                ? 'bg-indigo-50 hover:bg-indigo-100 border-indigo-150 text-indigo-600' 
+                                                                : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-400'
+                                                        }`}
+                                                        title={p.latitude && p.longitude ? "Ver en Mapa Integrado" : "Ubicación sin coordenadas, abrir mapa general"}
+                                                    >
+                                                        <MapIcon size={12} />
+                                                    </button>
+                                                    
+                                                    {p.googleMapsUrl && (
+                                                        <a 
+                                                            href={p.googleMapsUrl} 
+                                                            target="_blank" 
+                                                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-150 text-emerald-600 rounded-xl transition-all flex items-center justify-center shadow-sm"
+                                                            title="Navegar con Google Maps"
+                                                        >
+                                                            <ExternalLink size={12}/>
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Compact Action Button */}
+                                            {p.status !== 'COMPLETED' && p.status !== 'CANCELLED' && (
+                                                <div className="border-t border-slate-150/60 pt-2 flex items-center justify-end">
+                                                    {p.status === 'IN_ROUTE' ? (
+                                                        <button 
+                                                            onClick={() => handleFinishPickup(p)} 
+                                                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
+                                                        >
+                                                            <Shirt size={14} /> RECOGER PRENDAS
+                                                        </button>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => handleStartRoutePickup(p)} 
+                                                            className="w-full bg-slate-950 hover:bg-slate-850 text-white py-2 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
+                                                        >
+                                                            <Navigation size={14} /> INICIAR RUTA
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
-                        ))}
+                        )}
 
                         {/* CALL CENTER - ENTREGAS */}
                         {mainMode === 'CALL_CENTER' && activeTab === 'ENTREGAS' && invoices.map(inv => (
@@ -974,6 +1183,91 @@ const LogisticsDriverPOS: React.FC<LogisticsDriverPOSProps> = ({ onLogout, onCon
                                 </button>
                             </div>
                         </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* INTEGRATED MAP MODAL */}
+            <AnimatePresence>
+                {showMapModal && (
+                    <div className="fixed inset-0 z-[1000] flex flex-col bg-slate-950/95">
+                        {/* Header of Map Modal */}
+                        <div className="p-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center text-white shrink-0">
+                            <div>
+                                <h3 className="font-extrabold text-xs uppercase tracking-wider flex items-center gap-1.5 text-indigo-400">
+                                    <MapIcon size={16} className="animate-pulse" /> MAPA DE RUTA INTEGRADO
+                                </h3>
+                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">
+                                    {selectedPickupForMap ? `ENFOCADO EN: ${selectedPickupForMap.clientName}` : 'VISUALIZANDO TODOS LOS RECOJOS AGENDADOS'}
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => { setShowMapModal(false); setSelectedPickupForMap(null); }}
+                                className="p-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-all"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                        
+                        {/* Body of Map Modal */}
+                        <div className="flex-1 relative">
+                            <LeafletMap 
+                                items={pickups} 
+                                selectedItem={selectedPickupForMap} 
+                                previewLocation={null} 
+                                routeStart={driverLocation} 
+                                detailedPath={activeRoute?.path ?? undefined}
+                                onTakeOrder={(item) => {
+                                    handleStartRoutePickup(item);
+                                    setShowMapModal(false);
+                                }}
+                            />
+                        </div>
+                        
+                        {/* Footer info/controls */}
+                        <div className="p-4 bg-slate-900 border-t border-slate-800 flex flex-col gap-2 shrink-0">
+                            <div className="flex justify-between items-center text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                                <span>MI UBICACIÓN: {driverLocation ? "📍 DETECTADA" : "🔴 CARGANDO..."}</span>
+                                <span>TOTAL MARCADORES: {pickups.filter(p => p.latitude && p.longitude).length}</span>
+                            </div>
+                            {selectedPickupForMap && (
+                                <div className="bg-slate-800/85 p-3.5 rounded-2xl flex items-center justify-between gap-3 border border-slate-700">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[8px] font-black text-indigo-400 uppercase tracking-wider">CLIENTE SELECCIONADO</p>
+                                        <h4 className="text-white text-xs font-black truncate uppercase mt-0.5">{selectedPickupForMap.clientName}</h4>
+                                        <p className="text-[9px] font-bold text-slate-300 truncate mt-0.5">{selectedPickupForMap.address}</p>
+                                        {activeRoute && (
+                                            <div className="flex gap-2.5 items-center text-[10px] font-black uppercase text-amber-400 mt-1 tracking-wider">
+                                                <span>🚗 {(activeRoute.distance / 1000).toFixed(1)} km</span>
+                                                <span className="text-slate-600">•</span>
+                                                <span>⏱️ {Math.round(activeRoute.duration / 60)} min</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex gap-2 shrink-0">
+                                        {selectedPickupForMap.phone && (
+                                            <a href={`tel:${selectedPickupForMap.phone}`} className="p-2.5 bg-slate-900 text-white border border-slate-700 hover:bg-slate-850 rounded-xl transition-colors"><Phone size={14} /></a>
+                                        )}
+                                        {selectedPickupForMap.status !== 'COMPLETED' && selectedPickupForMap.status !== 'CANCELLED' && (
+                                            <button 
+                                                onClick={() => {
+                                                    if (selectedPickupForMap.status === 'IN_ROUTE') {
+                                                        handleFinishPickup(selectedPickupForMap);
+                                                    } else {
+                                                        handleStartRoutePickup(selectedPickupForMap);
+                                                    }
+                                                    setShowMapModal(false);
+                                                }}
+                                                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center gap-1.5 shadow-lg shadow-indigo-600/30 transition-all"
+                                            >
+                                                {selectedPickupForMap.status === 'IN_ROUTE' ? <Shirt size={13} /> : <Navigation size={13} />}
+                                                {selectedPickupForMap.status === 'IN_ROUTE' ? 'RECOGER' : 'INICIAR RUTA'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </AnimatePresence>

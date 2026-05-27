@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PickupRequest, Client, Invoice } from '../types';
-import { dbCreatePickupRequest, dbGetPickupRequests, dbGetClients, dbCreateClient, dbUpdatePickupRequest, dbDeletePickupRequest } from '../services/dbService';
+import { dbCreatePickupRequest, dbGetPickupRequests, dbGetClients, dbCreateClient, dbUpdatePickupRequest, dbDeletePickupRequest, dbGetLogisticsDrivers } from '../services/dbService';
 import {
     Headset, Plus, MapPin, Calendar, Clock, AlertCircle, Search,
     Phone, User, StickyNote, CheckCircle2, XCircle, Siren, Navigation, ExternalLink, Hash, X, Save, Edit, RefreshCcw, Image as ImageIcon, Eye, PlusCircle, ChevronDown, Map as MapIcon, Loader2 as LoaderCircle, Truck, Store, Zap, Trash2, Check
@@ -54,6 +54,9 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
     const [priority, setPriority] = useState<'NORMAL' | 'ALTA'>('NORMAL');
     const [notes, setNotes] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    
+    const [drivers, setDrivers] = useState<any[]>([]);
+    const [selectedDriverId, setSelectedDriverId] = useState<string>('');
 
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
     const [pickupToDelete, setPickupToDelete] = useState<PickupRequest | null>(null);
@@ -67,6 +70,7 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
     const [newAddress, setNewAddress] = useState('');
     const [newMapsUrl, setNewMapsUrl] = useState('');
     const [reproMotive, setReproMotive] = useState('');
+    const [newDriverId, setNewDriverId] = useState('');
 
     const [showSuggestions, setShowSuggestions] = useState(false);
     
@@ -75,15 +79,20 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
     const [showMiniMap, setShowMiniMap] = useState(false);
     const [extractedCoords, setExtractedCoords] = useState<{lat: number, lng: number} | null>(null);
 
+    const [selectedPickupForMap, setSelectedPickupForMap] = useState<PickupRequest | null>(null);
+    const [showMapModal, setShowMapModal] = useState(false);
+
     const isDataDirty = useMemo(() => {
         if (!selectedClient) return false;
         const currentPhone = `${selectedCountry.phone}${phone.replace(/\D/g, '')}`;
         return (
             (selectedClient.address || '').trim().toUpperCase() !== address.trim().toUpperCase() ||
             (selectedClient.phone || '') !== currentPhone ||
-            (selectedClient.googleMapsUrl || '') !== mapsUrl
+            (selectedClient.googleMapsUrl || '') !== mapsUrl ||
+            selectedClient.latitude !== extractedCoords?.lat ||
+            selectedClient.longitude !== extractedCoords?.lng
         );
-    }, [selectedClient, address, phone, selectedCountry, mapsUrl]);
+    }, [selectedClient, address, phone, selectedCountry, mapsUrl, extractedCoords]);
 
     // FIX: Buscador mejorado con useMemo y normalización robusta
     const clientSuggestions = useMemo(() => {
@@ -98,9 +107,19 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
 
     useEffect(() => {
         loadRequests();
+        loadDrivers();
         const interval = setInterval(loadRequests, 15000); 
         return () => clearInterval(interval);
     }, []);
+
+    const loadDrivers = async () => {
+        try {
+            const data = await dbGetLogisticsDrivers();
+            setDrivers(data || []);
+        } catch (err) {
+            console.error('Error loading drivers in CallCenter:', err);
+        }
+    };
 
     useEffect(() => {
         if (mapsUrl) {
@@ -133,6 +152,11 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
         setClientName(client.name.toUpperCase());
         setAddress(client.address.toUpperCase());
         setMapsUrl(client.googleMapsUrl || '');
+        if (client.latitude && client.longitude) {
+            setExtractedCoords({ lat: Number(client.latitude), lng: Number(client.longitude) });
+        } else {
+            setExtractedCoords(null);
+        }
         
         const rawPhone = client.phone || '';
         const countryMatch = LATAM_COUNTRIES.find(c => rawPhone.startsWith(c.phone));
@@ -164,11 +188,17 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
         setMapsUrl('');
         setNotes('');
         setExtractedCoords(null);
+        setSelectedDriverId('');
     };
 
     const handleSubmitPickup = async () => {
         if (!selectedClient) {
             alert("Seleccione un cliente primero.");
+            return;
+        }
+
+        if (!selectedDriverId) {
+            alert("Debe seleccionar obligatoriamente un chofer asignado para este cliente.");
             return;
         }
 
@@ -196,7 +226,8 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
                 scheduledDate: date,
                 timeRange,
                 priority,
-                notes: notes.toUpperCase(),
+                notes: `[CHOFER_ID:${selectedDriverId}] ${notes.toUpperCase()}`,
+                chofer_id: selectedDriverId,
                 status: 'PENDING',
                 latitude: extractedCoords?.lat,
                 longitude: extractedCoords?.lng,
@@ -244,12 +275,17 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
         setNewPhone(req.phone);
         setNewAddress(req.address);
         setNewMapsUrl(req.googleMapsUrl || '');
+        setNewDriverId(req.chofer_id || '');
         setReproMotive('');
     };
 
     const handleConfirmReprogram = async () => {
         if (!reprogrammingRequest || !newDate || !reproMotive || !newPhone || !newAddress) {
             alert("Debe completar los campos obligatorios.");
+            return;
+        }
+        if (!newDriverId) {
+            alert("Debe seleccionar obligatoriamente un chofer asignado para la reprogramación.");
             return;
         }
         setIsSaving(true);
@@ -275,7 +311,8 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
                 notes: updatedNotes,
                 status: 'PENDING',
                 latitude: newLat,
-                longitude: newLng
+                longitude: newLng,
+                chofer_id: newDriverId
             });
             setReprogrammingRequest(null);
             await loadRequests();
@@ -313,9 +350,37 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
         return 'LAVANDERÍA';
     };
 
+    const requestsWithCoords = useMemo(() => {
+        return requests.map(req => {
+            let lat = req.latitude;
+            let lng = req.longitude;
+            if (!lat || !lng) {
+                const url = req.googleMapsUrl;
+                if (url) {
+                    const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+                    if (atMatch) {
+                        lat = parseFloat(atMatch[1]);
+                        lng = parseFloat(atMatch[2]);
+                    } else {
+                        const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+                        if (qMatch) {
+                            lat = parseFloat(qMatch[1]);
+                            lng = parseFloat(qMatch[2]);
+                        }
+                    }
+                }
+            }
+            return {
+                ...req,
+                latitude: lat,
+                longitude: lng
+            };
+        });
+    }, [requests]);
+
     const combinedHistory = useMemo(() => {
         if (filter !== 'ALL') return [];
-        const pickups = requests.filter(r => r.status === 'COMPLETED' || r.status === 'FAILED' || r.status === 'IN_ROUTE').map(r => {
+        const pickups = requestsWithCoords.filter(r => r.status === 'COMPLETED' || r.status === 'FAILED' || r.status === 'IN_ROUTE').map(r => {
             const associatedInvoice = invoices.find(inv => inv.pickupId === r.id);
             const itemBase = {
                 id: r.id,
@@ -344,9 +409,9 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
             return { ...itemBase, status: getTrackingLabel(itemBase) };
         });
         return [...pickups, ...storeDeliveries].sort((a, b) => new Date(b.date || '').getTime() - new Date(a.date || '').getTime());
-    }, [requests, invoices, filter]);
+    }, [requestsWithCoords, invoices, filter]);
 
-    const filteredRequests = requests.filter(r => {
+    const filteredRequests = requestsWithCoords.filter(r => {
         if (filter === 'PENDING') return r.status === 'PENDING' || r.status === 'FAILED' || r.status === 'IN_ROUTE';
         if (filter === 'TODAY') {
             const todayStr = new Date().toISOString().split('T')[0];
@@ -457,6 +522,31 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
                         </div>
 
                         <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1.5 font-sans">
+                                <Truck size={16} className="text-gray-400" />
+                                Chofer Asignado (Obligatorio)
+                            </label>
+                            <div className="relative">
+                                <select 
+                                    required
+                                    value={selectedDriverId} 
+                                    onChange={e => setSelectedDriverId(e.target.value)} 
+                                    className="w-full pl-3 pr-10 py-2 border border-blue-200 rounded-xl focus:ring-2 focus:border-indigo-500 outline-none text-sm font-bold bg-blue-50/20 shadow-sm text-slate-900 appearance-none cursor-pointer"
+                                >
+                                    <option value="">-- SELECCIONE UN CHOFER --</option>
+                                    {drivers.map(drv => (
+                                        <option key={drv.id} value={drv.id}>
+                                            🚚 {drv.nombre_completo || drv.username}
+                                        </option>
+                                    ))}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                    <ChevronDown size={14} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">Dirección de Recojo</label>
                             <div className="relative">
                                 <MapPin className="absolute left-3 top-2.5 text-gray-400" size={16} />
@@ -534,93 +624,203 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-100/50 custom-scrollbar">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {filter !== 'ALL' ? filteredRequests.map(req => (
-                            <div 
-                                key={req.id} 
-                                className={`rounded-[2rem] shadow-sm border-2 p-5 relative group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 animate-in slide-in-from-bottom-4 ${req.isSelfScheduled ? 'border-indigo-400 ring-4 ring-indigo-50' : req.priority === 'ALTA' && req.status === 'PENDING' ? 'border-red-400 ring-4 ring-red-50' : 'border-white'}`}
-                                style={{ backgroundColor: req.isSelfScheduled ? `${primaryColor}08` : req.priority === 'ALTA' ? '#fef2f2' : '#ffffff' }}
-                            >
-                                {req.isSelfScheduled && (
-                                    <div className="absolute -top-3 left-4 bg-indigo-600 text-white px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 shadow-lg border-2 border-white">
-                                        <Zap size={10} fill="currentColor"/> AUTOAGENDADO
-                                    </div>
-                                )}
-                                <div className="flex justify-between items-start mb-4 gap-2">
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="font-bold text-slate-900 text-lg uppercase truncate leading-tight" title={req.clientName}>{req.clientName}</h3>
-                                        <div className="flex items-center gap-1.5 text-xs text-indigo-500 mt-1 font-bold"><Phone size={12} strokeWidth={3} /> {req.phone}</div>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-1 shrink-0">
-                                        {req.status === 'COMPLETED' && <div className="text-emerald-500 bg-emerald-50 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border border-emerald-100"><CheckCircle2 size={12} /> RECOGIDO</div>}
-                                        {req.status === 'FAILED' && <div className="text-rose-500 bg-rose-50 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border border-rose-100"><XCircle size={12} /> FALLIDO</div>}
-                                        {req.status === 'PENDING' && req.priority === 'ALTA' && <div className="text-rose-600 animate-pulse flex items-center gap-1 text-[10px] font-bold bg-rose-50 px-2 py-1 rounded-lg border border-rose-100"><Siren size={14} /> URGENTE</div>}
-                                        {req.status === 'IN_ROUTE' && <div className="text-blue-600 animate-pulse flex items-center gap-1 text-[10px] font-bold bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 uppercase tracking-tight"><Navigation size={12} /> EN RUTA</div>}
-                                    </div>
-                                </div>
-                                <div className="space-y-3">
-                                    <div className="flex items-start gap-3 bg-white/50 p-3 rounded-2xl text-slate-700 border border-slate-100/50 backdrop-blur-sm">
-                                        <MapPin size={16} className="mt-0.5 shrink-0 text-slate-400" />
-                                        <span className="text-[11px] font-bold uppercase leading-relaxed text-slate-600">{req.address}</span>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <div className="flex-1 flex items-center gap-2 bg-indigo-50/50 text-indigo-700 px-3 py-2 rounded-xl font-bold text-[10px] border border-indigo-100/50"><Calendar size={14} /> {new Date(req.scheduledDate + 'T12:00').toLocaleDateString('es-PE', { day:'numeric', month:'short' }).toUpperCase()}</div>
-                                        <div className="flex-1 flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-2 rounded-xl font-bold text-[9px] uppercase border border-slate-100"><Clock size={14} /> {req.timeRange}</div>
-                                    </div>
-                                    {req.notes && (
-                                        <div className="text-[10px] text-amber-700 bg-amber-50 p-3 rounded-2xl border border-amber-100 flex items-start gap-2 font-bold uppercase leading-tight italic">
-                                            <StickyNote size={14} className="shrink-0 text-amber-400" /> {req.notes}
+                    {filter !== 'ALL' ? (
+                        <>
+                            {/* VISTA DE TARJETAS EN MÓVIL */}
+                            <div className="grid grid-cols-1 gap-4 md:hidden">
+                                {filteredRequests.map(req => (
+                                    <div 
+                                        key={req.id} 
+                                        className={`rounded-[2rem] shadow-sm border-2 p-5 relative group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 ${req.isSelfScheduled ? 'border-indigo-400 ring-4 ring-indigo-50' : req.priority === 'ALTA' && req.status === 'PENDING' ? 'border-red-400 ring-4 ring-red-50' : 'border-white'}`}
+                                        style={{ backgroundColor: req.isSelfScheduled ? `${primaryColor}08` : req.priority === 'ALTA' ? '#fef2f2' : '#ffffff' }}
+                                    >
+                                        {req.isSelfScheduled && (
+                                            <div className="absolute -top-3 left-4 bg-indigo-600 text-white px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 shadow-lg border-2 border-white">
+                                                <Zap size={10} fill="currentColor"/> AUTOAGENDADO
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between items-start mb-4 gap-2">
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="font-bold text-slate-900 text-lg uppercase truncate leading-tight" title={req.clientName}>{req.clientName}</h3>
+                                                <div className="flex items-center gap-1.5 text-xs text-indigo-500 mt-1 font-bold"><Phone size={12} strokeWidth={3} /> {req.phone}</div>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-1 shrink-0">
+                                                {req.status === 'COMPLETED' && <div className="text-emerald-500 bg-emerald-50 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border border-emerald-100"><CheckCircle2 size={12} /> RECOGIDO</div>}
+                                                {req.status === 'FAILED' && <div className="text-rose-500 bg-rose-50 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border border-rose-100"><XCircle size={12} /> FALLIDO</div>}
+                                                {req.status === 'PENDING' && req.priority === 'ALTA' && <div className="text-rose-600 animate-pulse flex items-center gap-1 text-[10px] font-bold bg-rose-50 px-2 py-1 rounded-lg border border-rose-100"><Siren size={14} /> URGENTE</div>}
+                                                {req.status === 'IN_ROUTE' && <div className="text-blue-600 animate-pulse flex items-center gap-1 text-[10px] font-bold bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 uppercase tracking-tight"><Navigation size={12} /> EN RUTA</div>}
+                                            </div>
                                         </div>
-                                    )}
-                                    <div className="pt-2 flex gap-2">
-                                        <button 
-                                            onClick={() => setTrackingRequestId(req.id)} 
-                                            className="p-3 bg-white hover:bg-indigo-50 text-indigo-600 rounded-2xl border border-slate-100 transition-all flex items-center justify-center shadow-sm group-hover:border-indigo-200"
-                                            title="Seguimiento / Tracking"
-                                        >
-                                            <Navigation size={18} strokeWidth={2.5} />
-                                        </button>
-                                        <button 
-                                            onClick={() => handleReprogramClick(req)} 
-                                            className="flex-1 py-3 bg-slate-900 text-white rounded-2xl transition-all font-bold text-[10px] uppercase flex items-center justify-center gap-2 active:scale-95 shadow-md"
-                                        >
-                                            <RefreshCcw size={14} strokeWidth={3} /> REPROG.
-                                        </button>
-                                        <button 
-                                            onClick={() => setPickupToDelete(req)} 
-                                            className="p-3 bg-red-50 text-red-500 rounded-2xl border border-red-100 transition-all hover:bg-red-500 hover:text-white flex items-center justify-center active:scale-95"
-                                            title="Cancelar / Eliminar"
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )) : combinedHistory.map(item => (
-                            <div key={item.id} className="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 relative group hover:shadow-lg transition-all animate-in fade-in">
-                                <div className="flex justify-between items-start mb-4 gap-2">
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="font-bold text-slate-800 text-sm uppercase truncate">{(item.clientName || '').toUpperCase()}</h3>
-                                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mt-1 uppercase">
-                                            {item.type === 'PICKUP' ? <Store size={14} className="text-blue-500" /> : <Truck size={14} className="text-indigo-500" />}
-                                            {item.type === 'PICKUP' ? 'RECOJO' : 'ENVÍO'}
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2 bg-blue-50/60 text-blue-700 px-3 py-2 rounded-xl font-bold text-[9px] uppercase border border-blue-100">
+                                                <Truck size={12} className="text-blue-500 shrink-0" />
+                                                <span className="truncate">CHOFER: {(drivers.find(d => d.id === req.chofer_id)?.nombre_completo || drivers.find(d => d.id === req.chofer_id)?.username || 'No Asignado').toUpperCase()}</span>
+                                            </div>
+                                            <div className="flex items-start gap-3 bg-white/50 p-3 rounded-2xl text-slate-700 border border-slate-100/50 backdrop-blur-sm">
+                                                <MapPin size={16} className="mt-0.5 shrink-0 text-slate-400" />
+                                                <span className="text-[11px] font-bold uppercase leading-relaxed text-slate-600">{req.address}</span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <div className="flex-1 flex items-center gap-2 bg-indigo-50/50 text-indigo-700 px-3 py-2 rounded-xl font-bold text-[10px] border border-indigo-100/50"><Calendar size={14} /> {new Date(req.scheduledDate + 'T12:00').toLocaleDateString('es-PE', { day:'numeric', month:'short' }).toUpperCase()}</div>
+                                                <div className="flex-1 flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-2 rounded-xl font-bold text-[9px] uppercase border border-slate-100"><Clock size={14} /> {req.timeRange}</div>
+                                            </div>
+                                            {req.notes && (
+                                                <div className="text-[10px] text-amber-700 bg-amber-50 p-3 rounded-2xl border border-amber-100 flex items-start gap-2 font-bold uppercase leading-tight italic">
+                                                    <StickyNote size={14} className="shrink-0 text-amber-400" /> {req.notes}
+                                                </div>
+                                            )}
+                                            <div className="pt-2 flex gap-2">
+                                                <button 
+                                                    onClick={() => { setSelectedPickupForMap(req); setShowMapModal(true); }}
+                                                    className={`p-3 rounded-2xl border transition-all flex items-center justify-center shadow-sm ${req.latitude && req.longitude ? 'bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100' : 'bg-slate-100 border-slate-200 text-slate-400'}`}
+                                                    title="Ver en Mapa"
+                                                    disabled={!req.latitude && !req.longitude}
+                                                >
+                                                    <MapIcon size={18} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => setTrackingRequestId(req.id)} 
+                                                    className="p-3 bg-white hover:bg-indigo-50 text-indigo-600 rounded-2xl border border-slate-100 transition-all flex items-center justify-center shadow-sm group-hover:border-indigo-200"
+                                                    title="Seguimiento / Tracking"
+                                                >
+                                                    <Navigation size={18} strokeWidth={2.5} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleReprogramClick(req)} 
+                                                    className="flex-1 py-3 bg-slate-900 text-white rounded-2xl transition-all font-bold text-[10px] uppercase flex items-center justify-center gap-2 active:scale-95 shadow-md"
+                                                >
+                                                    <RefreshCcw size={14} strokeWidth={3} /> REPROG.
+                                                </button>
+                                                <button 
+                                                    onClick={() => setPickupToDelete(req)} 
+                                                    className="p-3 bg-red-50 text-red-500 rounded-2xl border border-red-100 transition-all hover:bg-red-500 hover:text-white flex items-center justify-center active:scale-95"
+                                                    title="Cancelar / Eliminar"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className={`px-2.5 py-1 rounded-full text-[9px] font-bold border uppercase ${item.status === 'ENTREGADO' || item.status === 'RECOGIDO' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>{item.status}</div>
-                                </div>
-                                <div className="space-y-3">
-                                    <div className="flex items-start gap-2 text-slate-500">
-                                        <MapPin size={14} className="shrink-0 text-slate-300 mt-0.5" />
-                                        <span className="text-[10px] font-bold uppercase leading-tight line-clamp-2">{item.address}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 px-1 border-t border-slate-50 pt-3">
-                                        <div className="flex items-center gap-1.5"><Phone size={12}/> {item.phone}</div>
-                                        <div className="flex items-center gap-1.5"><Calendar size={12}/> {new Date(item.date || '').toLocaleDateString()}</div>
-                                    </div>
-                                </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
+
+                            {/* VISTA DE TABLA EN ESCRITORIO */}
+                            <div className="hidden md:block overflow-hidden bg-white rounded-3xl border border-slate-200/80 shadow-sm">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-slate-50 border-b border-slate-100/85">
+                                            <th className="py-4 px-5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Prioridad</th>
+                                            <th className="py-4 px-5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Cliente</th>
+                                            <th className="py-4 px-5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Teléfono</th>
+                                            <th className="py-4 px-5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Dirección</th>
+                                            <th className="py-4 px-5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Fecha / Hora</th>
+                                            <th className="py-4 px-5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Chofer</th>
+                                            <th className="py-4 px-5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 text-center">Estado</th>
+                                            <th className="py-4 px-5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 text-right">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {filteredRequests.map(req => {
+                                            const driverName = drivers.find(d => d.id === req.chofer_id)?.nombre_completo || drivers.find(d => d.id === req.chofer_id)?.username || 'No Asignado';
+                                            const hasCoords = !!req.latitude && !!req.longitude;
+                                            return (
+                                                <tr key={req.id} className={`hover:bg-slate-50/70 transition-colors ${req.priority === 'ALTA' && req.status === 'PENDING' ? 'bg-red-50/20' : ''}`}>
+                                                    <td className="py-4 px-5">
+                                                        {req.priority === 'ALTA' && req.status === 'PENDING' ? (
+                                                            <span className="inline-flex items-center gap-1 text-[9px] font-extrabold text-red-600 bg-red-100/70 py-1 px-2.5 rounded-full border border-red-200 uppercase tracking-wider animate-pulse"><Siren size={11} /> URGENTE</span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 text-[9px] font-extrabold text-slate-500 bg-slate-100 py-1 px-2.5 rounded-full border border-slate-200 uppercase tracking-wider">NORMAL</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-4 px-5">
+                                                        <div className="font-bold text-slate-900 text-xs uppercase tracking-tight">{req.clientName}</div>
+                                                        {req.isSelfScheduled && <div className="text-[9px] font-extrabold text-indigo-600 mt-0.5 flex items-center gap-1 uppercase">★ Autoagendado</div>}
+                                                    </td>
+                                                    <td className="py-4 px-5 text-xs text-slate-500 font-bold">{req.phone}</td>
+                                                    <td className="py-4 px-5 max-w-[240px]">
+                                                        <div className="text-xs font-semibold text-slate-600 truncate uppercase" title={req.address}>{req.address}</div>
+                                                        {req.notes && <div className="text-[9px] text-amber-600 mt-1 font-bold italic line-clamp-1">{req.notes}</div>}
+                                                    </td>
+                                                    <td className="py-4 px-5">
+                                                        <div className="text-xs font-bold text-slate-700">{new Date(req.scheduledDate + 'T12:00').toLocaleDateString('es-PE', { day:'numeric', month:'short' }).toUpperCase()}</div>
+                                                        <div className="text-[9px] font-extrabold text-slate-400 mt-0.5 uppercase">{req.timeRange}</div>
+                                                    </td>
+                                                    <td className="py-4 px-5">
+                                                        <span className="inline-flex px-2 py-1 rounded-lg text-[9px] font-extrabold uppercase border bg-blue-50 border-blue-100 text-blue-700 truncate max-w-[150px]">{driverName}</span>
+                                                    </td>
+                                                    <td className="py-4 px-5 text-center">
+                                                        {req.status === 'COMPLETED' && <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg text-[10px] font-extrabold"><CheckCircle2 size={11} /> RECOGIDO</span>}
+                                                        {req.status === 'FAILED' && <span className="inline-flex items-center gap-1 text-rose-500 bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-lg text-[10px] font-extrabold"><XCircle size={11} /> FALLIDO</span>}
+                                                        {req.status === 'PENDING' && <span className="inline-flex items-center gap-1 text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg text-[10px] font-extrabold">PENDIENTE</span>}
+                                                        {req.status === 'IN_ROUTE' && <span className="inline-flex items-center gap-1 text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg text-[10px] font-extrabold animate-pulse"><Navigation size={11} /> EN RUTA</span>}
+                                                    </td>
+                                                    <td className="py-4 px-5">
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            <button 
+                                                                onClick={() => { setSelectedPickupForMap(req); setShowMapModal(true); }}
+                                                                className={`p-2 rounded-xl transition-all border ${hasCoords ? 'bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100 hover:scale-105' : 'bg-slate-100 border-slate-200 text-slate-400 opacity-40 cursor-not-allowed'}`}
+                                                                title={hasCoords ? "Ver en Mapa Interno" : "Sin coordenadas asignadas"}
+                                                            >
+                                                                <MapIcon size={14} strokeWidth={2.5} />
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => setTrackingRequestId(req.id)} 
+                                                                className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-200 transition-all hover:scale-105"
+                                                                title="Seguimiento / Tracking"
+                                                            >
+                                                                <Navigation size={14} strokeWidth={2.5} />
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleReprogramClick(req)} 
+                                                                className="p-2 bg-slate-900 hover:opacity-90 text-white rounded-xl transition-all hover:scale-105"
+                                                                title="Reprogramar"
+                                                            >
+                                                                <RefreshCcw size={14} strokeWidth={2.5} />
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => setPickupToDelete(req)} 
+                                                                className="p-2 bg-red-50 hover:bg-red-500 hover:text-white text-red-500 rounded-xl border border-red-100 transition-all hover:scale-105"
+                                                                title="Cancelar / Eliminar"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {combinedHistory.map(item => (
+                                <div key={item.id} className="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 relative group hover:shadow-lg transition-all animate-in fade-in">
+                                    <div className="flex justify-between items-start mb-4 gap-2">
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-bold text-slate-800 text-sm uppercase truncate">{(item.clientName || '').toUpperCase()}</h3>
+                                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mt-1 uppercase">
+                                                {item.type === 'PICKUP' ? <Store size={14} className="text-blue-500" /> : <Truck size={14} className="text-indigo-500" />}
+                                                {item.type === 'PICKUP' ? 'RECOJO' : 'ENVÍO'}
+                                            </div>
+                                        </div>
+                                        <div className={`px-2.5 py-1 rounded-full text-[9px] font-bold border uppercase ${item.status === 'ENTREGADO' || item.status === 'RECOGIDO' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>{item.status}</div>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <div className="flex items-start gap-2 text-slate-500">
+                                            <MapPin size={14} className="shrink-0 text-slate-300 mt-0.5" />
+                                            <span className="text-[10px] font-bold uppercase leading-tight line-clamp-2">{item.address}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 px-1 border-t border-slate-50 pt-3">
+                                            <div className="flex items-center gap-1.5"><Phone size={12}/> {item.phone}</div>
+                                            <div className="flex items-center gap-1.5"><Calendar size={12}/> {new Date(item.date || '').toLocaleDateString()}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -666,6 +866,30 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
                                 <div><label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Nueva Fecha</label><input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full px-3 py-2 border rounded-lg outline-none text-sm font-bold text-slate-900" /></div>
                                 <div><label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Rango Horario</label><select value={newTimeRange} onChange={e => setNewTimeRange(e.target.value)} className="w-full px-3 py-2 border rounded-lg bg-white text-sm font-bold text-slate-900">{TIME_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
                             </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 flex items-center gap-1">
+                                    <Truck size={12} className="text-gray-400" />
+                                    Chofer Asignado (Obligatorio)
+                                </label>
+                                <div className="relative">
+                                    <select 
+                                        required
+                                        value={newDriverId} 
+                                        onChange={e => setNewDriverId(e.target.value)} 
+                                        className="w-full pl-3 pr-10 py-2 border rounded-lg focus:ring-2 focus:border-indigo-500 outline-none text-sm font-bold bg-white text-slate-900 appearance-none cursor-pointer"
+                                    >
+                                        <option value="">-- SELECCIONE UN CHOFER --</option>
+                                        {drivers.map(drv => (
+                                            <option key={drv.id} value={drv.id}>
+                                                🚚 {drv.nombre_completo || drv.username}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                        <ChevronDown size={14} />
+                                    </div>
+                                </div>
+                            </div>
                             <div><label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Motivo / Notas</label><textarea required value={reproMotive} onChange={e => setReproMotive(e.target.value.toUpperCase())} placeholder="Motivo de la reprogramación..." className="w-full p-3 border rounded-lg outline-none text-sm h-24 resize-none uppercase font-bold text-slate-900" /></div>
                         </div>
                         <div className="p-4 border-t bg-gray-50 flex justify-end gap-3">
@@ -677,6 +901,46 @@ const CallCenter: React.FC<CallCenterProps> = ({ apiToken, onRefreshData, client
                     </div>
                 </div>
             )}
+
+            {showMapModal && (
+                <div className="fixed inset-0 z-[1000] flex flex-col bg-slate-950/95 animate-in fade-in duration-200">
+                    {/* Header */}
+                    <div className="p-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center text-white shrink-0">
+                        <div>
+                            <h3 className="font-extrabold text-xs uppercase tracking-wider flex items-center gap-1.5 text-indigo-400">
+                                <MapIcon size={16} className="animate-pulse" /> MAPA DE UBICACIÓN - CALL CENTER
+                            </h3>
+                            {selectedPickupForMap && (
+                                <p className="text-[10px] font-bold text-slate-300 uppercase tracking-wide mt-1">
+                                    RECOJO DE: <span className="text-amber-400 font-extrabold">{selectedPickupForMap.clientName}</span> | {selectedPickupForMap.address}
+                                </p>
+                            )}
+                        </div>
+                        <button 
+                            onClick={() => { setShowMapModal(false); setSelectedPickupForMap(null); }}
+                            className="p-3 bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-all shadow-md active:scale-95"
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
+                    
+                    {/* Body */}
+                    <div className="flex-1 relative">
+                        <LeafletMap 
+                            items={requestsWithCoords} 
+                            selectedItem={selectedPickupForMap} 
+                            previewLocation={null} 
+                        />
+                    </div>
+                    
+                    {/* Footer */}
+                    <div className="p-4 bg-slate-900 border-t border-slate-800 flex justify-between items-center text-[10px] font-black uppercase text-slate-400 tracking-wider shrink-0">
+                        <span className="truncate max-w-2xl">DIRECCIÓN: {selectedPickupForMap?.address || "Hacer click en un marcador para ver detalles"}</span>
+                        <span>Total de Visitas Agendadas: {requestsWithCoords.filter(req => req.latitude && req.longitude).length}</span>
+                    </div>
+                </div>
+            )}
+
             <style>{`.custom-scrollbar::-webkit-scrollbar { width: 6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }`}</style>
         </div>
     );

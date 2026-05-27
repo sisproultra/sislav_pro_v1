@@ -33,16 +33,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function testQuery() {
-    console.log(`🚀 Buscando en usuarios_login para inspeccionar columnas...`);
+    console.log(`🚀 Buscando en recojos_delivery para inspeccionar columnas...`);
     const { data, error } = await supabase
-        .from("usuarios_login")
+        .from("recojos_delivery")
         .select("*")
         .limit(1);
 
     if (error) {
         console.error('❌ Error:', error);
     } else if (!data || data.length === 0) {
-        console.warn('⚠️ No se encontraron registros en usuarios_login');
+        console.warn('⚠️ No se encontraron registros en recojos_delivery');
     } else {
         console.log('✅ Registro encontrado. Columnas:', Object.keys(data[0]));
         console.log('✅ Ejemplo de registro:', data[0]);
