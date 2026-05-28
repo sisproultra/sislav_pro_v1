@@ -6,12 +6,21 @@ import { dbValidateCoupon, dbRedeemCoupon } from '../services/dbService';
 interface PreCheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (data: { deliveryDate: string | undefined, notes: string, prePaymentAmount: number, discountAmount: number, paymentDetailsStr: string, paymentsList?: { methodName: string, amount: number }[] }) => void;
+  onConfirm: (data: { 
+      deliveryDate: string | undefined; 
+      notes: string; 
+      prePaymentAmount: number; 
+      discountAmount: number; 
+      paymentDetailsStr: string; 
+      paymentsList?: { methodName: string, amount: number }[];
+      issueDate?: string; 
+  }) => void;
   totalAmount: number;
   paymentMethods: PaymentMethodConfig[];
   isDelivery?: boolean; 
   cart?: CartItem[]; 
   company: Company;
+  initialIssueDate?: string;
 }
 
 interface PaymentEntry {
@@ -29,7 +38,7 @@ const TIME_OPTIONS = [
     "07:00 PM", "08:00 PM", "09:00 PM", "10:00 PM"
 ];
 
-const PreCheckoutModal: React.FC<PreCheckoutModalProps> = ({ isOpen, onClose, onConfirm, totalAmount, paymentMethods, isDelivery = false, cart = [], company }) => {
+const PreCheckoutModal: React.FC<PreCheckoutModalProps> = ({ isOpen, onClose, onConfirm, totalAmount, paymentMethods, isDelivery = false, cart = [], company, initialIssueDate }) => {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('05:00 PM');
   const [notes, setNotes] = useState('');
@@ -41,10 +50,30 @@ const PreCheckoutModal: React.FC<PreCheckoutModalProps> = ({ isOpen, onClose, on
   const [couponError, setCouponError] = useState('');
   const [showDateConfirmation, setShowDateConfirmation] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [issueDate, setIssueDate] = useState('');
 
   const currency = company?.currencySymbol || 'S/';
   const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim() || '#0054A6';
   const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--brand-secondary').trim() || '#10B981';
+
+  const getIssueDateValidation = (selectedDateStr: string): { isValid: boolean; error?: string } => {
+      if (!selectedDateStr) return { isValid: false, error: 'Fecha inválida' };
+      
+      const sel = new Date(selectedDateStr + 'T12:00:00');
+      const today = new Date();
+      today.setHours(12, 0, 0, 0);
+      
+      const diffTime = today.getTime() - sel.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (sel > today) {
+          return { isValid: false, error: 'La fecha no puede ser futura' };
+      }
+      if (diffDays > 2) {
+          return { isValid: false, error: 'La fecha no puede tener más de 2 días de antigüedad' };
+      }
+      return { isValid: true };
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -60,8 +89,9 @@ const PreCheckoutModal: React.FC<PreCheckoutModalProps> = ({ isOpen, onClose, on
         setIsCouponMode(false);
         setCouponError('');
         setShowDateConfirmation(false);
+        setIssueDate(initialIssueDate || new Date().toISOString().split('T')[0]);
     }
-  }, [isOpen, totalAmount, isDelivery]);
+  }, [isOpen, totalAmount, isDelivery, initialIssueDate]);
 
   const discountVal = parseFloat(discount) || 0;
   const netTotal = Math.max(0, totalAmount - discountVal);
@@ -156,7 +186,8 @@ const PreCheckoutModal: React.FC<PreCheckoutModalProps> = ({ isOpen, onClose, on
               prePaymentAmount: totalPaid - change, 
               discountAmount: discountVal,
               paymentDetailsStr: paymentStr,
-              paymentsList: paymentsList
+              paymentsList: paymentsList,
+              issueDate: issueDate
           });
       } catch (e) {
           console.error(e);
@@ -336,7 +367,7 @@ const PreCheckoutModal: React.FC<PreCheckoutModalProps> = ({ isOpen, onClose, on
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 md:gap-4">
+                    <div className="grid grid-cols-2 gap-3 md:gap-4 font-sans">
                         <div className="space-y-1 md:space-y-2"><label className="block text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1"><Calendar size={12}/> Fecha Entrega</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl md:rounded-2xl px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-indigo-500 transition-all" /></div>
                         <div className="space-y-1 md:space-y-2"><label className="block text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1"><Clock size={12}/> Hora Entrega</label><div className="relative"><select value={time} onChange={e => setTime(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl md:rounded-2xl px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-indigo-500 transition-all appearance-none">{TIME_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div></div>
                     </div>
@@ -346,7 +377,7 @@ const PreCheckoutModal: React.FC<PreCheckoutModalProps> = ({ isOpen, onClose, on
                   <button 
                     onClick={handleInitialConfirm} 
                     style={{ backgroundColor: primaryColor }} 
-                    className="w-full py-4 md:py-5 rounded-2xl md:rounded-[2.2rem] font-bold text-xs md:text-sm uppercase tracking-[0.25em] shadow-xl md:shadow-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-3 md:gap-4 text-white shadow-indigo-600/20"
+                    className="w-full py-4 md:py-5 rounded-2xl md:rounded-[2.2rem] font-bold text-xs md:text-sm uppercase tracking-[0.25em] shadow-xl md:shadow-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-3 md:gap-4 text-white shadow-indigo-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Check strokeWidth={4} className="w-5 h-5 md:w-6 md:h-6" /> Finalizar Venta
                   </button>

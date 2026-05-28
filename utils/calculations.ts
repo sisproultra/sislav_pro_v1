@@ -15,13 +15,13 @@ export const calculateTotals = (items: CartItem[], igvPercentage: number = 18.00
   const igvFactor = 1 + (igvPercentage / 100);
 
   items.forEach(item => {
-    // Calculamos el subtotal de la línea basándonos en el precio que ya incluye IGV
-    // Si la empresa usa el redondeo a 1 decimal para el público, lo respetamos aquí
-    const lineTotal = roundToOneDecimal(item.price * item.quantity);
+    // Calculamos el subtotal de la línea basándonos en el precio que ya incluye IGV y restando el descuento_unitario
+    const discountedPrice = Math.max(0, item.price - (item.descuento_unitario || 0));
+    const lineTotal = roundToOneDecimal(discountedPrice * item.quantity);
     
     if (item.igvType === IgvType.GRAVADO) {
       // Valor Unitario (Sin IGV) con 4 decimales para SUNAT
-      item.valor_unitario = Number((item.price / igvFactor).toFixed(4));
+      item.valor_unitario = Number((discountedPrice / igvFactor).toFixed(4));
       // IGV del ítem con 4 decimales
       item.igv_item = Number((lineTotal - (lineTotal / igvFactor)).toFixed(4));
       
@@ -32,11 +32,11 @@ export const calculateTotals = (items: CartItem[], igvPercentage: number = 18.00
       igv += (lineTotal - itemBase);
     } else if (item.igvType === IgvType.EXONERADO) {
       exonerada += lineTotal;
-      item.valor_unitario = item.price;
+      item.valor_unitario = discountedPrice;
       item.igv_item = 0;
     } else if (item.igvType === IgvType.INAFECTO) {
       inafecta += lineTotal;
-      item.valor_unitario = item.price;
+      item.valor_unitario = discountedPrice;
       item.igv_item = 0;
     }
   });
@@ -80,6 +80,11 @@ export const formatOrderNumber = (num: number, config: Company): string => {
  */
 export const formatDateSafe = (dateStr: string | undefined): string => {
     if (!dateStr) return '-';
+    // Si es una fecha YYYY-MM-DD, la formateamos directamente para evitar offsets de zona horaria (UTC)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        const [year, month, day] = dateStr.split('-');
+        return `${day}/${month}/${year}`;
+    }
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return '-';
     return d.toLocaleDateString(undefined, { 
@@ -137,4 +142,19 @@ export const getPeruDateTime = () => {
     const time = `${getPart('hour')}:${getPart('minute')}:${getPart('second')}`;
     
     return { date, time, iso: `${date}T${time}` };
+};
+
+/**
+ * Retorna la fecha de Perú (hoy) restándole 2 días, en formato YYYY-MM-DD.
+ */
+export const getRetroactivePeruDate = (): string => {
+    const { date } = getPeruDateTime();
+    const [year, month, day] = date.split('-').map(Number);
+    const pDate = new Date(year, month - 1, day);
+    pDate.setDate(pDate.getDate() - 2);
+    
+    const yStr = pDate.getFullYear();
+    const mStr = String(pDate.getMonth() + 1).padStart(2, '0');
+    const dStr = String(pDate.getDate()).padStart(2, '0');
+    return `${yStr}-${mStr}-${dStr}`;
 };

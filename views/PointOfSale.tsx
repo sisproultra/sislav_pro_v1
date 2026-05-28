@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, ShoppingBasket, ShoppingCart, Trash2, Plus, Minus, User, X, Save, Loader2, CheckCircle2, Ticket, Layers, PlusCircle, ClipboardEdit, Camera, Mic, AlertTriangle, ShieldAlert, Pause, Play, Clock, History, Crown, RefreshCcw, Image as ImageIcon, Bell, Shirt, Edit2, Check, DollarSign, WashingMachine, FileText, ListPlus } from 'lucide-react';
+import { Search, ShoppingBasket, ShoppingCart, Trash2, Plus, Minus, User, X, Save, Loader2, CheckCircle2, Ticket, Layers, PlusCircle, ClipboardEdit, Camera, Mic, AlertTriangle, ShieldAlert, Pause, Play, Clock, History, Crown, RefreshCcw, Image as ImageIcon, Bell, Shirt, Edit2, Check, DollarSign, WashingMachine, FileText, ListPlus, Calendar, CalendarCheck, AlertCircle } from 'lucide-react';
 import { Product, CartItem, InvoiceType, InvoiceTotals, Client, PaymentMethodConfig, PickupRequest, Category, UnitCode, GlobalColor, Company, PausedSale, UmSaas } from '../types';
-import { calculateTotals, roundToOneDecimal } from '../utils/calculations';
+import { calculateTotals, roundToOneDecimal, getPeruDateTime, getRetroactivePeruDate, formatDateSafe } from '../utils/calculations';
 import { dbUploadImage, dbGetPopularityData } from '../services/dbService';
 import { printQuoteDirectly } from '../utils/printService';
 import ClientModal from '../components/ClientModal';
@@ -25,9 +25,22 @@ interface PointOfSaleProps {
   addToCart: (product: Product, forceNew?: boolean) => void;
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
-  updatePrice: (id: string, price: number) => void;
+  updatePrice: (id: string, price: number, discount?: number) => void;
   updateDetails: (id: string, details: string, images?: string[], audioNote?: string, deliveryDate?: string, newQuantity?: number) => void;
-  onCheckout: (docType: InvoiceType, client: Client, paymentMethodId: string, deliveryDate?: string, notes?: string, prePayment?: number, discount?: number, customerPhotos?: string[], paymentsList?: { methodName: string, amount: number }[], cartOverride?: CartItem[], pickupOverride?: string) => Promise<void>;
+  onCheckout: (
+      docType: InvoiceType, 
+      client: Client, 
+      paymentMethodId: string, 
+      deliveryDate?: string, 
+      notes?: string, 
+      prePayment?: number, 
+      discount?: number, 
+      customerPhotos?: string[], 
+      paymentsList?: { methodName: string, amount: number }[], 
+      cartOverride?: CartItem[], 
+      pickupOverride?: string,
+      issueDate?: string
+  ) => Promise<void>;
   onAddClient: (client: Client) => Promise<Client>;
   onOpenInventoryModal: () => void;
   paymentMethods: PaymentMethodConfig[];
@@ -77,6 +90,10 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
   const [showNoClientAlert, setShowNoClientAlert] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [nagVisible, setNagVisible] = useState(false);
+
+  // Estados para Facturación Retroactiva SUNAT
+  const [isRetroactiveActive, setIsRetroactiveActive] = useState(false);
+  const [isRetroactiveModalOpen, setIsRetroactiveModalOpen] = useState(false);
   
   const [activeTab, setActiveTab] = useState<'CATALOG' | 'CART'>('CATALOG');
   const [addedProductId, setAddedProductId] = useState<string | null>(null);
@@ -91,6 +108,7 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
 
   const [editingPriceItem, setEditingPriceItem] = useState<CartItem | null>(null);
   const [tempPrice, setTempPrice] = useState<string>('');
+  const [tempDiscount, setTempDiscount] = useState<string>('');
 
   const [customerPhotos, setCustomerPhotos] = useState<string[]>([]);
   const searchCache = useRef<Record<string, Client[]>>({});
@@ -461,7 +479,7 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
     setIsPreCheckoutOpen(true);
   };
 
-  const handleFinalCheckout = async (data: { deliveryDate: string | undefined, notes: string, prePaymentAmount: number, discountAmount: number, paymentDetailsStr: string, paymentsList?: { methodName: string, amount: number }[] }) => {
+  const handleFinalCheckout = async (data: { deliveryDate: string | undefined, notes: string, prePaymentAmount: number, discountAmount: number, paymentDetailsStr: string, paymentsList?: { methodName: string, amount: number }[], issueDate?: string }) => {
       const clientToProcess = activeClientData;
       const photosToProcess = [...customerPhotos];
 
@@ -502,7 +520,9 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
                   data.discountAmount,
                   photosToProcess, 
                   data.paymentsList,
-                  adjustedCart // ENVIAMOS EL CARRITO CON CANTIDADES AJUSTADAS INTERNAMENTE
+                  adjustedCart, // ENVIAMOS EL CARRITO CON CANTIDADES AJUSTADAS INTERNAMENTE
+                  undefined, // pickupOverride
+                  data.issueDate // ENVIAMOS FECHA DE EMISIÓN DE COMPROBANTE SELECTIVA (SUNAT)
               );
           }
           if (initialPickupRequest) onClearPickupRequest();
@@ -611,13 +631,15 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
   const handleStartEditPrice = (item: CartItem) => {
     setEditingPriceItem(item);
     setTempPrice(item.price.toString());
+    setTempDiscount((item.descuento_unitario || 0).toString());
   };
 
   const handleSavePrice = () => {
     if (!editingPriceItem) return;
-    const val = parseFloat(tempPrice);
-    if (!isNaN(val) && val >= 0) {
-        updatePrice(editingPriceItem.id, val);
+    const priceVal = parseFloat(tempPrice);
+    const discountVal = parseFloat(tempDiscount) || 0;
+    if (!isNaN(priceVal) && priceVal >= 0) {
+        updatePrice(editingPriceItem.id, priceVal, discountVal);
     }
     setEditingPriceItem(null);
   };
@@ -976,16 +998,41 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
                     <div className="bg-indigo-50 text-indigo-600 px-1.5 md:px-2 py-0.5 md:py-1 rounded-lg text-[8px] md:text-[9px] font-bold border border-indigo-100 uppercase tracking-widest">Puntos: +{Math.floor(totals.total / (company.pointsEquivalency || 10))}</div>
                 </div>
             </div>
-            <button 
-                onClick={handleCheckoutClick} 
-                disabled={cart.length === 0 || isProcessing || !canManage}
-                style={{ backgroundColor: primaryColor }}
-                className="w-full py-3.5 md:py-4 rounded-xl md:rounded-[1.8rem] text-white font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] shadow-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 md:gap-3 disabled:opacity-50 disabled:grayscale group shadow-indigo-600/30"
-            >
-                {isProcessing ? <Loader2 className="animate-spin" /> : (
-                    !canManage ? "ACCESO RESTRINGIDO" : <><CheckCircle2 strokeWidth={3} className="w-5 h-5 md:w-6 md:h-6 group-hover:scale-110 transition-transform" /> PROCESAR VENTA</>
-                )}
-            </button>
+            <div className="flex gap-2 items-stretch w-full">
+                <button 
+                    onClick={() => setIsRetroactiveModalOpen(true)}
+                    className={`px-3.5 rounded-xl md:rounded-[1.8rem] border-2 transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-sm relative shrink-0 ${
+                        isRetroactiveActive 
+                            ? 'bg-amber-50 border-amber-400 text-amber-700 shadow-amber-200/40' 
+                            : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                    }`}
+                    title="Configurar Fecha Retroactiva (SUNAT)"
+                    type="button"
+                >
+                    <Clock size={16} className={`${isRetroactiveActive ? 'text-amber-600 animate-pulse' : 'text-slate-400'}`} />
+                    <img 
+                        src="https://i.ibb.co/twcHbM44/Anotaci-n-2026-05-27-231150.png" 
+                        alt="Retroactivo" 
+                        referrerPolicy="no-referrer"
+                        className="h-6 w-auto min-w-[24px] object-contain rounded-md"
+                    />
+                    {isRetroactiveActive && (
+                        <span className="absolute -top-1.5 -right-1 flex h-4 w-4 items-center justify-center bg-amber-500 rounded-full text-[8px] font-bold text-white uppercase border border-white animate-bounce">
+                            ✓
+                        </span>
+                    )}
+                </button>
+                <button 
+                    onClick={handleCheckoutClick} 
+                    disabled={cart.length === 0 || isProcessing || !canManage}
+                    style={{ backgroundColor: primaryColor }}
+                    className="flex-1 py-3.5 md:py-4 rounded-xl md:rounded-[1.8rem] text-white font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] shadow-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 md:gap-3 disabled:opacity-50 disabled:grayscale group shadow-indigo-600/30"
+                >
+                    {isProcessing ? <Loader2 className="animate-spin" /> : (
+                        !canManage ? "ACCESO RESTRINGIDO" : <><CheckCircle2 strokeWidth={3} className="w-5 h-5 md:w-6 md:h-6 group-hover:scale-110 transition-transform" /> PROCESAR VENTA</>
+                    )}
+                </button>
+            </div>
         </div>
       </div>
 
@@ -1005,20 +1052,45 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
                           <p className="text-sm font-bold text-slate-800 uppercase tracking-widest mb-1">{editingPriceItem.name}</p>
                           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Precio Catálogo: {currency} {editingPriceItem.originalPrice?.toFixed(2) || editingPriceItem.price.toFixed(2)}</p>
                       </div>
-                      <div className="relative">
-                          <input 
-                            type="number"
-                            step="0.01"
-                            value={tempPrice}
-                            onChange={e => setTempPrice(e.target.value)}
-                            style={{ borderColor: '#f1f5f9' }} // border-slate-100 fallback
-                            className="w-full bg-slate-100 border-2 rounded-2xl py-5 px-6 text-3xl font-bold text-slate-900 outline-none focus:bg-white transition-all text-center shadow-inner"
-                            autoFocus
-                            onKeyDown={e => {
-                                if (e.key === 'Enter') handleSavePrice();
-                                if (e.key === 'Escape') setEditingPriceItem(null);
-                            }}
-                          />
+                      <div className="space-y-4">
+                          <div>
+                              <label className="block text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center">Precio Unitario (S/)</label>
+                              <input 
+                                type="number"
+                                step="0.01"
+                                value={tempPrice}
+                                onChange={e => setTempPrice(e.target.value)}
+                                style={{ borderColor: '#f1f5f9' }} 
+                                className="w-full bg-slate-100 border-2 rounded-2xl py-3 px-4 text-2xl font-bold text-slate-900 outline-none focus:bg-white transition-all text-center shadow-inner"
+                                autoFocus
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') handleSavePrice();
+                                    if (e.key === 'Escape') setEditingPriceItem(null);
+                                }}
+                              />
+                          </div>
+
+                          <div>
+                              <label className="block text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center">Descuento por Unidad (S/)</label>
+                              <input 
+                                type="number"
+                                step="0.01"
+                                value={tempDiscount}
+                                onChange={e => {
+                                    const val = parseFloat(e.target.value);
+                                    if (isNaN(val)) setTempDiscount('');
+                                    else if (val > parseFloat(tempPrice)) setTempDiscount(tempPrice);
+                                    else setTempDiscount(e.target.value);
+                                }}
+                                style={{ borderColor: '#f1f5f9' }} 
+                                className="w-full bg-slate-100 border-2 rounded-2xl py-3 px-4 text-2xl font-bold text-indigo-600 outline-none focus:bg-white transition-all text-center shadow-inner"
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') handleSavePrice();
+                                    if (e.key === 'Escape') setEditingPriceItem(null);
+                                }}
+                                placeholder="0.00"
+                              />
+                          </div>
                       </div>
                       <button 
                         onClick={handleSavePrice}
@@ -1052,7 +1124,137 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
             company={company}
             isDelivery={initialPickupRequest !== null} 
             cart={cart}
+            initialIssueDate={isRetroactiveActive ? getRetroactivePeruDate() : undefined}
         />
+      )}
+
+      {/* MODAL CONFIGURACIÓN FACTURACIÓN RETROACTIVA */}
+      {isRetroactiveModalOpen && (
+          <div className="fixed inset-0 bg-slate-950/75 z-[400] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+              <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.3)] overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+                  <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center bg-white">
+                      <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-amber-500 text-white rounded-2xl shadow-lg shadow-amber-500/20">
+                              <CalendarCheck size={18} />
+                          </div>
+                          <div>
+                              <h3 className="font-bold text-xs uppercase tracking-widest text-slate-800">Fecha de Emisión</h3>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide">Configuración SUNAT</p>
+                          </div>
+                      </div>
+                      <button 
+                          onClick={() => setIsRetroactiveModalOpen(false)} 
+                          className="p-1.5 hover:bg-slate-200 rounded-full transition-colors text-slate-400"
+                      >
+                          <X size={18}/>
+                      </button>
+                  </div>
+
+                  <div className="p-6 space-y-5">
+                      {/* Imagen de referencia */}
+                      <div className="bg-slate-50 border border-slate-100 p-3 rounded-2xl text-center flex flex-col items-center justify-center gap-2">
+                          <span className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest block">Ubicación de Guía de Pago</span>
+                          <img 
+                              src="https://i.ibb.co/twcHbM44/Anotaci-n-2026-05-27-231150.png" 
+                              alt="Referencia SUNAT" 
+                              referrerPolicy="no-referrer"
+                              className="max-h-20 rounded-md shadow-sm border border-slate-200/50"
+                          />
+                      </div>
+
+                      {/* Opciones de Emisión */}
+                      <div className="grid grid-cols-2 gap-3">
+                          <button
+                              type="button"
+                              onClick={() => {
+                                  setIsRetroactiveActive(false);
+                              }}
+                              className={`p-3 rounded-2xl border-2 transition-all text-left flex flex-col gap-1.5 ${
+                                  !isRetroactiveActive 
+                                      ? 'border-indigo-600 bg-indigo-50/30' 
+                                      : 'border-slate-100 bg-white hover:bg-slate-50'
+                              }`}
+                          >
+                              <span className={`text-[10px] font-bold uppercase tracking-wider ${!isRetroactiveActive ? 'text-indigo-600' : 'text-slate-500'}`}>Emisión Hoy</span>
+                              <span className="text-[8px] text-slate-400 leading-normal font-sans">Fecha automática al procesar venta actual.</span>
+                          </button>
+                          
+                          <button
+                              type="button"
+                              onClick={() => {
+                                  setIsRetroactiveActive(true);
+                              }}
+                              className={`p-3 rounded-2xl border-2 transition-all text-left flex flex-col gap-1.5 ${
+                                  isRetroactiveActive 
+                                      ? 'border-amber-500 bg-amber-50/30' 
+                                      : 'border-slate-100 bg-white hover:bg-slate-50'
+                              }`}
+                          >
+                              <span className={`text-[10px] font-bold uppercase tracking-wider ${isRetroactiveActive ? 'text-amber-600' : 'text-slate-500'}`}>Retroactivo</span>
+                              <span className="text-[8px] text-slate-400 leading-normal font-sans">Emitir con fecha anterior (Permitido hasta 2 días).</span>
+                          </button>
+                      </div>
+
+                      {/* Explicación Dinámica */}
+                      <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl space-y-3">
+                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                              <span>Emisión en tiempo real</span>
+                              <span className={isRetroactiveActive ? "text-amber-600 animate-pulse font-sans" : "text-indigo-600 font-sans"}>
+                                  {isRetroactiveActive ? "● RETROACTIVO" : "● NORMAL"}
+                              </span>
+                          </div>
+                          
+                          <div className="space-y-2">
+                              <div className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm">
+                                  <span className="text-slate-400 font-bold uppercase text-[9px] font-sans">Fecha Local (Hoy):</span>
+                                  <span className="font-bold text-slate-700 font-mono text-xs">{formatDateSafe(getPeruDateTime().date)}</span>
+                              </div>
+                              
+                              <div className={`flex justify-between items-center p-2.5 rounded-xl border transition-all shadow-sm ${
+                                  isRetroactiveActive 
+                                      ? "bg-amber-50/50 border-amber-200" 
+                                      : "bg-white border-slate-100 opacity-60"
+                              }`}>
+                                  <span className="text-slate-400 font-bold uppercase text-[9px] flex items-center gap-1 font-sans">
+                                      <Clock size={10} className={isRetroactiveActive ? "text-amber-500" : ""} /> Fecha Comprobantes:
+                                  </span>
+                                  <span className={`font-black font-mono text-xs ${isRetroactiveActive ? "text-amber-700" : "text-slate-600"}`}>
+                                      {isRetroactiveActive ? formatDateSafe(getRetroactivePeruDate()) : formatDateSafe(getPeruDateTime().date)}
+                                  </span>
+                              </div>
+                          </div>
+
+                          {isRetroactiveActive ? (
+                              <p className="text-[9px] text-amber-600 font-bold leading-normal uppercase tracking-wide bg-amber-50 border border-amber-200/50 p-3 rounded-xl font-sans text-center">
+                                  ⚠️ Los comprobantes se emitirán dos días atrás de forma dinámica (ej. si es medianoche se recalcula automáticamente). Es la modalidad admitida por SUNAT.
+                              </p>
+                          ) : (
+                              <p className="text-[9px] text-indigo-600 font-bold leading-normal uppercase tracking-wide bg-indigo-50 border border-indigo-200/50 p-3 rounded-xl font-sans text-center">
+                                  ✓ Recomendado para transacciones en tiempo real. El sistema usará la hora y fecha fiscal actual de Perú.
+                              </p>
+                          )}
+                      </div>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+                      <button 
+                          onClick={() => setIsRetroactiveModalOpen(false)}
+                          className="flex-1 py-3 border border-slate-200 hover:bg-slate-200 transition-colors bg-white rounded-xl font-bold text-[10px] uppercase tracking-widest text-slate-500"
+                      >
+                          Cerrar
+                      </button>
+                      <button 
+                          onClick={() => {
+                              setIsRetroactiveModalOpen(false);
+                          }}
+                          style={{ backgroundColor: isRetroactiveActive ? '#D97706' : primaryColor }}
+                          className="flex-1 py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest text-white shadow-md active:scale-95 transition-all"
+                      >
+                          Confirmar
+                      </button>
+                  </div>
+              </div>
+          </div>
       )}
 
       {selectedCartItemForMultiDetail && (

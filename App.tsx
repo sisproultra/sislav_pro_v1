@@ -52,7 +52,7 @@ import {
 } from './services/dbService';
 import { getSaasGlobalConfig } from './services/saasService';
 import { sendBillToSunat, sendSummaryToSunat } from './services/sunatService';
-import { calculateTotals, formatOrderNumber, roundToOneDecimal } from './utils/calculations';
+import { calculateTotals, formatOrderNumber, roundToOneDecimal, getPeruDateTime } from './utils/calculations';
 import { EvolutionService } from './services/evolutionService';
 import { printInvoiceDirectly } from './utils/printService';
 import SaaSLogin from './views/SaaSLogin';
@@ -1675,24 +1675,29 @@ export default function App() {
     const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
     const [isSupplyModalOpen, setIsSupplyModalOpen] = useState(false);
 
-    const handleCheckout = async (t: InvoiceType, client: Client, paymentMethodStr: string, deliveryDate?: string, notes?: string, prePayment?: number, discount?: number, customerPhotos: string[] = [], paymentsList: { methodName: string, amount: number }[] = [], cartOverride?: CartItem[], pickupOverride?: string): Promise<void> => {
+    const handleCheckout = async (t: InvoiceType, client: Client, paymentMethodStr: string, deliveryDate?: string, notes?: string, prePayment?: number, discount?: number, customerPhotos: string[] = [], paymentsList: { methodName: string, amount: number }[] = [], cartOverride?: CartItem[], pickupOverride?: string, issueDate?: string): Promise<void> => {
         const finalCart = cartOverride || cart;
         const totals = calculateTotals(finalCart, activeSucursal.porcentajeIgv);
         const now = new Date().toISOString();
         const serie = t === InvoiceType.FACTURA ? activeSucursal.serieFactura : t === InvoiceType.BOLETA ? activeSucursal.serieBoleta : activeSucursal.serieNotaVenta;
         
+        // Formatos de fecha y SUNAT
+        const finalFechaEmision = issueDate || getPeruDateTime().date;
+
         const localInvoiceTemplate: any = {
             sucursal_id: activeSucursal.id, 
             cliente_id: client.id, 
             totals: totals, 
             type: t, 
             date: now, 
+            fecha_emision: finalFechaEmision,
             serie: serie, 
             orderStatus: 'RECIBIDO', 
             paymentMethod: paymentMethodStr, 
             prePaymentAmount: prePayment, 
             deliveryDate: deliveryDate, 
             notes: notes, 
+            discount: discount || 0,
             origin: (pickupOverride || initialPickupForPos?.id) ? 'DELIVERY' : 'TIENDA',
             pickup_id: pickupOverride || initialPickupForPos?.id
         };
@@ -1711,7 +1716,7 @@ export default function App() {
                 correlativo: savedVenta.correlativo,
                 ordenNumber: savedVenta.codigo_orden,
                 sunatStatus: t === InvoiceType.NOTA_VENTA ? 'INTERNAL' : 'PENDING',
-                qrCodeData: `${activeSucursal.ruc}|${t}|${serie}|${savedVenta.correlativo}|${totals.igv.toFixed(2)}|${totals.total.toFixed(2)}|${now.split('T')[0]}|${client.docType === 'RUC' ? '6' : '1'}|${client.docNumber}|`
+                qrCodeData: `${activeSucursal.ruc}|${t}|${serie}|${savedVenta.correlativo}|${totals.igv.toFixed(2)}|${totals.total.toFixed(2)}|${finalFechaEmision}|${client.docType === 'RUC' ? '6' : '1'}|${client.docNumber}|`
             };
             
             // Trigger bot check-in on first sale of the day
@@ -1983,17 +1988,19 @@ export default function App() {
                     removeFromCart={(id) => setCart(prev => prev.filter(i => i.id !== id))} 
                     updateQuantity={(id, q) => setCart(prev => prev.map(i => i.id === id ? (() => {
                         const isWeightUnit = [UmSaas.KILO, UmSaas.METROS, UmSaas.LITRO].includes(i.um_saas as UmSaas);
-                        const subtotal = roundToOneDecimal(q * i.price);
+                        const disc = i.descuento_unitario || 0;
+                        const subtotal = roundToOneDecimal(q * Math.max(0, i.price - disc));
                         const finalQty = isWeightUnit ? q : Math.round(q);
                         return { ...i, quantity: finalQty, subtotal };
                     })() : i))} 
-                    updatePrice={(id, p) => setCart(prev => prev.map(i => i.id === id ? (() => {
-                        const subtotal = roundToOneDecimal(i.quantity * p);
-                        return { ...i, price: p, subtotal };
+                    updatePrice={(id, p, d = 0) => setCart(prev => prev.map(i => i.id === id ? (() => {
+                        const subtotal = roundToOneDecimal(i.quantity * Math.max(0, p - d));
+                        return { ...i, price: p, descuento_unitario: d, subtotal };
                     })() : i))} 
                     updateDetails={(id, det, imgs, aud, date, newQty) => setCart(prev => prev.map(i => i.id === id ? (() => {
                         const q = newQty !== undefined ? newQty : i.quantity;
-                        const subtotal = roundToOneDecimal(q * i.price);
+                        const disc = i.descuento_unitario || 0;
+                        const subtotal = roundToOneDecimal(q * Math.max(0, i.price - disc));
                         const isWeightUnit = [UmSaas.KILO, UmSaas.METROS, UmSaas.LITRO].includes(i.um_saas as UmSaas);
                         const finalQty = isWeightUnit ? q : Math.round(q);
                         return { 

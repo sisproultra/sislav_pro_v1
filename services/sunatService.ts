@@ -109,7 +109,8 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
         "total_inafecta": safeNumber(invoice.totals.inafecta),
         "total_gratuita": "0.00",
         "total_otros_cargos": "0.00",
-        "total_descuento": "0.00",
+        "total_descuento": safeNumber(invoice.descuento || 0),
+        "descuento_global": safeNumber(invoice.descuento || 0),
         "total_exportacion": "0.00",
         "total_venta": safeNumber(invoice.totals.total),
         "total_pago": safeNumber(invoice.totals.total),
@@ -138,26 +139,35 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
         const itemIgvType = item.igvType || '10';
         const cantidadOriginal = Number(item.quantity) || 0;
         const precioOriginal = Number(item.price) || 0;
+        const descuentoUnitario = Number(item.descuento_unitario) || 0;
+        
+        const precioConDescuento = Math.max(0, precioOriginal - descuentoUnitario);
         
         // IMPORTANTE: El total de línea debe redondearse igual que en calculateTotals (roundToOneDecimal)
         // para que la suma de ítems coincida con el total de venta en la cabecera.
-        const totalLine = Math.floor((precioOriginal * cantidadOriginal) * 10 + 0.0001) / 10;
+        const totalLine = Math.floor((precioConDescuento * cantidadOriginal) * 10 + 0.0001) / 10;
         
         let valorUnitario;
         let subtotal;
         let igv;
+        let precioBase;
+        let descuentoPrecioBase;
 
         if (itemIgvType === '10') {
             // Gravado: Desglosamos el IGV del total de la línea (ya redondeado a 1 decimal)
             subtotal = Number((totalLine / igvFactor).toFixed(2));
             igv = Number((totalLine - subtotal).toFixed(2));
             // Recalculamos el valor unitario para que cuadre exactamente con el subtotal
-            valorUnitario = cantidadOriginal > 0 ? subtotal / cantidadOriginal : (precioOriginal / igvFactor);
+            valorUnitario = cantidadOriginal > 0 ? subtotal / cantidadOriginal : (precioConDescuento / igvFactor);
+            precioBase = precioOriginal / igvFactor;
+            descuentoPrecioBase = descuentoUnitario / igvFactor;
         } else {
             // Exonerado / Inafecto
             subtotal = totalLine;
             igv = 0;
-            valorUnitario = precioOriginal;
+            valorUnitario = precioConDescuento;
+            precioBase = precioOriginal;
+            descuentoPrecioBase = descuentoUnitario;
         }
         
         return {
@@ -165,7 +175,8 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
             "cantidad": cantidadOriginal.toFixed(6),
             "valor_unitario": valorUnitario.toFixed(10),
             "precio_unitario": precioOriginal.toFixed(6),
-            "precio_base": valorUnitario.toFixed(10), 
+            "precio_base": precioBase.toFixed(10), 
+            "descuento_precio_base": descuentoPrecioBase.toFixed(10),
             "codigo_sunat": "",
             "codigo_producto": item.id ? item.id.substring(0, 15) : `p-${idx}`,
             "codigo_unidad": item.unitCode || 'NIU', 

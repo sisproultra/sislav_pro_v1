@@ -10,7 +10,7 @@ import {
     ORDER_STATUS_MAP, Employee, GlobalColor, PromoBanner, ItemDetalle, SunatResponse, CampaignTemplate,
     InventoryCount, GuiaRemision, WaTemplate, WaTemplateCategory
 } from '../types';
-import { formatOrderNumber, getNextLetter } from '../utils/calculations';
+import { formatOrderNumber, getNextLetter, roundToOneDecimal } from '../utils/calculations';
 import { fixEncoding } from '../utils/stringUtils';
 import { getSaasGlobalConfig } from './saasService';
 
@@ -1596,13 +1596,17 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
         // Si tenemos detalles por unidad (ej: 4 sacos con colores distintos), desglosamos en N filas
         if (detailsArray.length > 0) {
             detailsArray.forEach((audit, idx) => {
-                const unitPrice = it.price;
-                const unitSubtotal = it.price; // Subtotal de una sola unidad
+                const discUnit = it.descuento_unitario || 0;
+                const origPrice = it.price;
+                const finalUnitPrice = Math.max(0, origPrice - discUnit);
                 
                 itemsPayload.push({
                     ...it,
                     quantity: 1, // Una sola unidad por fila desglosada
-                    subtotal: unitSubtotal,
+                    precio_original: origPrice,
+                    precio_unitario: finalUnitPrice,
+                    descuento_item: discUnit,
+                    subtotal: finalUnitPrice,
                     color: audit.color || it.color,
                     defectos: audit.defectos || it.defectos,
                     details: audit.observaciones || "",
@@ -1615,9 +1619,20 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
             });
         } else {
             // Comportamiento normal: Una sola fila para la cantidad total
+            const discUnit = it.descuento_unitario || 0;
+            const origPrice = it.price;
+            const finalUnitPrice = Math.max(0, origPrice - discUnit);
+            const qty = it.quantity || 1;
+            const totDisc = discUnit * qty;
+            const finalSubtotal = roundToOneDecimal(finalUnitPrice * qty);
+
             itemsPayload.push({
                 ...it,
-                peso: (it.peso_estimado || 0.400) * it.quantity
+                precio_original: origPrice,
+                precio_unitario: finalUnitPrice,
+                descuento_item: totDisc,
+                subtotal: finalSubtotal,
+                peso: (it.peso_estimado || 0.400) * qty
             });
         }
     });
@@ -1688,7 +1703,9 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
             cash_session_id: activeSession?.id || null,
             fecha_recepcion: getPeruTimestamp(),
             documento_referencia_id: invoice.relatedDocument || null,
-            notes: invoice.notes || null // Persistir las notas (razón de la NC si aplica)
+            notes: invoice.notes || null, // Persistir las notas (razón de la NC si aplica)
+            fecha_emision: invoice.fecha_emision || null,
+            descuento: invoice.discount || 0
         }).eq('id', result.id);
 
         if (activeSession?.id) {

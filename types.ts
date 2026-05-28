@@ -219,6 +219,7 @@ export interface CartItem extends Product {
     valor_unitario?: number;
     igv_item?: number;
     descuento_item?: number;
+    descuento_unitario?: number;
     photoUrl?: string;
     voiceNoteUrl?: string;
 }
