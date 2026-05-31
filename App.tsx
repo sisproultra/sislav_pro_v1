@@ -1574,7 +1574,19 @@ export default function App() {
         // 1. Optimistic update for Invoices
         setInvoices(prevInvs => prevInvs.map(inv => {
             if (inv.id === orderId) {
-                return { ...inv, items: inv.items.map(it => itemIds.includes(it.id) ? { ...it, status } : it) };
+                const newItems = inv.items.map(it => itemIds.includes(it.id) ? { ...it, status } : it);
+                
+                // Verificar si todos los items activos están entregados
+                const activeItems = newItems.filter(it => !((it as any).estado_id === 9 || (it.status as any) === 'ANULADO' || it.status === 'CANCELADO'));
+                const isAllDelivered = activeItems.length > 0 && activeItems.every(it => it.status === 'ENTREGADO');
+                
+                const updates: any = { items: newItems };
+                if (isAllDelivered) {
+                    updates.orderStatus = 'ENTREGADO';
+                    updates.entregado_at = new Date().toISOString();
+                }
+                
+                return { ...inv, ...updates };
             }
             return inv;
         }));
@@ -1624,6 +1636,24 @@ export default function App() {
 
         try { 
             await dbUpdateItemStatus(orderId, itemIds, status, machineId, duration, totalKg); 
+            
+            // Si el estado enviado es ENTREGADO y todos los items de la orden están en ENTREGADO, actualizamos también el estado general del comprobante
+            if (status === 'ENTREGADO') {
+                const targetInv = invoices.find(inv => inv.id === orderId);
+                if (targetInv) {
+                    const tempItems = targetInv.items.map(it => itemIds.includes(it.id) ? { ...it, status } : it);
+                    const activeItems = tempItems.filter(it => !((it as any).estado_id === 9 || (it.status as any) === 'ANULADO' || it.status === 'CANCELADO'));
+                    const isAllDelivered = activeItems.length > 0 && activeItems.every(it => it.status === 'ENTREGADO');
+                    if (isAllDelivered) {
+                        try {
+                            await dbUpdateInvoiceStatus(orderId, 'ENTREGADO');
+                        } catch (err) {
+                            console.warn("⚠️ No se pudo actualizar el estado de cabecera de la venta a ENTREGADO en la Base de Datos:", err);
+                        }
+                    }
+                }
+            }
+
             // After successful DB update, we can invalidate to ensure sync
             if (branchId) {
                 queryClient.invalidateQueries({ queryKey: ['activeItems', branchId] });
@@ -1641,11 +1671,24 @@ export default function App() {
                 const newItems = inv.items.map(it => itemIds.includes(it.id) ? { ...it, status: 'ENTREGADO' as OrderStatus } : it);
                 const addedPayment = payments.reduce((sum, p) => sum + p.amount, 0);
                 const newPrePayment = (inv.prePaymentAmount || 0) + addedPayment;
-                return { 
-                    ...inv, 
+                
+                // Verificar si todos los items activos están entregados
+                const activeItems = newItems.filter(it => !((it as any).estado_id === 9 || (it.status as any) === 'ANULADO' || it.status === 'CANCELADO'));
+                const isAllDelivered = activeItems.length > 0 && activeItems.every(it => it.status === 'ENTREGADO');
+                
+                const updates: any = { 
                     items: newItems, 
                     prePaymentAmount: newPrePayment,
                     descuento: discount !== undefined ? discount : inv.descuento
+                };
+                if (isAllDelivered) {
+                    updates.orderStatus = 'ENTREGADO';
+                    updates.entregado_at = new Date().toISOString();
+                }
+                
+                return { 
+                    ...inv, 
+                    ...updates
                 };
             }
             return inv;
@@ -1657,6 +1700,17 @@ export default function App() {
             if (discount !== undefined) tasks.push(dbUpdateInvoiceDiscount(orderId, discount));
             for (const p of payments) { tasks.push(dbAddPayment(orderId, p.amount, p.methodName, authSession?.user?.id, activeCashSession?.id)); }
             if (itemIds.length > 0) tasks.push(dbUpdateItemStatus(orderId, itemIds, 'ENTREGADO'));
+            
+            // Verificar si el estado final debería ser ENTREGADO en DB
+            const targetInv = invoices.find(inv => inv.id === orderId);
+            if (targetInv) {
+                const tempItems = targetInv.items.map(it => itemIds.includes(it.id) ? { ...it, status: 'ENTREGADO' as OrderStatus } : it);
+                const activeItems = tempItems.filter(it => !((it as any).estado_id === 9 || (it.status as any) === 'ANULADO' || it.status === 'CANCELADO'));
+                const isAllDelivered = activeItems.length > 0 && activeItems.every(it => it.status === 'ENTREGADO');
+                if (isAllDelivered) {
+                    tasks.push(dbUpdateInvoiceStatus(orderId, 'ENTREGADO'));
+                }
+            }
             
             await Promise.all(tasks);
             // Sincronización final silenciosa

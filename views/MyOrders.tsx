@@ -870,8 +870,14 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5">
-                                                    <div className="flex justify-center items-center">
+                                                    <div className="flex flex-col items-center justify-center gap-1">
                                                         <CircularProgress percent={deliveredPercent} color="#10b981" />
+                                                        {(inv.orderStatus === 'ENTREGADO' || deliveredPercent === 100) && (
+                                                            <div className="text-[10px] text-emerald-600 font-mono font-bold bg-emerald-50 border border-emerald-100 rounded-md px-1.5 py-0.5 mt-1 text-center leading-tight animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                                                <div>{formatDateSafe(inv.entregado_at || inv.date)}</div>
+                                                                <div className="text-[9px] text-emerald-500 font-medium">{formatTimeSafe(inv.entregado_at || inv.date)}</div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5">
@@ -996,9 +1002,19 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-2">
-                                                 <CircularProgress percent={readyPercent} color="#3b82f6" />
-                                                 <CircularProgress percent={deliveredPercent} color="#10b981" />
+                                            <div className="flex gap-2 items-start">
+                                                 <div className="flex flex-col items-center justify-center">
+                                                     <CircularProgress percent={readyPercent} color="#3b82f6" />
+                                                 </div>
+                                                 <div className="flex flex-col items-center justify-center">
+                                                     <CircularProgress percent={deliveredPercent} color="#10b981" />
+                                                     {(inv.orderStatus === 'ENTREGADO' || deliveredPercent === 100) && (
+                                                         <div className="text-[9px] text-emerald-600 font-mono font-bold bg-emerald-50 border border-emerald-100 rounded-md px-1 py-0.5 mt-1 text-center leading-tight">
+                                                             <div>{formatDateSafe(inv.entregado_at || inv.date)}</div>
+                                                             <div className="text-[8px] text-emerald-500 font-medium">{formatTimeSafe(inv.entregado_at || inv.date)}</div>
+                                                         </div>
+                                                     )}
+                                                 </div>
                                             </div>
                                         </div>
 
