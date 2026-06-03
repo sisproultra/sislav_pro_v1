@@ -143,6 +143,7 @@ export interface Client extends BaseEntity {
     latitude?: number;
     longitude?: number;
     googleMapsUrl?: string;
+    suscrito?: boolean;
 }
 
 export type OrderStatus = 'PENDIENTE' | 'RECIBIDO' | 'EN_LAVADO' | 'EN_SECADO' | 'LISTO' | 'EN_RUTA' | 'ENTREGADO' | 'ENTREGA_PARCIAL' | 'CANCELADO' | 'NO_ENTREGADO' | 'LISTO_PARA_RECOJO' | 'EN_TRANSITO_CENTRAL' | 'RECIBIDO_CENTRAL' | 'PROCESANDO_CENTRAL' | 'LISTO_PARA_RETORNO' | 'EN_TRANSITO_ACOPIO' | 'RECIBIDO_ACOPIO';
@@ -565,6 +566,7 @@ export const SYSTEM_MODULES: PermissionDefinition[] = [
     { id: 'view:bonus_points', label: 'Puntos Bonus', description: 'Gestión de puntos y canjes', category: 'MARKETING' },
     { id: 'view:promotions', label: 'Promociones', description: 'Ofertas, packs y descuentos', category: 'MARKETING' },
     { id: 'view:wa_campaign', label: 'Campaña de Marketing', description: 'Marketing masivo por WhatsApp', category: 'MARKETING' },
+    { id: 'view:memberships', label: 'Membresías', description: 'Control de suscripciones de kilos mensuales', category: 'MARKETING' },
     { id: 'view:wa_reminders', label: 'Recordatorio', description: 'Recordatorios de recojo de prendas', category: 'PRINCIPAL' },
     
     { id: 'view:modificaciones', label: 'Modificar', description: 'Edición de tickets y boletas', category: 'ADMINISTRACIÓN' },
@@ -611,6 +613,7 @@ export const DEFAULT_BRANCH_MODULES: Record<string, boolean> = {
   'view:bonus_points':    false,
   'view:promotions':      false,
   'view:wa_campaign':     false,
+  'view:memberships':     true,
   'DEV_CONFIG':           false,
 };
 

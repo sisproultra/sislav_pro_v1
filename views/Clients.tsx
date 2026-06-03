@@ -168,6 +168,7 @@ const Clients: React.FC<ClientsProps> = ({
                   <th className="px-4 py-4 w-40">CONTACTO</th>
                   <th className="px-4 py-4">DIRECCIÓN</th>
                   <th className="px-4 py-4 text-center w-24">PUNTOS</th>
+                  <th className="px-4 py-4 text-center w-36">MEMBRESÍA</th>
                   <th className="px-4 py-4 text-center w-28">CUMPLEAÑOS</th>
                   <th className="px-4 py-4 text-center w-40">ACCIONES</th>
                 </tr>
@@ -196,9 +197,14 @@ const Clients: React.FC<ClientsProps> = ({
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-gray-800 uppercase tracking-tight truncate max-w-[250px]" title={c.name}>
+                            <span className="font-bold text-gray-800 uppercase tracking-tight truncate max-w-[200px]" title={c.name}>
                               {c.name}
                             </span>
+                            {c.suscrito && (
+                              <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-xs shrink-0 select-none" title="Socio de Membresía Activa">
+                                <Crown size={9} fill="currentColor" /> SUSCRITO
+                              </span>
+                            )}
                             {c.alertMessage && (
                               <div 
                                 className={`w-2 h-2 rounded-full animate-pulse shrink-0 ${
@@ -240,6 +246,17 @@ const Clients: React.FC<ClientsProps> = ({
                              <Crown size={10} fill="currentColor" />
                              <span className="text-[10px] font-bold">{points}</span>
                           </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {c.suscrito ? (
+                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-black px-2 py-1 rounded-full shadow-xs animate-pulse">
+                              <Crown size={10} fill="currentColor" /> ACTIVO
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-gray-400 text-[10px] font-bold px-2 py-1">
+                              INACTIVO
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span className="text-gray-600 font-bold text-[10px]">

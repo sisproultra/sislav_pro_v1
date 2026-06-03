@@ -103,6 +103,7 @@ const LogisticsDriverPOS = lazy(() => import('./views/LogisticsDriverPOS'));
 const CashClosingView = lazy(() => import('./views/CashClosing'));
 const ProductCounting = lazy(() => import('./views/ProductCounting'));
 const Modificaciones = lazy(() => import('./views/Modificaciones'));
+const Memberships = lazy(() => import('./views/Memberships'));
 
 import { ModuleLoadingSkeleton } from './components/ModuleLoadingSkeleton';
 
@@ -1736,7 +1737,9 @@ export default function App() {
         const serie = t === InvoiceType.FACTURA ? activeSucursal.serieFactura : t === InvoiceType.BOLETA ? activeSucursal.serieBoleta : activeSucursal.serieNotaVenta;
         
         // Formatos de fecha y SUNAT
-        const finalFechaEmision = issueDate || getPeruDateTime().date;
+        const finalFechaEmision = issueDate 
+            ? (issueDate.includes('T') ? issueDate : `${issueDate}T${getPeruDateTime().time}`) 
+            : getPeruDateTime().iso;
 
         const localInvoiceTemplate: any = {
             sucursal_id: activeSucursal.id, 
@@ -1810,7 +1813,7 @@ export default function App() {
                 inv.id === invoice.id 
                     ? { 
                         ...inv, 
-                        sunatStatus: (sunatRes.success ? 'ACCEPTED' : 'REJECTED') as any,
+                        sunatStatus: (sunatRes.success ? 'ACCEPTED' : (sunatRes.isPending ? 'PENDING' : 'REJECTED')) as any,
                         sunatResponse: {
                             success: sunatRes.success,
                             description: sunatRes.description,
@@ -2167,6 +2170,7 @@ export default function App() {
             case 'view:package_inventory': return <PackageInventory invoices={invoices} onUpdateStatus={dbUpdateInvoiceStatus} company={activeSucursal} />;
             case 'view:product_counting': return <ProductCounting authSession={authSession!} products={products} />;
             case 'view:loyalty': return <Loyalty company={activeSucursal} canManage={canManageApp} />;
+            case 'view:memberships': return <Memberships company={activeSucursal} canManage={canManageApp} onSaveCompany={async (c) => { await dbUpdateSucursalConfig(c.id, c); setActiveSucursal({ ...c }); localStorage.setItem('sislav_active_sucursal', JSON.stringify(c)); refreshData(true); }} />;
             case 'view:bonus_points': return <BonusPoints company={activeSucursal} products={products} onSaveCompany={async (c) => { await dbUpdateSucursalConfig(c.id, c); setActiveSucursal({ ...c }); localStorage.setItem('sislav_active_sucursal', JSON.stringify(c)); refreshData(true); }} onUpdateProduct={(id, p) => { productMutation.mutate({ id, updates: p }); return Promise.resolve(); }} canManage={canManageApp} />;
             case 'view:promotions': {
                 return <Promotions 
@@ -2243,7 +2247,7 @@ export default function App() {
                 metricsGlobal={waRemindersMetrics}
                 setMetricsGlobal={setWaRemindersMetrics}
             />;
-            case 'view:reports': return <Reports expenses={expenses} invoices={invoices} clients={clients} company={activeSucursal} />;
+            case 'view:reports': return <Reports expenses={expenses} invoices={invoices} clients={clients} company={activeSucursal} paymentMethods={paymentMethods} />;
             case 'view:my_reports': return <MyReports invoices={invoices} paymentMethods={paymentMethods} company={activeSucursal} />;
             case 'view:accounting': return <Accounting invoices={invoices} paymentMethods={paymentMethods} company={activeSucursal} />;
             case 'view:modificaciones': return <Modificaciones invoices={invoices} products={products} company={activeSucursal} paymentMethods={paymentMethods} onRefresh={() => refreshData(true)} canManage={canManageApp} checkCajaOpen={checkCajaOpen} />;

@@ -78,6 +78,7 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
   const [localClientSuggestions, setLocalClientSuggestions] = useState<Client[]>([]);
   const [clientError, setClientError] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [editingClientForModal, setEditingClientForModal] = useState<Client | null>(null);
   const [isPreCheckoutOpen, setIsPreCheckoutOpen] = useState(false);
   const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -543,6 +544,7 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
         const saved = await onAddClient(c);
         setSelectedClient(saved);
         setIsClientModalOpen(false);
+        setEditingClientForModal(null);
         if (saved.alertMessage) setIsAlertModalOpen(true);
     } catch (e) { alert("Error al guardar cliente"); }
     finally { setIsProcessing(false); }
@@ -894,7 +896,7 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
                 )}
               </div>
               {canManage && (
-                <button onClick={() => setIsClientModalOpen(true)} style={{ backgroundColor: primaryColor }} className="text-white px-2 rounded-xl font-bold text-[9px] uppercase shadow-md active:scale-95 transition-all flex items-center gap-1 shrink-0"><Plus size={12} strokeWidth={3}/> NUEVO</button>
+                <button onClick={() => { setEditingClientForModal(null); setIsClientModalOpen(true); }} style={{ backgroundColor: primaryColor }} className="text-white px-2 rounded-xl font-bold text-[9px] uppercase shadow-md active:scale-95 transition-all flex items-center gap-1 shrink-0"><Plus size={12} strokeWidth={3}/> NUEVO</button>
               )}
             </div>
             {activeClientData && (
@@ -904,7 +906,8 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
                         <div className={`font-bold text-[10px] truncate uppercase ${hasInsufficientPoints && totalPointsNeeded > 0 ? 'text-red-900' : 'text-indigo-900'}`}>{activeClientData.name}</div>
                         <div className="flex items-center gap-2"><div className="text-[9px] font-bold" style={{ color: primaryColor }}>{activeClientData.docType}: {activeClientData.docNumber}</div><div className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border flex items-center gap-1 ${hasInsufficientPoints && totalPointsNeeded > 0 ? 'bg-red-600 text-white border-red-700' : 'bg-amber-100 text-amber-700 border-amber-200'}`}><Crown size={8} fill="currentColor" /> {activeClientData.points || 0} PTS</div></div>
                     </div>
-                    <button onClick={() => setSelectedClient(null)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={14}/></button>
+                    <button type="button" onClick={() => { setEditingClientForModal(activeClientData); setIsClientModalOpen(true); }} className="text-slate-400 hover:text-indigo-600 transition-colors mr-1 p-1 hover:bg-white rounded-lg shadow-sm" title="Editar datos del cliente"><Edit2 size={13}/></button>
+                    <button onClick={() => { setSelectedClient(null); setEditingClientForModal(null); }} className="text-slate-400 hover:text-red-500 transition-colors p-1 hover:bg-white rounded-lg shadow-sm" title="Quitar cliente"><X size={13}/></button>
                 </div>
             )}
 
@@ -1106,9 +1109,13 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
 
       <ClientModal 
         isOpen={isClientModalOpen} 
-        onClose={() => setIsClientModalOpen(false)} 
+        onClose={() => {
+            setIsClientModalOpen(false);
+            setEditingClientForModal(null);
+        }} 
         onSave={handleNewClientSave} 
         apiToken={apiToken} 
+        initialData={editingClientForModal}
         initialDocType={getInitialClientDocType()} 
         clientsList={clients} 
         onSearchDatabase={onSearchClients}

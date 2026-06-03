@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Client } from '../types';
-import { X, Search, Loader2, Save, User, MapPin, Phone, Calendar, ChevronDown, Check, AlertTriangle, Camera, Navigation, Hash } from 'lucide-react';
+import { X, Search, Loader2, Save, User, MapPin, Phone, Calendar, ChevronDown, Check, AlertTriangle, Camera, Navigation, Hash, Crown } from 'lucide-react';
 import { searchClient } from '../services/clientService';
 
 interface ClientModalProps {
@@ -68,6 +68,7 @@ const ClientModal: React.FC<ClientModalProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [duplicateClient, setDuplicateClient] = useState<Client | null>(null);
   const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
+  const [suscrito, setSuscrito] = useState(false);
 
   // Robustly get primary color from CSS or fallback
   const primaryColor = typeof window !== 'undefined' ? 
@@ -108,6 +109,7 @@ const ClientModal: React.FC<ClientModalProps> = ({
         setGender(initialData.gender as any || 'Otro');
         setAlertMessage(initialData.alertMessage || '');
         setAlertColor(initialData.alertColor as any || 'blue');
+        setSuscrito(initialData.suscrito || false);
         if (initialData.birthday) {
             const parts = initialData.birthday.split('-');
             if (parts.length === 3) {
@@ -171,6 +173,7 @@ const ClientModal: React.FC<ClientModalProps> = ({
     setShowSuggestions(false);
     setDuplicateClient(null);
     setShowDuplicateAlert(false);
+    setSuscrito(false);
   };
 
   const handleDocNumberChange = (value: string) => {
@@ -254,6 +257,7 @@ const ClientModal: React.FC<ClientModalProps> = ({
     setAlertMessage(client.alertMessage || '');
     setAlertColor(client.alertColor as any || 'blue');
     setSunatStatus(client.sunatStatus || '');
+    setSuscrito(client.suscrito || false);
     setSunatCondition(client.sunatCondition || '');
     setEmail(client.email || '');
     setRuc(client.ruc || '');
@@ -371,7 +375,8 @@ const ClientModal: React.FC<ClientModalProps> = ({
       sunatCondition,
       id: initialData?.id || '',
       points: initialData?.points || 0,
-      sucursal_id: initialData?.sucursal_id || ''
+      sucursal_id: initialData?.sucursal_id || '',
+      suscrito
     });
     
     onClose();
@@ -545,6 +550,32 @@ const ClientModal: React.FC<ClientModalProps> = ({
                                                 <option value="Otro">OTRO</option>
                                             </select>
                                         </div>
+                                    </div>
+
+                                    {/* SWITCH DE MEMBRESÍA */}
+                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                                                <Crown size={15} fill="currentColor" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-slate-700 uppercase tracking-tight">Socio de Membresía</p>
+                                                <p className="text-[9px] text-slate-400 font-bold uppercase">Activar o desactivar cuenta de suscripción</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSuscrito(!suscrito)}
+                                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
+                                                suscrito ? 'bg-amber-500' : 'bg-slate-200'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                                    suscrito ? 'translate-x-5' : 'translate-x-0'
+                                                }`}
+                                            />
+                                        </button>
                                     </div>
                                 </div>
                             </div>

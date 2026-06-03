@@ -31,7 +31,15 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
   const peruTime = getPeruDateTime();
   const dateToUse = invoice.fecha_emision || invoice.date;
   const fechaEmision = dateToUse ? dateToUse.split('T')[0] : peruTime.date;
-  const horaEmision = dateToUse ? new Date(dateToUse).toLocaleTimeString('en-GB') : peruTime.time;
+  
+  let horaEmision = peruTime.time;
+  if (dateToUse && dateToUse.includes('T')) {
+      const parts = dateToUse.split('T');
+      if (parts[1]) {
+          // Tomar sólo HH:MM:SS de la parte de hora
+          horaEmision = parts[1].split('.')[0].split('-')[0].split('+')[0];
+      }
+  }
 
   const cleanDoc = (doc: string) => (doc || "").replace(/[^0-9]/g, '').trim();
   const cleanText = (text: string) => (text || "").toUpperCase().replace(/[<>&"']/g, '').trim();
@@ -216,8 +224,10 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
       
       if (!response.ok) {
           const errorText = await response.text();
+          const isPending = response.status >= 500;
           return { 
               success: false, 
+              isPending,
               description: `Error del servidor API (${response.status}): ${errorText.substring(0, 100)}` 
           };
       }
@@ -226,7 +236,7 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
       console.log("Respuesta bruta de SUNAT API:", responseText);
 
       if (!responseText || responseText.trim() === "") {
-          return { success: false, description: "Error: La API de SUNAT devolvió una respuesta vacía." };
+          return { success: false, isPending: true, description: "Error: La API de SUNAT devolvió una respuesta vacía." };
       }
 
       let body;
@@ -264,7 +274,7 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
           };
       }
   } catch (e: any) {
-      return { success: false, description: "Error de comunicación: " + e.message };
+      return { success: false, isPending: true, description: "Error de comunicación: " + e.message };
   }
 };
 

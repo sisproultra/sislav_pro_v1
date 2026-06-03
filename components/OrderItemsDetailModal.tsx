@@ -9,7 +9,7 @@ import {
   Check, Archive, Landmark, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Invoice, OrderStatus, GlobalColor, PaymentMethodConfig } from '../types';
-import { dbGetInvoiceFull } from '../services/dbService';
+import { dbGetInvoiceFull, dbUpdateItemObservations } from '../services/dbService';
 import { formatDateSafe, formatTimeSafe, formatDateTimeSafe } from '../utils/calculations';
 
 interface OrderItemsDetailModalProps {
@@ -31,6 +31,9 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [editingCell, setEditingCell] = useState<{ itemIdx: number; uIdx: number } | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+  const [isSavingDetail, setIsSavingDetail] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const brandPrimary = document.documentElement.style.getPropertyValue('--brand-primary').trim() || '#0054A6';
@@ -51,6 +54,54 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
       } finally {
           setIsLoading(false);
       }
+  };
+
+  const handleSaveSingleDetail = async (item: any, itemIdx: number, uIdx: number, newValue: string) => {
+    setIsSavingDetail(true);
+    try {
+      const rawSource = item.observaciones || item.details || '';
+      let updatedObservaciones = '';
+
+      if (rawSource && typeof rawSource === 'string' && rawSource.trim().startsWith('[')) {
+        const parsed = JSON.parse(rawSource);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (parsed[uIdx]) {
+            parsed[uIdx].observaciones = newValue.toUpperCase();
+            parsed[uIdx].details = newValue.toUpperCase();
+          }
+          updatedObservaciones = JSON.stringify(parsed);
+        }
+      } else {
+        updatedObservaciones = newValue.toUpperCase();
+      }
+
+      await dbUpdateItemObservations(item.id, updatedObservaciones);
+      
+      // Update local invoice state immediately to avoid reloading lag
+      if (invoice) {
+        const updatedItems = invoice.items.map((it: any, idx: number) => {
+          if (idx === itemIdx) {
+            return {
+              ...it,
+              observaciones: updatedObservaciones,
+              details: updatedObservaciones
+            };
+          }
+          return it;
+        });
+        setInvoice({
+          ...invoice,
+          items: updatedItems
+        });
+      }
+
+      setEditingCell(null);
+    } catch (e) {
+      console.error("Error al guardar el detalle:", e);
+      alert("No se pudo guardar el cambio. Intente de nuevo.");
+    } finally {
+      setIsSavingDetail(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -290,7 +341,66 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
                                           ))}
                                         </div>
                                       )}
-                                      <p className="text-[10px] text-slate-600 font-bold uppercase leading-tight line-clamp-1">{unit.details || 'Sin notas'}</p>
+                                      
+                                      {editingCell?.itemIdx === itemIdx && editingCell?.uIdx === uIdx ? (
+                                        <div className="flex flex-col gap-1.5 w-full max-w-xs animate-in slide-in-from-top-1 duration-200">
+                                          <textarea
+                                            value={editValue}
+                                            onChange={(e) => setEditValue(e.target.value)}
+                                            className="w-full px-3 py-1.5 text-[10px] font-bold text-slate-900 uppercase bg-slate-50 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none leading-normal min-h-[50px]"
+                                            placeholder="Escribe la nota/detalle aquí..."
+                                            autoFocus
+                                          />
+                                          <div className="flex items-center gap-1.5 self-end">
+                                            <button
+                                              onClick={() => setEditingCell(null)}
+                                              className="px-2 py-1 text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                                              title="Cancelar"
+                                            >
+                                              Cancelar
+                                            </button>
+                                            <button
+                                              onClick={() => handleSaveSingleDetail(item, itemIdx, uIdx, editValue)}
+                                              disabled={isSavingDetail}
+                                              className="px-2 py-1 text-[8px] font-black uppercase tracking-[0.2em] rounded-md transition-all flex items-center gap-1 border"
+                                              style={{ 
+                                                color: brandPrimary, 
+                                                borderColor: `${brandPrimary}30`, 
+                                                backgroundColor: `${brandPrimary}08` 
+                                              }}
+                                              title="Guardar"
+                                            >
+                                              {isSavingDetail ? (
+                                                <>
+                                                  <Loader2 size={10} className="animate-spin" /> Guardando...
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Check size={10} strokeWidth={3} /> Guardar
+                                                </>
+                                              )}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2 group/note justify-between min-h-[22px]">
+                                          <p className="text-[10px] text-slate-600 font-bold uppercase leading-tight">
+                                            {unit.details || <span className="text-slate-300 italic font-medium">Sin notas</span>}
+                                          </p>
+                                          {invoice?.orderStatus !== 'ENTREGADO' && (
+                                            <button
+                                              onClick={() => {
+                                                setEditingCell({ itemIdx, uIdx });
+                                                setEditValue(unit.details || '');
+                                              }}
+                                              className="hover:scale-110 active:scale-95 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-lg transition-all ml-2 flex-shrink-0 flex items-center justify-center"
+                                              title="Editar detalle"
+                                            >
+                                              <LucideIcons.Pencil size={11} />
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
                                     </td>
                                     <td className="px-4 py-3">
                                       <div className="flex items-center justify-center gap-2">

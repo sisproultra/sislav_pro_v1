@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
     FileBarChart, Search, Download, Printer, Calendar, 
     TrendingDown, ArrowRight, Table as TableIcon, Filter,
@@ -8,7 +8,8 @@ import {
     Users, ShoppingBag, Layers, Target, Clock, Star,
     CreditCard, BarChart2, Activity, Shirt, ArrowUpRight, Trophy, PackageCheck, Info
 } from 'lucide-react';
-import { Expense, Company, Invoice, Client, InvoiceType } from '../types';
+import { Expense, Company, Invoice, Client, InvoiceType, PaymentMethodConfig } from '../types';
+import { dbGetPaymentsReport } from '../services/dbService';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import * as XLSX from 'xlsx';
 
@@ -17,6 +18,7 @@ interface ReportsProps {
     invoices: Invoice[];
     clients: Client[];
     company: Company;
+    paymentMethods: PaymentMethodConfig[];
 }
 
 // FIX: Updated 'CLIENTES' to 'CLIENTS' to match the IDs used in the code
@@ -24,10 +26,28 @@ type ReportSubModule = 'VENTAS' | 'EGRESOS' | 'CLIENTS' | 'ESTADOS';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f43f5e', '#3b82f6'];
 
-const Reports: React.FC<ReportsProps> = ({ expenses, invoices, clients, company }) => {
+const Reports: React.FC<ReportsProps> = ({ expenses, invoices, clients, company, paymentMethods }) => {
     const [activeTab, setActiveTab] = useState<ReportSubModule>('VENTAS');
     const [startDate, setStartDate] = useState(new Date(new Date().setDate(1)).toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [payments, setPayments] = useState<any[]>([]);
+    const [isLoadingPayments, setIsLoadingPayments] = useState(false);
+
+    // --- FETCH PAYMENTS IN RANGE ---
+    useEffect(() => {
+        const fetchPayments = async () => {
+            setIsLoadingPayments(true);
+            try {
+                const data = await dbGetPaymentsReport(startDate, endDate);
+                setPayments(data);
+            } catch (err) {
+                console.error("Error fetching payments report in Reports:", err);
+            } finally {
+                setIsLoadingPayments(false);
+            }
+        };
+        fetchPayments();
+    }, [startDate, endDate]);
     
     const currency = company.currencySymbol || 'S/';
     const primaryColor = document.documentElement.style.getPropertyValue('--primary-color') || '#4f46e5';
@@ -101,16 +121,14 @@ const Reports: React.FC<ReportsProps> = ({ expenses, invoices, clients, company 
         let fileName = "";
 
         if (activeTab === 'VENTAS') {
-            dataToExport = filteredInvoices.map(i => ({
-                'FECHA': i.date,
-                'TICKET': i.ordenNumber,
-                'DOCUMENTO': `${i.serie}-${i.correlativo}`,
-                'CLIENTE': i.client.name,
-                'TOTAL': i.totals.total.toFixed(2),
-                'PAGADO': (i.prePaymentAmount || 0).toFixed(2),
-                'ESTADO': i.orderStatus
+            dataToExport = payments.map(p => ({
+                'FECHA COBRO': p.date ? new Date(p.date).toLocaleString('es-PE') : '---',
+                'TICKET/CORRELATIVO': p.ticket,
+                'CLIENTE': p.clientName,
+                'MONTO PAGADO': p.amount,
+                'MÉTODO DE PAGO': p.methodName || 'OTROS'
             }));
-            fileName = `REPORTE_VENTAS_${startDate}_${endDate}`;
+            fileName = `REPORTE_INGRESOS_COBROS_${startDate}_${endDate}`;
         } else if (activeTab === 'EGRESOS') {
             dataToExport = filteredExpenses.map(e => ({
                 'FECHA': e.date,
@@ -215,6 +233,74 @@ const Reports: React.FC<ReportsProps> = ({ expenses, invoices, clients, company 
                                         <Download size={14} /> Descargar Reporte Excel
                                     </button>
                                 </div>
+                            </div>
+
+                            {/* Detailed Income Table */}
+                            <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col min-w-0">
+                                <div className="p-8 bg-slate-50 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                    <div className="space-y-1">
+                                        <h3 className="font-bold text-xs uppercase text-slate-700 flex items-center gap-3">
+                                            <TableIcon size={18} /> Detalle de Cobros Realizados
+                                        </h3>
+                                        <p className="text-[11px] font-medium text-slate-400">Todos los cobros recibidos en el período de fechas seleccionado.</p>
+                                    </div>
+                                    <button 
+                                        onClick={handleExport} 
+                                        className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all shadow-sm font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
+                                    >
+                                        <Download size={14} /> Exportar Cobros Excel
+                                    </button>
+                                </div>
+                                
+                                {isLoadingPayments ? (
+                                    <div className="p-16 flex flex-col items-center justify-center gap-3">
+                                        <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-indigo-600 animate-spin"></div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cargando cobros...</p>
+                                    </div>
+                                ) : payments.length === 0 ? (
+                                    <div className="p-16 text-center text-slate-500 font-medium text-xs">
+                                        No se encontraron cobros registrados en este rango de fechas.
+                                    </div>
+                                ) : (
+                                    <div className="flex-1 overflow-x-auto">
+                                        <table className="w-full text-left">
+                                            <thead>
+                                                <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b bg-slate-50/50">
+                                                    <th className="p-6">Fecha/Hora Cobro</th>
+                                                    <th className="p-6">Ticket</th>
+                                                    <th className="p-6">Nombre del Cliente</th>
+                                                    <th className="p-6">Método de Pago</th>
+                                                    <th className="p-6 text-right">Monto Pagado</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50 text-xs">
+                                                {payments.map((p, idx) => (
+                                                    <tr key={p.id || idx} className="hover:bg-slate-50/50 transition-colors">
+                                                        <td className="p-6 font-bold text-slate-500 whitespace-nowrap">
+                                                            {p.date ? new Date(p.date).toLocaleString('es-PE') : '---'}
+                                                        </td>
+                                                        <td className="p-6 font-bold text-slate-800 uppercase">
+                                                            <span className="bg-slate-100 px-3 py-1 rounded-full font-bold text-[10px] text-slate-600">
+                                                                {p.ticket || '---'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-6 font-semibold uppercase text-slate-700">
+                                                            {p.clientName}
+                                                        </td>
+                                                        <td className="p-6">
+                                                            <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full font-bold uppercase text-[9px]">
+                                                                {p.methodName || 'OTROS'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-6 text-right font-black text-emerald-600 text-sm">
+                                                            {currency} {p.amount.toFixed(2)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

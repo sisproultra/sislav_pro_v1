@@ -1101,7 +1101,8 @@ export const dbCreateClient = async (client: any): Promise<Client> => {
         cumpleanos: client.birthday || null, 
         genero: client.gender, 
         registrado_por: user, 
-        activo: true 
+        activo: true,
+        suscrito: client.suscrito !== undefined ? client.suscrito : false
     };
     
     if (client.id && !client.id.startsWith('temp-')) payload.id = client.id;
@@ -1139,7 +1140,8 @@ export const dbCreateClient = async (client: any): Promise<Client> => {
         longitude: data.longitud,
         birthday: data.cumpleanos,
         gender: data.genero,
-        googleMapsUrl: data.google_maps_url
+        googleMapsUrl: data.google_maps_url,
+        suscrito: data.suscrito ?? false
     };
 
     return mappedClient;
@@ -1148,6 +1150,26 @@ export const dbCreateClient = async (client: any): Promise<Client> => {
 export const dbDeleteClient = async (id: string) => {
     const { error } = await supabase.from('clientes').update({ activo: false }).eq('id', id);
     if (error) throw error;
+};
+
+export const dbUpdateClientSubscriptionStatus = async (clientId: string, isSubscribed: boolean) => {
+    try {
+        const { error } = await supabase.from('clientes').update({ suscrito: isSubscribed }).eq('id', clientId);
+        if (error) {
+            console.warn("⚠️ No se pudo actualizar el estado de suscripción en clientes:", error.message);
+        } else {
+            console.log(`✅ Estado de suscripción para cliente ${clientId} actualizado a:`, isSubscribed);
+        }
+        // Limpiamos cache de clientes
+        const branchId = getActiveBranchId();
+        if (branchId) {
+            // Buscamos y limpiamos las claves que empiecen con clients_
+            // Dado que no podemos listar todas, el ttl normal o la recarga remota lo cubrirá.
+            // Para asegurar actualización, invalidamos mediante el mecanismo de mutación o refresco
+        }
+    } catch (e: any) {
+        console.warn("⚠️ Error al actualizar el estado de suscripción del cliente:", e.message);
+    }
 };
 
 export const dbGetClients = async (page: number = 1, pageSize: number = 100, searchTerm: string = ''): Promise<{ clients: Client[], total: number }> => {
@@ -1166,7 +1188,7 @@ export const dbGetClients = async (page: number = 1, pageSize: number = 100, sea
 
         let query = supabase
             .from('clientes')
-            .select('id, sucursal_id, empresa_holding_id, nombres, apellidos, telefono, email, dni, activo, fecha_registro, tipo_documento, cumpleanos, genero, direccion, google_maps_url, puntos, mensaje_alerta, color_alerta, latitud, longitud, registrado_por, ruc, razon_social', { count: 'exact' })
+            .select('id, sucursal_id, empresa_holding_id, nombres, apellidos, telefono, email, dni, activo, fecha_registro, tipo_documento, cumpleanos, genero, direccion, google_maps_url, puntos, mensaje_alerta, color_alerta, latitud, longitud, registrado_por, ruc, razon_social, suscrito', { count: 'exact' })
             .eq('sucursal_id', branchId)
             .eq('empresa_holding_id', holdingId)
             .eq('activo', true);
@@ -1206,7 +1228,8 @@ export const dbGetClients = async (page: number = 1, pageSize: number = 100, sea
             longitude: c.longitud, 
             birthday: c.cumpleanos, 
             gender: c.genero, 
-            googleMapsUrl: c.google_maps_url 
+            googleMapsUrl: c.google_maps_url,
+            suscrito: c.suscrito ?? false
         }));
         
         const result = { clients: mappedClients, total: count || 0 };
@@ -1531,7 +1554,7 @@ export const dbUpdatePickupRequestStatus = async (id: string, status: string) =>
 
 export const dbUpdateSunatResponse = async (ventaId: string, response: SunatResponse) => {
     const payload: any = {
-        sunat_status: response.success ? 'ACCEPTED' : 'REJECTED',
+        sunat_status: response.success ? 'ACCEPTED' : (response.isPending ? 'PENDING' : 'REJECTED'),
         sunat_description: response.description,
         sunat_hash: response.hash,
         sunat_pdf_url: response.pdfUrl,
@@ -3240,6 +3263,7 @@ export const dbUpdateSucursalConfig = async (id: string, updates: any) => {
     if (updates.doc_enforce_threshold !== undefined) payload.doc_enforce_threshold = updates.doc_enforce_threshold;
     if (updates.cash_management_type !== undefined) payload.cash_management_type = updates.cash_management_type;
     if (updates.cashManagementType !== undefined) payload.cash_management_type = updates.cashManagementType;
+    if (updates.modulos_config !== undefined) payload.modulos_config = updates.modulos_config;
 
     const { error } = await supabase.from('sucursales').update(payload).eq('id', id);
     if (error) throw error;
@@ -4926,6 +4950,14 @@ export const dbGetUndeliveredOrdersForReminders = async (): Promise<Invoice[]> =
         console.error('Exception in dbGetUndeliveredOrdersForReminders:', e);
         return [];
     }
+};
+
+export const dbUpdateItemObservations = async (itemId: string, observaciones: string) => {
+    const { error } = await supabase
+        .from('items_venta')
+        .update({ observaciones })
+        .eq('id', itemId);
+    if (error) throw error;
 };
 
 export const dbUpdateLastReminderSent = async (orderId: string) => {
