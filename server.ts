@@ -79,12 +79,23 @@ async function startServer() {
     console.log(`🌐 [Proxy VPS] Target: ${targetUrl}`);
     
     try {
+      const headers: any = { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+      
+      // Inyección segura del token global de Visioner7 desde el Servidor para evitar exponerlo al cliente.
+      if (host.includes('visioner7')) {
+        const globalToken = (process.env.VISIONER7_API_TOKEN || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6OSwiZW1haWwiOiJqZWNvdi5jb250YWN0b0BnbWFpbC5jb20iLCJpYXQiOjE3ODA1MTI2MTYsImV4cCI6MTgxMjA0ODYxNn0.zp7dp-yUfMcjkQSH4Q3Vq506nrJvyZJ_zrpsaFimOfM").trim();
+        headers['Authorization'] = `Bearer ${globalToken}`;
+        console.log(`🔑 [Proxy VPS] Inyectando Bearer Token de Visioner7 de forma segura.`);
+      } else if (req.headers.authorization) {
+        headers['Authorization'] = req.headers.authorization;
+      }
+      
       const response = await fetch(targetUrl, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        headers,
         body: JSON.stringify(req.body)
       });
       

@@ -248,7 +248,10 @@ export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): P
 
       const response = await fetch(finalUrl, { 
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${(company.whatsapp_token || company.apiToken || '').trim()}`
+          },
           body: JSON.stringify(payload)
       });
       

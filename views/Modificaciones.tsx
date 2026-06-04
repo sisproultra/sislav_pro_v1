@@ -6,7 +6,8 @@ import {
   PencilLine, CheckCircle2, AlertTriangle, Search, Filter, 
   Trash2, CreditCard, RotateCcw, AlertCircle, Info, Check, 
   Undo2, ShieldCheck, Clock, DollarSign, ChevronLeft, ChevronRight,
-  Plus, Minus, Save, Receipt, User, Loader2, Calendar, CalendarCheck, Wallet
+  Plus, Minus, Save, Receipt, User, Loader2, Calendar, CalendarCheck, Wallet,
+  Printer
 } from 'lucide-react';
 import { formatDateSafe, formatTimeSafe } from '../utils/calculations';
 import { 
@@ -20,8 +21,10 @@ import {
   dbAddPayment,
   dbAnularVenta,
   getActiveBranchId,
-  dbGetGlobalColors
+  dbGetGlobalColors,
+  dbGetTicketConfig
 } from '../services/dbService';
+import { printInvoiceDirectly } from '../utils/printService';
 import { GlobalColor } from '../types';
 import CartItemDetailModal from '../components/CartItemDetailModal';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -62,13 +65,37 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
   const [isAddingNewItemViaModal, setIsAddingNewItemViaModal] = useState(false);
   const [sessionPayments, setSessionPayments] = useState<{methodId: string, amount: number, date: string}[]>([]);
   const [globalColors, setGlobalColors] = useState<GlobalColor[]>([]);
+  const [ticketConfig, setTicketConfig] = useState<any>(null);
 
   const primaryColor = company?.primaryColor || '#22c55e';
 
   useEffect(() => {
     loadClosingDate();
     loadGlobalColors();
+    loadTicketConfig();
   }, []);
+
+  const loadTicketConfig = async () => {
+    if (company?.id) {
+      try {
+        const config = await dbGetTicketConfig(company.id);
+        setTicketConfig(config);
+      } catch (err) {
+        console.error("Error loading ticket config:", err);
+      }
+    }
+  };
+
+  const handlePrintInvoice = async (inv: Invoice) => {
+    try {
+      setIsActionLoading(true);
+      await printInvoiceDirectly(inv, company, ticketConfig, true);
+    } catch (error: any) {
+      alert("Error al imprimir ticket: " + error.message);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
 
   const loadGlobalColors = async () => {
     const colors = await dbGetGlobalColors();
@@ -135,6 +162,10 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
 
   // Lógica de Ajuste de Ítems
   const handleOpenAdjustment = (invoice: Invoice) => {
+    if (invoice.orderStatus === 'ENTREGADO') {
+      alert("No se puede modificar una orden que ya ha sido ENTREGADA. Si necesita modificarla, primero revierta su entrega.");
+      return;
+    }
     setSelectedInvoice(invoice);
     setAdjustmentCart([...invoice.items]);
     setIsAdjustmentModalOpen(true);
@@ -164,6 +195,18 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
     if (!selectedInvoice) return 0;
     return currentAdjustmentTotal - selectedInvoice.totals.total;
   }, [currentAdjustmentTotal, selectedInvoice]);
+
+  const handleUpdateItemPrice = (itemId: string, newPrice: number) => {
+      setAdjustmentCart(prev => prev.map(it => {
+          if (it.id === itemId) {
+              const updatedItem = { ...it };
+              updatedItem.price = Math.max(0, newPrice);
+              updatedItem.subtotal = updatedItem.quantity * updatedItem.price;
+              return updatedItem;
+          }
+          return it;
+      }));
+  };
 
   const handleUpdateAdjustmentCart = (productId: string, delta: number) => {
       const index = adjustmentCart.findIndex(it => it.id === productId);
@@ -359,7 +402,29 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
 
             console.log("[handleConfirmAdjustment] Éxito absoluto");
             setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 2000);
+
+            // Construir la invoice ajustada para poder imprimirla si el usuario lo desea
+            const updatedInvoiceForPrint = {
+                ...selectedInvoice,
+                items: activeItems.map(it => ({
+                    ...it,
+                    quantity: Number(it.quantity),
+                    price: Number(it.price),
+                    subtotal: Number(it.subtotal)
+                })),
+                totals: newTotals,
+                // Si agregaron pagos adicionales, el prePaymentAmount aumenta
+                prePaymentAmount: (selectedInvoice.prePaymentAmount || 0) + sessionPayments.reduce((sum, sp) => sum + sp.amount, 0)
+            };
+
+            setTimeout(() => {
+                setShowSuccessToast(false);
+                const printNow = window.confirm("¡Ajustes guardados! ¿Desea imprimir el ticket corregido ahora?");
+                if (printNow) {
+                    printInvoiceDirectly(updatedInvoiceForPrint, company, ticketConfig, true)
+                        .catch(err => console.error("Error al imprimir ticket corregido:", err));
+                }
+            }, 800);
             
             setSessionPayments([]);
             setIsAdjustmentModalOpen(false);
@@ -523,11 +588,24 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
                   
                   <div className="flex gap-2">
                     <button 
-                        onClick={() => handleOpenAdjustment(inv)}
-                        className="p-3 bg-white border border-slate-200 text-indigo-600 rounded-xl transition-all shadow-sm active:scale-95"
-                        title="Ajustar Ítems"
+                        onClick={() => {
+                          if (inv.orderStatus === 'ENTREGADO') {
+                            alert("No se puede modificar una orden que ya ha sido ENTREGADA. Si necesita modificarla, primero revierta su entrega.");
+                          } else {
+                            handleOpenAdjustment(inv);
+                          }
+                        }}
+                        className={`p-3 bg-white border rounded-xl transition-all shadow-sm active:scale-95 ${inv.orderStatus === 'ENTREGADO' ? 'text-slate-300 border-slate-100 cursor-not-allowed bg-slate-50' : 'text-indigo-600 border-slate-200'}`}
+                        title={inv.orderStatus === 'ENTREGADO' ? "No modificable (Entregado)" : "Ajustar Ítems"}
                       >
                         <Receipt size={14} />
+                      </button>
+                      <button 
+                        onClick={() => handlePrintInvoice(inv)}
+                        className="p-3 bg-white border border-slate-200 text-slate-600 rounded-xl transition-all shadow-sm active:scale-95"
+                        title="Reimprimir Ticket"
+                      >
+                        <Printer size={14} />
                       </button>
                     {inv.orderStatus === 'ENTREGADO' && canManage && (
                       <button 
@@ -643,11 +721,24 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
                       <td className="p-6 text-right">
                         <div className="flex items-center justify-end gap-2.5">
                            <button 
-                              onClick={() => handleOpenAdjustment(inv)}
-                              title="Ajustar Ítems / Prendas"
-                              className="p-3 bg-white border border-slate-100 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-2xl transition-all shadow-sm active:scale-95 group/btn"
+                              onClick={() => {
+                                if (inv.orderStatus === 'ENTREGADO') {
+                                  alert("No se puede modificar una orden que ya ha sido ENTREGADA. Si necesita modificarla, primero revierta su entrega.");
+                                } else {
+                                  handleOpenAdjustment(inv);
+                                }
+                              }}
+                              title={inv.orderStatus === 'ENTREGADO' ? "No modificable (Entregado)" : "Ajustar Ítems / Prendas"}
+                              className={`p-3 bg-white border border-slate-100 rounded-2xl transition-all shadow-sm active:scale-95 group/btn ${inv.orderStatus === 'ENTREGADO' ? 'text-slate-300 cursor-not-allowed bg-slate-50' : 'text-indigo-600 hover:bg-indigo-600 hover:text-white'}`}
                             >
                               <Receipt size={16} />
+                            </button>
+                            <button 
+                              onClick={() => handlePrintInvoice(inv)}
+                              title="Reimprimir Ticket"
+                              className="p-3 bg-white border border-slate-100 text-slate-600 hover:bg-slate-600 hover:text-white rounded-2xl transition-all shadow-sm active:scale-95 group/btn"
+                            >
+                              <Printer size={16} />
                             </button>
                           {canManage && (
                              <button 
@@ -918,8 +1009,28 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
                                                     <span className="px-2 py-0.5 bg-indigo-600 text-white text-[8px] font-black rounded-md shadow-sm uppercase">ADICIONAL</span>
                                                 )}
                                             </div>
-                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{company.currencySymbol}{it.price.toFixed(2)} / {it.unitCode}</p>
+                                            
+                                            <div className="flex flex-col sm:flex-row sm:items-center gap-x-3 gap-y-2 mt-1">
+                                                {isAnulado ? (
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{company.currencySymbol}{it.price.toFixed(2)} / {it.unitCode}</p>
+                                                ) : (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[10px] font-black text-slate-400">{company.currencySymbol}</span>
+                                                        <input 
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            disabled={isActionLoading}
+                                                            value={it.price}
+                                                            onChange={(e) => {
+                                                                const val = parseFloat(e.target.value);
+                                                                handleUpdateItemPrice(it.id, isNaN(val) ? 0 : val);
+                                                            }}
+                                                            className="w-20 px-2 py-1 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 text-center"
+                                                        />
+                                                        <span className="text-[10px] font-black text-slate-400 uppercase">/ {it.unitCode}</span>
+                                                    </div>
+                                                )}
                                                 {it.itemDeliveryDate && (
                                                     <div className={`flex items-center gap-1 text-[9px] font-black uppercase ${isAnulado ? 'text-red-400' : 'text-indigo-500'}`}>
                                                         <Clock size={12} /> {formatDateSafe(it.itemDeliveryDate)} {formatTimeSafe(it.itemDeliveryDate)}
@@ -927,7 +1038,7 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
                                                 )}
                                             </div>
                                         </div>
-    
+     
                                         <div className="flex items-center gap-3">
                                             <div className={`flex items-center bg-white border rounded-xl sm:rounded-2xl overflow-hidden shadow-sm h-9 sm:h-10 ${isAnulado ? 'border-red-100 opacity-50' : 'border-slate-200'}`}>
                                                 <button 
@@ -941,8 +1052,9 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
                                                     {it.quantity}
                                                 </span>
                                                 <button 
-                                                    disabled
-                                                    className="px-2 sm:px-3 h-full text-slate-100 cursor-not-allowed"
+                                                    disabled={isAnulado}
+                                                    onClick={() => handleUpdateAdjustmentCart(it.id, 1)}
+                                                    className={`px-2 sm:px-3 h-full transition-colors ${isAnulado ? 'text-red-200 cursor-not-allowed' : 'hover:bg-slate-50 text-slate-400 hover:text-indigo-600'}`}
                                                 >
                                                     <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                                 </button>
