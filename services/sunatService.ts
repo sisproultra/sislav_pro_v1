@@ -3,12 +3,317 @@ import { Invoice, Company, SunatResponse, InvoiceType, IgvType } from '../types'
 import { getPeruDateTime } from '../utils/calculations';
 
 /**
+ * Convierte un número decimal a representación textual en castellano para facturación.
+ */
+const numeroALetras = (num: number) => {
+    const aLetras = (n: number): string => {
+        const unidades = ["", "UN", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE"];
+        const decenas = ["DIEZ", "ONCE", "DOCE", "TRECE", "CATORCE", "QUINCE", "DIECISIETE", "DIECIOCHO", "DIECINUEVE"];
+        const decenas2 = ["", "DIEZ", "VEINTE", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"];
+        const centenas = ["", "CIENTO", "DOSCIENTOS", "TRESCIENTOS", "CUATROCIENTOS", "QUINIENTOS", "SEISCIENTOS", "SETECIENTOS", "OCHOCIENTOS", "NOVECIENTOS"];
+
+        if (n === 0) return "CERO";
+        if (n === 100) return "CIEN";
+        
+        let output = "";
+        if (n >= 100) { output += centenas[Math.floor(n / 100)] + " "; n %= 100; }
+        if (n >= 20) { 
+            output += decenas2[Math.floor(n / 10)]; 
+            if (n % 10 > 0) output += " Y " + unidades[n % 10];
+        } else if (n >= 10) {
+            output += decenas[n - 10];
+        } else if (n > 0) {
+            output += unidades[n];
+        }
+        return output.trim();
+    };
+
+    const entero = Math.floor(num);
+    const decimales = Math.round((num - entero) * 100);
+    const letrasEntero = entero === 0 ? "CERO" : aLetras(entero);
+    const centimos = String(decimales).padStart(2, '0');
+
+    return `${letrasEntero} CON ${centimos}/100 SOLES`;
+};
+
+/**
+ * Servicio de integración alterno e independiente con la API de Visioner7 para Boletas, Facturas y Notas de Crédito.
+ */
+export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): Promise<SunatResponse> => {
+  const dbUrl = company.sunat_url?.trim() || 'https://service1.visioner7-api.com/api/v1/sunat/generar-cpe';
+  
+  // Usamos el proxy CORS seguro de Cloud Run para vps dinámicos
+  const urlWithoutProtocol = dbUrl.replace('https://', '').replace('http://', '');
+  const finalUrl = `/api-proxy/sunat-vps/${urlWithoutProtocol}`;
+
+  console.log(`🚀 [Visioner7] Preparando envío a Visioner7 API. URL: ${finalUrl}`);
+  
+  const peruTime = getPeruDateTime();
+  const dateToUse = invoice.fecha_emision || invoice.date;
+  const fechaEmision = dateToUse ? dateToUse.split('T')[0] : peruTime.date;
+  
+  let horaEmision = peruTime.time;
+  if (dateToUse && dateToUse.includes('T')) {
+      const parts = dateToUse.split('T');
+      if (parts[1]) {
+          horaEmision = parts[1].split('.')[0].split('-')[0].split('+')[0];
+      }
+  }
+
+  const cleanDoc = (doc: string) => (doc || "").replace(/[^0-9]/g, '').trim();
+  const cleanText = (text: string) => (text || "").toUpperCase().replace(/[<>&"']/g, '').trim();
+
+  let codigoTipoEntidad = '0'; 
+  const docTypeClean = String(invoice.client.docType || '-').toUpperCase();
+  const rawDocNumber = cleanDoc(invoice.client.docNumber || '');
+
+  if (docTypeClean.includes('DNI') && rawDocNumber.length > 0 && rawDocNumber !== '99999999') {
+      codigoTipoEntidad = '1';
+  } else if (docTypeClean.includes('RUC')) {
+      codigoTipoEntidad = '6';
+  } else if (docTypeClean.includes('CEX') || docTypeClean.includes('EXTRANJER')) {
+      codigoTipoEntidad = '4';
+  } else {
+      codigoTipoEntidad = '0';
+  }
+
+  const igvRate = company.porcentajeIgv || 18.00;
+  const igvFactor = 1 + (igvRate / 100);
+  const isTestMode = company.sunatEnvironment === 'BETA' || company.sunatEnvironment === 'INTERNAL';
+
+  const safeNumber = (val: any) => {
+    const n = Number(val);
+    if (isNaN(n)) return "0.00";
+    return n.toFixed(2);
+  };
+
+  // Mapear Tipo Comprobante
+  let tipoComprobante = '03'; // Default Boleta (03)
+  if ((invoice.type as any) === InvoiceType.FACTURA || (invoice.type as any) === '01') {
+      tipoComprobante = '01';
+  } else if ((invoice.type as any) === InvoiceType.NOTA_CREDITO || (invoice.type as any) === '07') {
+      tipoComprobante = '07';
+  }
+
+  // Mapear datos para Nota de Crédito si aplica
+  let txtTIPO_COMPROBANTE_MODIFICA = "";
+  let txtNRO_DOCUMENTO_MODIFICA = "";
+  let txtCOD_TIPO_MOTIVO = "";
+  let txtDESCRIPCION_MOTIVO = "";
+
+  if (tipoComprobante === '07' && invoice.relatedDocument) {
+      txtTIPO_COMPROBANTE_MODIFICA = invoice.relatedDocument.type === 'FACTURA' || invoice.relatedDocument.type === '01' ? '01' : '03';
+      txtNRO_DOCUMENTO_MODIFICA = `${invoice.relatedDocument.serie}-${String(invoice.relatedDocument.correlativo).padStart(8, '0')}`;
+      txtCOD_TIPO_MOTIVO = "01"; // Anulación de la operación por defecto
+      txtDESCRIPCION_MOTIVO = cleanText(invoice.notes || "ANULACION DE LA OPERACION");
+  }
+
+  const payload: any = {
+    "txtTIPO_OPERACION": "0101",
+    "txtTOTAL_GRAVADAS": safeNumber(invoice.totals.gravada),
+    "txtTOTAL_INAFECTA": safeNumber(invoice.totals.inafecta),
+    "txtTOTAL_EXONERADAS": safeNumber(invoice.totals.exonerada),
+    "txtTOTAL_GRATUITAS": "0.00",
+    "txtSUB_TOTAL": safeNumber(Number(invoice.totals.gravada) + Number(invoice.totals.exonerada) + Number(invoice.totals.inafecta)),
+    "txtTOTAL_DESCUENTO": safeNumber(invoice.descuento || 0),
+    "txtPOR_IGV": safeNumber(igvRate),
+    "txtTOTAL_IGV": safeNumber(invoice.totals.igv),
+    "txtTOTAL": safeNumber(invoice.totals.total),
+    "txtSUB_TOTAL_PERCEPCIONES": "0.00",
+    "txtPOR_PERCEPCIONES": "0.00",
+    "txtBI_PERCEPCIONES": "0.00",
+    "txtTOTAL_PERCEPCIONES": "0.00",
+    "txtPOR_RETENCIONES": "0.00",
+    "txtBI_RETENCIONES": "0.00",
+    "txtTOTAL_RETENCIONES": "0.00",
+    "txtTOTAL_BONIFICACIONES": "0.00",
+    "txtTOTAL_EXPORTACION": "0.00",
+    "txtCOD_MEDIO_PAGO": "",
+    "txtCTA_BANCARIA_BN": "",
+    "txtCODIGO_DETRACCION": "",
+    "txtPOR_DETRACCION": "0.00",
+    "txtTOTAL_DETRACCIONES": "0.00",
+    "txtTOTAL_ISC": "0.00",
+    "txtTOTAL_OTR_IMP": "0.00",
+    "ICBP": "0.00",
+    "txtTOTAL_LETRAS": numeroALetras(invoice.totals.total).toUpperCase(),
+    "txtNRO_GUIA_REMISION": "",
+    "txtCOD_GUIA_REMISION": "",
+    "txtFECHA_GUIA_REMISION": "",
+    "txtNRO_OTR_COMPROBANTE": "",
+    "txtCOD_OTR_COMPROBANTE": "",
+    "txtTIPO_COMPROBANTE_MODIFICA": txtTIPO_COMPROBANTE_MODIFICA,
+    "txtNRO_DOCUMENTO_MODIFICA": txtNRO_DOCUMENTO_MODIFICA,
+    "txtCOD_TIPO_MOTIVO": txtCOD_TIPO_MOTIVO,
+    "txtDESCRIPCION_MOTIVO": txtDESCRIPCION_MOTIVO,
+    "txtNRO_COMPROBANTE": `${invoice.serie.toUpperCase().trim()}-${String(invoice.correlativo).padStart(8, '0')}`,
+    "txtFECHA_DOCUMENTO": fechaEmision,
+    "txtFECHA_VTO": fechaEmision,
+    "txtCOD_TIPO_DOCUMENTO": tipoComprobante,
+    "txtCOD_MONEDA": company.moneda_simbolo?.includes('$') ? "USD" : "PEN",
+    "txtOBSERVACIONES": cleanText(invoice.notes || "VENTA"),
+    "detalle_forma_pago": [
+      {
+        "COD_FORMA_PAGO": "Contado",
+        "MONTO_FORMA_PAGO": safeNumber(invoice.totals.total)
+      }
+    ],
+    "txtNRO_DOCUMENTO_CLIENTE": codigoTipoEntidad === '0' ? "00000000" : rawDocNumber,
+    "txtRAZON_SOCIAL_CLIENTE": codigoTipoEntidad === '0' ? "CLIENTE VARIOS" : cleanText(invoice.client.name || "CLIENTE VARIOS"),
+    "txtTIPO_DOCUMENTO_CLIENTE": codigoTipoEntidad,
+    "txtDIRECCION_CLIENTE": cleanText(invoice.client.address) || "-",
+    "txtCOD_UBIGEO_CLIENTE": invoice.client.ubigeo || "150101",
+    "txtDEPARTAMENTO_CLIENTE": invoice.client.departamento || "LIMA",
+    "txtPROVINCIA_CLIENTE": invoice.client.provincia || "LIMA",
+    "txtDISTRITO_CLIENTE": invoice.client.distrito || "LIMA",
+    "txtCIUDAD_CLIENTE": invoice.client.distrito || "LIMA",
+    "txtNRO_DOCUMENTO_EMPRESA": isTestMode ? "11111111111" : cleanDoc(company.ruc),
+    "txtTIPO_DOCUMENTO_EMPRESA": "6",
+    "txtNOMBRE_COMERCIAL_EMPRESA": cleanText(company.nombre_comercial || company.razonSocial),
+    "txtCODIGO_UBIGEO_EMPRESA": company.ubigeo || "150101",
+    "txtDIRECCION_EMPRESA": cleanText(company.address) || "-",
+    "txtDEPARTAMENTO_EMPRESA": cleanText(company.departamento || "LIMA"),
+    "txtPROVINCIA_EMPRESA": cleanText(company.provincia || "LIMA"),
+    "txtDISTRITO_EMPRESA": cleanText(company.distrito || "LIMA"),
+    "txtCODIGO_PAIS_EMPRESA": "PE",
+    "txtRAZON_SOCIAL_EMPRESA": cleanText(company.razonSocial),
+    "txtCONTACTO_EMPRESA": cleanText(company.contactPhone || "ADMIN"),
+    "txtTELEFONO_EMPRESA": company.contactPhone || "",
+    "txtFORMATO_IMPRESION": "",
+    "txtFLG_ANTICIPO": "0",
+    "txtFLG_REGU_ANTICIPO": "0",
+    "txtNRO_COMPROBANTE_REF_ANT": "",
+    "txtMONEDA_REGU_ANTICIPO": "",
+    "txtMONTO_REGU_ANTICIPO": "0.00",
+    "txtMONTO_REGU_ANTICIPO_TOTAL": "0.00",
+    "txtTIPO_DOCUMENTO_EMP_REGU_ANT": "",
+    "txtNRO_DOCUMENTO_EMP_REGU_ANT": "",
+    "txtUSUARIO_SOL_EMPRESA": (company.solUser || "MODDATOS").trim(),
+    "txtPASS_SOL_EMPRESA": (company.solPass || "MODDATOS").trim(),
+    "txtCONTRA": (company.solPass || "MODDATOS").trim(),
+    "txtPAS_FIRMA": (company.solPass || "MODDATOS").trim(),
+    "txtTIPO_PROCESO": isTestMode ? "3" : "1",
+    "detalle": invoice.items.map((item, idx) => {
+        const itemIgvType = item.igvType || '10';
+        const cantidadOriginal = Number(item.quantity) || 0;
+        const precioOriginal = Number(item.price) || 0;
+        const descuentoUnitario = Number(item.descuento_unitario) || 0;
+        const precioConDescuento = Math.max(0, precioOriginal - descuentoUnitario);
+        
+        const totalLine = Math.floor((precioConDescuento * cantidadOriginal) * 10 + 0.0001) / 10;
+        
+        let valorUnitario;
+        let subtotal;
+        let igv;
+        let precioBase;
+        let descuentoPrecioBase;
+
+        if (itemIgvType === '10') {
+            subtotal = Number((totalLine / igvFactor).toFixed(2));
+            igv = Number((totalLine - subtotal).toFixed(2));
+            valorUnitario = cantidadOriginal > 0 ? subtotal / cantidadOriginal : (precioConDescuento / igvFactor);
+            precioBase = precioOriginal / igvFactor;
+            descuentoPrecioBase = descuentoUnitario / igvFactor;
+        } else {
+            subtotal = totalLine;
+            igv = 0;
+            valorUnitario = precioConDescuento;
+            precioBase = precioOriginal;
+            descuentoPrecioBase = descuentoUnitario;
+        }
+        
+        return {
+          "txtITEM": String(idx + 1),
+          "txtUNIDAD_MEDIDA_DET": item.unitCode || 'NIU',
+          "txtCANTIDAD_DET": cantidadOriginal.toFixed(2),
+          "txtPRECIO_DET": precioOriginal.toFixed(2),
+          "txtIMPORTE_DET": subtotal.toFixed(2),
+          "txtPRECIO_TIPO_CODIGO": "01",
+          "txtIGV": igv.toFixed(2),
+          "POR_IGV": igvRate.toFixed(2),
+          "txtISC": "0.00",
+          "txtCOD_TIPO_OPERACION": itemIgvType,
+          "txtCODIGO_DET": item.id ? item.id.substring(0, 15) : idx.toString(),
+          "txtDESCRIPCION_DET": cleanText(item.name || "PRODUCTO"),
+          "txtPRECIO_SIN_IGV_DET": valorUnitario.toFixed(4),
+          "FLG_ICBPER": 0,
+          "IMPUESTO_BP": "0.00",
+          "IMPORTE_BP": "0.00"
+        };
+    })
+  };
+
+  try {
+      console.log("[Visioner7] Payload enviado:", JSON.stringify(payload, null, 2));
+
+      const response = await fetch(finalUrl, { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+          const errorText = await response.text();
+          const isPending = response.status >= 500;
+          return { 
+              success: false, 
+              isPending,
+              description: `Error del servidor API (${response.status}): ${errorText.substring(0, 100)}` 
+          };
+      }
+
+      const responseText = await response.text();
+      console.log("[Visioner7] Respuesta bruta:", responseText);
+
+      if (!responseText || responseText.trim() === "") {
+          return { success: false, isPending: true, description: "La API de Visioner7 devolvió una respuesta vacía." };
+      }
+
+      let body;
+      try {
+          body = JSON.parse(responseText);
+      } catch (parseError) {
+          return { 
+              success: false, 
+              description: `Error de formato en respuesta: La API no devolvió un JSON válido. Respuesta: ${responseText.substring(0, 100)}...` 
+          };
+      }
+
+      const successVal = body.success === true || body.success === 'true' || body.status === 'OK' || body.data?.success === true || body.codigo === '0' || body.code === 200 || body?.errors === undefined;
+      const descVal = body.message || body.msg || body.description || body.data?.message || (successVal ? "Comprobante generado y enviado con éxito" : "Error de emisión");
+
+      const pdfUrl = body.ruta_pdf || body.url_pdf || body.pdf || body.data?.ruta_pdf || body.data?.url_pdf || body.data?.pdf || "";
+      const xmlUrl = body.ruta_xml || body.url_xml || body.xml || body.data?.ruta_xml || body.data?.url_xml || body.data?.xml || "";
+      const cdrUrl = body.ruta_cdr || body.url_cdr || body.cdr || body.data?.ruta_cdr || body.data?.url_cdr || body.data?.cdr || "";
+      const hashVal = body.hash || body.firma || body.hash_cpe || body.data?.hash || body.data?.firma || "---";
+
+      return {
+          success: successVal,
+          description: descVal,
+          hash: hashVal,
+          pdfUrl,
+          xmlUrl,
+          cdrUrl
+      };
+
+  } catch (e: any) {
+      console.error("[Visioner7] Error catch:", e);
+      return { success: false, isPending: true, description: "Error de comunicación con Visioner7: " + e.message };
+  }
+};
+
+/**
  * Servicio de integración con el API de Facturación Electrónica Peruana.
  */
 export const sendBillToSunat = async (invoice: Invoice, company: Company): Promise<SunatResponse> => {
   
   // Usamos la URL configurada en la sucursal
-  const dbUrl = company.sunat_url?.trim();
+  const dbUrl = company.sunat_url?.trim() || "";
+  
+  // Si la url está armada para el nuevo CPE de Visioner7, redirigimos el flujo en paralelo para no romper producción
+  if (dbUrl.includes('visioner7') || dbUrl.includes('generar-cpe')) {
+     return sendBillToVisioner7(invoice, company);
+  }
   
   // LOGICA DE PROXY: 
   // Si la URL apunta a 'apisu.sysventa.com', usamos el proxy interno '/api-proxy/sunat'
