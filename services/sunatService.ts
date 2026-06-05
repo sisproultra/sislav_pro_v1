@@ -42,9 +42,8 @@ const numeroALetras = (num: number) => {
 export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): Promise<SunatResponse> => {
   const dbUrl = company.sunat_url?.trim() || 'https://service1.visioner7-api.com/api/v1/sunat/generar-cpe';
   
-  // Usamos el proxy CORS seguro de Cloud Run para vps dinámicos
-  const urlWithoutProtocol = dbUrl.replace('https://', '').replace('http://', '');
-  const finalUrl = `/api-proxy/sunat-vps/${urlWithoutProtocol}`;
+  // Usamos el proxy seguro de Vercel/Node para pasar los headers correctos
+  const finalUrl = `/api/sunat-proxy?url=${encodeURIComponent(dbUrl)}`;
 
   console.log(`🚀 [Visioner7] Preparando envío a Visioner7 API. URL: ${finalUrl}`);
   

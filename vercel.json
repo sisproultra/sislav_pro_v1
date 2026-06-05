@@ -29,8 +29,8 @@
       "destination": "/api/manifest"
     },
     {
-      "source": "/api-proxy/sunat-vps/:path*",
-      "destination": "https://:path*"
+      "source": "/api/sunat-proxy",
+      "destination": "/api/sunat-proxy.ts"
     },
     {
       "source": "/api-proxy/decolecta/:path*",
