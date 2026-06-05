@@ -575,6 +575,7 @@ export const normalizeSucursal = (s: any): any => {
         sunat_url: s.sunat_url,
         solUser: s.sol_user ?? s.solUser ?? 'MODDATOS',
         solPass: s.sol_pass ?? s.solPass ?? 'moddatos',
+        firmaPass: s.firma_pass ?? s.firmaPass ?? '',
         whatsapp_instance: s.whatsapp_instance,
         whatsapp_token: s.whatsapp_token,
         whatsapp_instance_name: s.whatsapp_instance_name,
@@ -3311,6 +3312,8 @@ export const dbUpdateSucursalBranding = async (id: string, updates: any) => {
     if (updates.solUser !== undefined) payload.sol_user = updates.solUser;
     if (updates.sol_pass !== undefined) payload.sol_pass = updates.sol_pass;
     if (updates.solPass !== undefined) payload.sol_pass = updates.solPass;
+    if (updates.firma_pass !== undefined) payload.firma_pass = updates.firma_pass;
+    if (updates.firmaPass !== undefined) payload.firma_pass = updates.firmaPass;
     
     // WhatsApp
     if (updates.whatsapp_instance !== undefined) payload.whatsapp_instance = updates.whatsapp_instance;

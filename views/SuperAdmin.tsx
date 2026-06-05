@@ -884,6 +884,7 @@ export const SuperAdmin: React.FC<{
     const [brSunatUrl, setBrSunatUrl] = useState('https://apisu.sysventa.com/API_SUNAT/post.php');
     const [brSolUser, setBrSolUser] = useState('MODDATOS');
     const [brSolPass, setBrSolPass] = useState('moddatos');
+    const [brFirmaPass, setBrFirmaPass] = useState('');
     const [brSerieBoleta, setBrSerieBoleta] = useState('B001');
     const [brSerieFactura, setBrSerieFactura] = useState('F001');
     const [brSerieNv, setBrSerieNv] = useState('NV01');
@@ -1054,7 +1055,7 @@ export const SuperAdmin: React.FC<{
     const resetBranchForm = () => {
         setBrName(''); setBrRazonSocial(''); setBrRuc(''); setBrAddress(''); setBrPhone('');
         setBrSlug(''); setBrModoSunat('0'); setBrSunatUrl('https://apisu.sysventa.com/API_SUNAT/post.php');
-        setBrSolUser('MODDATOS'); setBrSolPass('moddatos');
+        setBrSolUser('MODDATOS'); setBrSolPass('moddatos'); setBrFirmaPass('');
         setBrSerieBoleta('B001'); setBrSerieFactura('F001'); setBrSerieNv('NV01');
         setBrSerieNcF('FC01'); setBrSerieNcB('BC01');
         setBrNombreComercial(''); setBrUbigeo(''); setBrUrbanizacion('');
@@ -1105,6 +1106,7 @@ export const SuperAdmin: React.FC<{
             setBrSunatUrl(rawBranch.sunat_url || 'https://apisu.sysventa.com/API_SUNAT/post.php');
             setBrSolUser(rawBranch.sol_user || 'MODDATOS');
             setBrSolPass(rawBranch.sol_pass || 'moddatos');
+            setBrFirmaPass(rawBranch.firma_pass || rawBranch.firmaPass || '');
             setBrSerieBoleta(rawBranch.serie_boleta || 'B001');
             setBrSerieFactura(rawBranch.serie_factura || 'F001');
             setBrSerieNv(rawBranch.serie_nv || 'NV01');
@@ -1427,6 +1429,7 @@ export const SuperAdmin: React.FC<{
             sunat_url: brSunatUrl,
             sol_user: brSolUser,
             sol_pass: brSolPass,
+            firma_pass: brFirmaPass,
             serie_boleta: brSerieBoleta,
             serie_factura: brSerieFactura,
             serie_nv: brSerieNv,
@@ -2958,7 +2961,7 @@ export const SuperAdmin: React.FC<{
                                             <p className="text-[10px] text-indigo-700 font-bold uppercase leading-tight">Configuración crítica de enlace con OSE/SUNAT.</p>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Modo de Operación</label>
                                             <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
@@ -2974,6 +2977,10 @@ export const SuperAdmin: React.FC<{
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">SOL Pass</label>
                                             <input type="password" value={brSolPass} onChange={e => setBrSolPass(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="moddatos" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-1">Clave Firma <span className="text-[8px] text-slate-400 capitalize font-medium">(Opcional)</span></label>
+                                            <input type="password" value={brFirmaPass} onChange={e => setBrFirmaPass(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="Usa Clave SOL si vacío" />
                                         </div>
                                     </div>
                                     

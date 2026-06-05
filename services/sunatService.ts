@@ -189,8 +189,8 @@ export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): P
     "txtNRO_DOCUMENTO_EMP_REGU_ANT": "",
     "txtUSUARIO_SOL_EMPRESA": (company.solUser || "MODDATOS").trim(),
     "txtPASS_SOL_EMPRESA": (company.solPass || "MODDATOS").trim(),
-    "txtCONTRA": (company.solPass || "MODDATOS").trim(),
-    "txtPAS_FIRMA": (company.solPass || "MODDATOS").trim(),
+    "txtCONTRA": (company.firmaPass || company.solPass || "MODDATOS").trim(),
+    "txtPAS_FIRMA": (company.firmaPass || company.solPass || "MODDATOS").trim(),
     "txtTIPO_PROCESO": isTestMode ? "3" : "1",
     "detalle": invoice.items.map((item, idx) => {
         const itemIgvType = item.igvType || '10';

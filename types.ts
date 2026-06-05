@@ -98,6 +98,8 @@ export interface Company extends BaseEntity {
     serieNcFactura?: string;
     serieNcBoleta?: string;
     holding_name?: string;
+    firmaPass?: string;
+    firma_pass?: string;
     activo?: boolean;
     cobranza?: boolean;
     cobranza_activada_at?: string;

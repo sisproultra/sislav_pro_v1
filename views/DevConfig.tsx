@@ -642,6 +642,10 @@ const DevConfig: React.FC<DevConfigProps> = ({ onRefreshData, company, onSaveCom
                                                     <div><label className="text-[8px] font-black text-slate-400 uppercase block mb-1">SOL User</label><input disabled={!unlockedFields['solUser']} value={localCompany.solUser || ''} onChange={e => setLocalCompany({...localCompany, solUser: e.target.value})} className="w-full p-2 bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 border rounded-lg text-[9px] font-black outline-none" style={{ borderColor: primaryColor }} /></div>
                                                     <div><label className="text-[8px] font-black text-slate-400 uppercase block mb-1">SOL Pass</label><input type="password" disabled={!unlockedFields['solPass']} value={localCompany.solPass || ''} onChange={e => setLocalCompany({...localCompany, solPass: e.target.value})} className="w-full p-2 bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 border rounded-lg text-[9px] font-black outline-none" style={{ borderColor: primaryColor }} /></div>
                                                 </div>
+                                                <div>
+                                                    <label className="text-[8px] font-black text-slate-400 uppercase block mb-1">Contraseña Firma Digital / Certificado .pfx</label>
+                                                    <input type="password" disabled={!unlockedFields['solPass']} value={localCompany.firmaPass || ''} onChange={e => setLocalCompany({...localCompany, firmaPass: e.target.value})} className="w-full p-2 bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 border rounded-lg text-[9px] font-black outline-none" placeholder="Opcional - usa Clave SOL si está vacío" style={{ borderColor: primaryColor }} />
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="space-y-3">
