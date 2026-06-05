@@ -51,6 +51,36 @@ export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): P
   const dateToUse = invoice.fecha_emision || invoice.date;
   const fechaEmision = dateToUse ? dateToUse.split('T')[0] : peruTime.date;
   
+  let solUser = (company.solUser || "").trim() || "MODDATOS";
+  let solPass = (company.solPass || "").trim() || "moddatos";
+  let dbFirmaPass = (company.firmaPass || (company as any).pfx_password || "").trim();
+
+  const companyId = company.id || (company as any).sucursal_id;
+  if (companyId) {
+      try {
+          const { supabase } = await import('./supabaseClient');
+          const { data } = await supabase
+              .from('sucursales')
+              .select('sol_user, sol_pass, firma_pass')
+              .eq('id', companyId)
+              .maybeSingle();
+              
+          if (data) {
+              if (data.sol_user) solUser = data.sol_user.trim();
+              if (data.sol_pass) solPass = data.sol_pass.trim();
+              if (data.firma_pass) dbFirmaPass = data.firma_pass.trim();
+              console.log("🌸 [Visioner7] Datos cargados dinámicamente de DB para emisión:", { solUser, solPass, dbFirmaPass });
+          }
+      } catch (dbErr) {
+          console.warn("⚠️ No se pudieron cargar las credenciales de la sucursal de la base de datos:", dbErr);
+      }
+  }
+
+  // Fallback definitivo si el campo firma_pass está vacío o nulo
+  if (!dbFirmaPass) {
+      dbFirmaPass = "DERMOSPE2023";
+  }
+
   let horaEmision = peruTime.time;
   if (dateToUse && dateToUse.includes('T')) {
       const parts = dateToUse.split('T');
@@ -187,10 +217,10 @@ export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): P
     "txtMONTO_REGU_ANTICIPO_TOTAL": "0.00",
     "txtTIPO_DOCUMENTO_EMP_REGU_ANT": "",
     "txtNRO_DOCUMENTO_EMP_REGU_ANT": "",
-    "txtUSUARIO_SOL_EMPRESA": (company.solUser || "MODDATOS").trim(),
-    "txtPASS_SOL_EMPRESA": (company.solPass || "MODDATOS").trim(),
-    "txtCONTRA": (company.firmaPass || (company as any).pfx_password || "DERMOSPE2023").trim(),
-    "txtPAS_FIRMA": (company.firmaPass || (company as any).pfx_password || "DERMOSPE2023").trim(),
+    "txtUSUARIO_SOL_EMPRESA": solUser.trim(),
+    "txtPASS_SOL_EMPRESA": solPass.trim(),
+    "txtCONTRA": dbFirmaPass.trim(),
+    "txtPAS_FIRMA": dbFirmaPass.trim(),
     "txtTIPO_PROCESO": isTestMode ? "3" : "1",
     "detalle": invoice.items.map((item, idx) => {
         const itemIgvType = item.igvType || '10';
