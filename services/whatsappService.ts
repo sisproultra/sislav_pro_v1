@@ -197,7 +197,7 @@ export const generateInternalPDFBlob = async (invoice: Invoice, company: Company
     // 4. Datos del Documento
     doc.setFontSize(11);
     doc.setFont(primaryFont, 'bold');
-    const docTitle = invoice.type === InvoiceType.NOTA_VENTA ? 'NOTA DE VENTA' : (invoice.type === InvoiceType.FACTURA ? 'FACTURA' : 'BOLETA');
+    const docTitle = invoice.type === InvoiceType.NOTA_VENTA ? (company?.custom_nv_name || company?.modulos_config?.custom_nv_name || 'NOTA DE VENTA').toUpperCase() : (invoice.type === InvoiceType.FACTURA ? 'FACTURA' : 'BOLETA');
     doc.text(docTitle, 40, currentY, { align: 'center' });
     currentY += 5;
     doc.text(`${invoice.serie}-${String(invoice.correlativo).padStart(8, '0')}`, 40, currentY, { align: 'center' });

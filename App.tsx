@@ -48,7 +48,8 @@ import {
     dbOpenCashClosing,
     dbGetBirthdaysToday,
     dbSyncOwnerProfile,
-    dbGetHoldingBranding
+    dbGetHoldingBranding,
+    dbCheckAndRegisterBotCheckIn
 } from './services/dbService';
 import { getSaasGlobalConfig } from './services/saasService';
 import { sendBillToSunat, sendSummaryToSunat } from './services/sunatService';
@@ -897,12 +898,20 @@ export default function App() {
         const todayStr = new Date().toISOString().split('T')[0];
         const storageKey = `sislav_bot_notified_${activeSucursal.id}_${todayStr}`;
         
+        // 1. Verificar en localStorage primero para rapidez
         if (localStorage.getItem(storageKey)) return;
 
-        const { url_bot, instancia_bot, apikey_bot, whatsapp_saas, whatsapp_cod_pais } = globalConfig;
+        try {
+            // 2. Verificar en la Base de Datos de manera persistente
+            const alreadyNotified = await dbCheckAndRegisterBotCheckIn(activeSucursal.id, todayStr);
+            if (alreadyNotified) {
+                localStorage.setItem(storageKey, 'true');
+                return;
+            }
 
-        if (url_bot && instancia_bot && apikey_bot && whatsapp_saas) {
-            try {
+            const { url_bot, instancia_bot, apikey_bot, whatsapp_saas, whatsapp_cod_pais } = globalConfig;
+
+            if (url_bot && instancia_bot && apikey_bot && whatsapp_saas) {
                 const botService = new EvolutionService({
                     baseUrl: url_bot,
                     apiKey: apikey_bot,
@@ -915,10 +924,10 @@ export default function App() {
                 
                 await botService.sendText(targetNumber, `Lavanderia ${branchName} 🟢`);
                 localStorage.setItem(storageKey, 'true');
-            } catch (err) {
-                // Silent fail for monitoring check-in to avoid scary console errors
-                // console.error("Bot Monitoring Check-in failed:", err);
             }
+        } catch (err) {
+            // Silent fallback para que no interrumpa la venta si falla el bot
+            console.warn("⚠️ Bot Monitoring Check-in fallback/fail:", err);
         }
     }, [activeSucursal, globalConfig]);
 

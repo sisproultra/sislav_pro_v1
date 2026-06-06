@@ -312,7 +312,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
         switch (invoice.type) {
             case InvoiceType.FACTURA: return 'FACTURA ELECTRÓNICA';
             case InvoiceType.BOLETA: return 'BOLETA ELECTRÓNICA';
-            case InvoiceType.NOTA_VENTA: return 'NOTA DE VENTA';
+            case InvoiceType.NOTA_VENTA: return (company?.custom_nv_name || company?.modulos_config?.custom_nv_name || 'NOTA DE VENTA').toUpperCase();
             default: return 'COMPROBANTE';
         }
     };

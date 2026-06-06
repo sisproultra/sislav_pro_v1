@@ -590,6 +590,7 @@ export const normalizeSucursal = (s: any): any => {
         moneda_simbolo: s.moneda_simbolo ?? 'S/',
         currencySymbol: s.moneda_simbolo ?? 'S/',
         modulos_config: s.modulos_config ?? {},
+        custom_nv_name: s.custom_nv_name ?? s.modulos_config?.custom_nv_name ?? 'NOTA DE VENTA',
         doc_enforce_enabled: s.doc_enforce_enabled ?? false,
         doc_enforce_threshold: s.doc_enforce_threshold ?? 700,
         cash_management_type: s.cash_management_type || 'DAILY'
@@ -679,6 +680,49 @@ export const dbLogSystemError = async (message: string, details?: any) => {
         if (error) console.warn("⚠️ No se pudo persistir el log en DB:", error.message);
     } catch (e) {
         // Fallback silencioso para no interrumpir el flujo del usuario
+    }
+};
+
+/**
+ * Verifica si ya se notificó el bot_checkin del día para la sucursal de manera persistente en la BD.
+ * Si ya se notificó, devuelve true.
+ * Si no se ha notificado, inserta el log para el día de hoy y devuelve false.
+ */
+export const dbCheckAndRegisterBotCheckIn = async (branchId: string, todayStr: string): Promise<boolean> => {
+    try {
+        const messageKey = `bot_checkin:${todayStr}`;
+        const { data, error } = await supabase
+            .from('logs_sistema')
+            .select('id')
+            .eq('sucursal_id', branchId)
+            .eq('mensaje', messageKey)
+            .limit(1);
+
+        if (error) {
+            console.warn("⚠️ Error verificando bot check-in persistente:", error.message);
+            return false;
+        }
+
+        if (data && data.length > 0) {
+            return true; // Ya existe en la base de datos hoy
+        }
+
+        // Registrar registro en DB hoy para que no se envíen más alertas hoy en ningún navegador
+        const userId = getActiveUserId();
+        await supabase
+            .from('logs_sistema')
+            .insert({
+                sucursal_id: branchId,
+                usuario_id: userId,
+                mensaje: messageKey,
+                detalles: { notified: true, timestamp: new Date().toISOString() },
+                fecha: new Date().toISOString()
+            });
+
+        return false; // No se había notificado, procede a enviar
+    } catch (e) {
+        console.error("❌ Excepción en dbCheckAndRegisterBotCheckIn:", e);
+        return false;
     }
 };
 export const dbUploadImage = async (bucket: string, file: File | string | Blob, path: string): Promise<string> => {

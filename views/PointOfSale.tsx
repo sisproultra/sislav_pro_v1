@@ -825,7 +825,7 @@ const PointOfSale: React.FC<PointOfSaleProps> = ({
 
         <div className="p-4 border-b flex bg-gray-50 gap-2 shrink-0 overflow-x-auto no-scrollbar">
             {[
-                { type: InvoiceType.NOTA_VENTA, label: 'N. VENTA' },
+                { type: InvoiceType.NOTA_VENTA, label: company?.custom_nv_name || company?.modulos_config?.custom_nv_name || 'N. VENTA' },
                 ...(company?.sunatEnvironment === 'PRODUCTION' || company?.sunatEnvironment === 'BETA' ? [
                     { type: InvoiceType.BOLETA, label: 'BOLETA' },
                     { type: InvoiceType.FACTURA, label: 'FACTURA' }

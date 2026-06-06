@@ -890,6 +890,8 @@ export const SuperAdmin: React.FC<{
     const [brSerieNv, setBrSerieNv] = useState('NV01');
     const [brSerieNcF, setBrSerieNcF] = useState('FC01');
     const [brSerieNcB, setBrSerieNcB] = useState('BC01');
+    const [brCustomNvName, setBrCustomNvName] = useState('NOTA DE VENTA');
+    const [brCorrelativos, setBrCorrelativos] = useState<{tipo_documento: string, serie: string, ultimo_numero: number}[]>([]);
     const [brNombreComercial, setBrNombreComercial] = useState('');
     const [brUbigeo, setBrUbigeo] = useState('');
     const [brUrbanizacion, setBrUrbanizacion] = useState('');
@@ -969,6 +971,24 @@ export const SuperAdmin: React.FC<{
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        if (editingBranchId) {
+            supabase
+                .from('dispensador_correlativos')
+                .select('*')
+                .eq('sucursal_id', editingBranchId)
+                .then(({ data, error }) => {
+                    if (!error && data) {
+                        setBrCorrelativos(data);
+                    } else {
+                        setBrCorrelativos([]);
+                    }
+                });
+        } else {
+            setBrCorrelativos([]);
+        }
+    }, [editingBranchId]);
 
     const loadData = async (isRetry = false) => {
         // Solo mostramos el loader de pantalla completa si no tenemos datos previos
@@ -1070,6 +1090,8 @@ export const SuperAdmin: React.FC<{
         setBrPorcentajeIgv('18.00'); setBrMonedaSimbolo('S/');
         setBrUseOrderReset(false); setBrLimiteReconteo('10000');
         setBrModulosConfig(DEFAULT_MODULES_CONFIG);
+        setBrCustomNvName('NOTA DE VENTA');
+        setBrCorrelativos([]);
         setBrDocEnforceEnabled(false);
         setBrDocEnforceThreshold('700');
         setIsEditingBranch(false);
@@ -1097,6 +1119,7 @@ export const SuperAdmin: React.FC<{
         setBrUseOrderReset(branch.use_order_reset || false);
         setBrLimiteReconteo(String(branch.limite_reconteo || 10000));
         setBrModulosConfig((branch as any).modulos_config || {});
+        setBrCustomNvName((branch as any).modulos_config?.custom_nv_name || 'NOTA DE VENTA');
         setBrDocEnforceEnabled((branch as any).doc_enforce_enabled || false);
         setBrDocEnforceThreshold(String((branch as any).doc_enforce_threshold || 700));
         
@@ -1465,7 +1488,27 @@ export const SuperAdmin: React.FC<{
             isActive: brIsActive,
             porcentaje_igv: parseFloat(brPorcentajeIgv),
             moneda_simbolo: brMonedaSimbolo,
-            modulos_config: brModulosConfig
+            modulos_config: {
+                ...brModulosConfig,
+                custom_nv_name: brCustomNvName || 'NOTA DE VENTA'
+            }
+        };
+
+        const saveCorrelativos = async (sucursalId: string) => {
+            try {
+                for (const item of brCorrelativos) {
+                    await supabase.from('dispensador_correlativos').upsert({
+                        sucursal_id: sucursalId,
+                        tipo_documento: item.tipo_documento,
+                        serie: item.serie.toUpperCase(),
+                        ultimo_numero: item.ultimo_numero
+                    }, {
+                        onConflict: 'sucursal_id,tipo_documento,serie'
+                    });
+                }
+            } catch (err) {
+                console.error("Error al guardar correlativos dispensador:", err);
+            }
         };
 
         try {
@@ -1482,14 +1525,18 @@ export const SuperAdmin: React.FC<{
                 }
                 
                 await updateSaasBranch(editingBranchId, branchData);
+                await saveCorrelativos(editingBranchId);
             } else {
                 if (brCobranza) {
                     branchData.cobranza_activada_at = new Date().toISOString().replace('Z', '-05:00');
                 }
                 const newBranch = await createSaasBranch(branchData);
+                if (newBranch && newBranch.id) {
+                    await saveCorrelativos(newBranch.id);
+                }
                 
                 // Si se llenaron los datos del usuario inicial, crearlo
-                if (brUsername && brUserPassword && brUserFullname) {
+                if (brUsername && brUserPassword && brUserFullname && newBranch) {
                     await createInitialBranchUser({
                         username: brUsername,
                         password: brUserPassword,
@@ -2696,7 +2743,7 @@ export const SuperAdmin: React.FC<{
 
             {isBranchModalOpen && selectedCompany && (
                 <div className="fixed inset-0 bg-slate-950/80 z-[100] flex items-center justify-center p-0 md:p-4 backdrop-blur-md animate-in fade-in">
-                    <div className="bg-white md:rounded-[3rem] w-full md:max-w-5xl h-full md:h-auto md:max-h-[95vh] shadow-2xl overflow-hidden border border-white/10 flex flex-col animate-in zoom-in-95">
+                    <div className="bg-white md:rounded-[3rem] w-full md:max-w-6xl h-full md:h-auto md:max-h-[95vh] shadow-2xl overflow-hidden border border-white/10 flex flex-col animate-in zoom-in-95">
                         <div className="p-6 md:p-10 border-b border-slate-100 bg-white flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 shadow-sm relative z-10">
                             <div className="flex items-center gap-4">
                                 <div className="bg-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-600/20">
@@ -2961,31 +3008,40 @@ export const SuperAdmin: React.FC<{
                                             <p className="text-[10px] text-indigo-700 font-bold uppercase leading-tight">Configuración crítica de enlace con OSE/SUNAT.</p>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Modo de Operación</label>
-                                            <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
-                                                <button type="button" onClick={() => setBrModoSunat('2')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '2' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>INT</button>
-                                                <button type="button" onClick={() => setBrModoSunat('0')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '0' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400'}`}>BETA</button>
-                                                <button type="button" onClick={() => setBrModoSunat('1')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '1' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400'}`}>PROD</button>
+
+                                    {/* SECCIÓN 1: CONFIGURACIÓN SUNAT Y CREDENCIALES */}
+                                    <div className="bg-white border border-slate-100 p-8 rounded-[2rem] shadow-sm space-y-6">
+                                        <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                                            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                                                <Settings size={16} />
+                                            </div>
+                                            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Credenciales & Entorno</h3>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Modo de Operación</label>
+                                                <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
+                                                    <button type="button" onClick={() => setBrModoSunat('2')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '2' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>INT</button>
+                                                    <button type="button" onClick={() => setBrModoSunat('0')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '0' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400'}`}>BETA</button>
+                                                    <button type="button" onClick={() => setBrModoSunat('1')} className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${brModoSunat === '1' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400'}`}>PROD</button>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">SOL User</label>
+                                                <input value={brSolUser} onChange={e => setBrSolUser(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="MODDATOS" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">SOL Pass</label>
+                                                <input type="password" value={brSolPass} onChange={e => setBrSolPass(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="moddatos" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-1">Clave Firma <span className="text-[8px] text-slate-400 capitalize font-medium">(Opcional)</span></label>
+                                                <input type="password" value={brFirmaPass} onChange={e => setBrFirmaPass(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="Usa Clave SOL si vacío" />
                                             </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">SOL User</label>
-                                            <input value={brSolUser} onChange={e => setBrSolUser(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="MODDATOS" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">SOL Pass</label>
-                                            <input type="password" value={brSolPass} onChange={e => setBrSolPass(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="moddatos" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-1">Clave Firma <span className="text-[8px] text-slate-400 capitalize font-medium">(Opcional)</span></label>
-                                            <input type="password" value={brFirmaPass} onChange={e => setBrFirmaPass(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="Usa Clave SOL si vacío" />
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div className="space-y-6">
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nombre Comercial</label>
                                                 <input value={brNombreComercial} onChange={e => setBrNombreComercial(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-4 text-slate-900 font-bold outline-none focus:border-indigo-500 shadow-inner" />
@@ -2998,16 +3054,196 @@ export const SuperAdmin: React.FC<{
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="space-y-6">
-                                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Code size={14}/> Series de Documentos</h4>
-                                            <div className="bg-slate-50 border border-slate-100 p-6 rounded-[2rem] space-y-4">
-                                                <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Serie Boleta</span><input value={brSerieBoleta} onChange={e => setBrSerieBoleta(e.target.value.toUpperCase())} className="w-20 p-2 text-center bg-white border border-slate-200 rounded-lg font-bold text-indigo-600 uppercase" maxLength={4} /></div>
-                                                <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Serie Factura</span><input value={brSerieFactura} onChange={e => setBrSerieFactura(e.target.value.toUpperCase())} className="w-20 p-2 text-center bg-white border border-slate-200 rounded-lg font-bold text-indigo-600 uppercase" maxLength={4} /></div>
-                                                <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Serie Nota Venta</span><input value={brSerieNv} onChange={e => setBrSerieNv(e.target.value.toUpperCase())} className="w-20 p-2 text-center bg-white border border-slate-200 rounded-lg font-bold text-slate-600 uppercase" maxLength={4} /></div>
-                                                <div className="pt-2 border-t border-slate-200 mt-2">
-                                                    <div className="flex justify-between items-center mb-2"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">N. Crédito Factura</span><input value={brSerieNcF} onChange={e => setBrSerieNcF(e.target.value.toUpperCase())} className="w-20 p-2 text-center bg-white border border-slate-200 rounded-lg font-bold text-rose-600 uppercase" maxLength={4} /></div>
-                                                    <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">N. Crédito Boleta</span><input value={brSerieNcB} onChange={e => setBrSerieNcB(e.target.value.toUpperCase())} className="w-20 p-2 text-center bg-white border border-slate-200 rounded-lg font-bold text-rose-600 uppercase" maxLength={4} /></div>
+                                    </div>
+
+                                    {/* SECCIÓN 2: SERIES Y CORRELATIVOS REALMENTE ESPACIOSOS */}
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 px-1">
+                                            <Code size={16} className="text-slate-400" />
+                                            <h4 className="text-[11px] font-extrabold text-slate-450 uppercase tracking-[0.2em]">Series y Correlativos de Documentos</h4>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {/* BOLETA */}
+                                            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between hover:border-indigo-100 transition-all group space-y-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="space-y-1">
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-bold bg-indigo-50 text-indigo-700 uppercase tracking-widest">BOLETA ELECTRÓNICA</span>
+                                                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Serie</h5>
+                                                    </div>
+                                                    <input value={brSerieBoleta} onChange={e => setBrSerieBoleta(e.target.value.toUpperCase())} className="w-24 px-3 py-2 text-center bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 rounded-xl font-black text-slate-800 uppercase text-lg transition-all outline-none" maxLength={4} />
                                                 </div>
+                                                {isEditingBranch && (
+                                                    <div className="space-y-1.5 pt-3 border-t border-slate-50 flex justify-between items-center">
+                                                        <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider font-sans">Sgte. Correlativo</span>
+                                                        <input type="number" min="0" value={(brCorrelativos.find(c => c.tipo_documento === '03' && c.serie.toUpperCase() === brSerieBoleta.toUpperCase())?.ultimo_numero ?? 0) + 1} onChange={e => {
+                                                            const val = Math.max(0, (parseInt(e.target.value) || 1) - 1);
+                                                            setBrCorrelativos(prev => {
+                                                                const idx = prev.findIndex(c => c.tipo_documento === '03' && c.serie.toUpperCase() === brSerieBoleta.toUpperCase());
+                                                                if (idx > -1) {
+                                                                    const copy = [...prev];
+                                                                    copy[idx] = { ...copy[idx], ultimo_numero: val };
+                                                                    return copy;
+                                                                } else {
+                                                                    return [...prev, { tipo_documento: '03', serie: brSerieBoleta.toUpperCase(), ultimo_numero: val }];
+                                                                }
+                                                            });
+                                                        }} className="w-24 px-3 py-2 text-center bg-slate-50 border-2 border-slate-150 rounded-xl text-sm font-mono font-bold text-indigo-600 focus:bg-white transition-all outline-none" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* FACTURA */}
+                                            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between hover:border-indigo-100 transition-all group space-y-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="space-y-1">
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-bold bg-indigo-50 text-indigo-700 uppercase tracking-widest">FACTURA ELECTRÓNICA</span>
+                                                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Serie</h5>
+                                                    </div>
+                                                    <input value={brSerieFactura} onChange={e => setBrSerieFactura(e.target.value.toUpperCase())} className="w-24 px-3 py-2 text-center bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 rounded-xl font-black text-slate-800 uppercase text-lg transition-all outline-none" maxLength={4} />
+                                                </div>
+                                                {isEditingBranch && (
+                                                    <div className="space-y-1.5 pt-3 border-t border-slate-50 flex justify-between items-center">
+                                                        <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider font-sans">Sgte. Correlativo</span>
+                                                        <input type="number" min="0" value={(brCorrelativos.find(c => c.tipo_documento === '01' && c.serie.toUpperCase() === brSerieFactura.toUpperCase())?.ultimo_numero ?? 0) + 1} onChange={e => {
+                                                            const val = Math.max(0, (parseInt(e.target.value) || 1) - 1);
+                                                            setBrCorrelativos(prev => {
+                                                                const idx = prev.findIndex(c => c.tipo_documento === '01' && c.serie.toUpperCase() === brSerieFactura.toUpperCase());
+                                                                if (idx > -1) {
+                                                                    const copy = [...prev];
+                                                                    copy[idx] = { ...copy[idx], ultimo_numero: val };
+                                                                    return copy;
+                                                                } else {
+                                                                    return [...prev, { tipo_documento: '01', serie: brSerieFactura.toUpperCase(), ultimo_numero: val }];
+                                                                }
+                                                            });
+                                                        }} className="w-24 px-3 py-2 text-center bg-slate-50 border-2 border-slate-150 rounded-xl text-sm font-mono font-bold text-indigo-600 focus:bg-white transition-all outline-none" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* NOTA DE VENTA */}
+                                            <div className="bg-amber-50/40 p-6 rounded-3xl border border-amber-100 shadow-sm flex flex-col justify-between hover:border-amber-200 transition-all group space-y-4">
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="space-y-1 flex-1 pr-2">
+                                                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-bold bg-amber-100/70 text-amber-800 uppercase tracking-widest mb-1 truncate max-w-full">{brCustomNvName}</span>
+                                                            <h5 className="text-[10px] font-black text-amber-700/60 uppercase tracking-wider block">Serie</h5>
+                                                        </div>
+                                                        <input value={brSerieNv} onChange={e => setBrSerieNv(e.target.value.toUpperCase())} className="w-24 px-3 py-2 text-center bg-white border-2 border-amber-100 focus:border-amber-500 rounded-xl font-black text-amber-800 uppercase text-lg transition-all outline-none shadow-sm" maxLength={4} />
+                                                    </div>
+                                                    <div className="flex justify-between items-center gap-2 pt-1 font-bold">
+                                                        <span className="text-[9px] font-extrabold text-amber-800/80 uppercase tracking-wider shrink-0">Nombre Personalizado</span>
+                                                        <input value={brCustomNvName} onChange={e => setBrCustomNvName(e.target.value.toUpperCase())} className="w-32 px-2 py-1 bg-white border border-amber-200 rounded-lg text-[10px] font-black text-amber-900 uppercase shadow-inner text-right" placeholder="NOTA DE VENTA" />
+                                                    </div>
+                                                </div>
+                                                {isEditingBranch && (
+                                                    <div className="space-y-1.5 pt-3 border-t border-amber-100 flex justify-between items-center">
+                                                        <span className="text-[9px] font-extrabold text-amber-800/85 uppercase tracking-wider font-sans">Sgte. Correlativo</span>
+                                                        <input type="number" min="0" value={(brCorrelativos.find(c => c.tipo_documento === '80' && c.serie.toUpperCase() === brSerieNv.toUpperCase())?.ultimo_numero ?? 0) + 1} onChange={e => {
+                                                            const val = Math.max(0, (parseInt(e.target.value) || 1) - 1);
+                                                            setBrCorrelativos(prev => {
+                                                                const idx = prev.findIndex(c => c.tipo_documento === '80' && c.serie.toUpperCase() === brSerieNv.toUpperCase());
+                                                                if (idx > -1) {
+                                                                    const copy = [...prev];
+                                                                    copy[idx] = { ...copy[idx], ultimo_numero: val };
+                                                                    return copy;
+                                                                } else {
+                                                                    return [...prev, { tipo_documento: '80', serie: brSerieNv.toUpperCase(), ultimo_numero: val }];
+                                                                }
+                                                            });
+                                                        }} className="w-24 px-3 py-2 text-center bg-white border-2 border-amber-200 rounded-xl text-sm font-mono font-bold text-amber-900 focus:bg-white transition-all outline-none shadow-sm" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* CORRELATIVO INTERNO (ORDEN INTERNA) */}
+                                            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all group space-y-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="space-y-1">
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-bold bg-slate-200 text-slate-800 uppercase tracking-widest">TICKET INTERNO (SERVICIOS)</span>
+                                                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">ID de Ticket</h5>
+                                                    </div>
+                                                    <div className="px-3 py-1.5 bg-slate-200/50 rounded-xl text-slate-500 font-bold font-mono text-[10px] uppercase tracking-wider self-center text-center">
+                                                        Nº Orden
+                                                    </div>
+                                                </div>
+                                                {isEditingBranch && (
+                                                    <div className="space-y-1.5 pt-3 border-t border-slate-200 flex justify-between items-center">
+                                                        <span className="text-[9px] font-extrabold text-slate-600 uppercase tracking-wider font-sans">Sgte. Nro. de Ticket</span>
+                                                        <input type="number" min="0" value={(brCorrelativos.find(c => c.tipo_documento === 'ORDEN_INTERNA' && c.serie === '')?.ultimo_numero ?? 0) + 1} onChange={e => {
+                                                            const val = Math.max(0, (parseInt(e.target.value) || 1) - 1);
+                                                            setBrCorrelativos(prev => {
+                                                                const idx = prev.findIndex(c => c.tipo_documento === 'ORDEN_INTERNA' && c.serie === '');
+                                                                if (idx > -1) {
+                                                                    const copy = [...prev];
+                                                                    copy[idx] = { ...copy[idx], ultimo_numero: val };
+                                                                    return copy;
+                                                                } else {
+                                                                    return [...prev, { tipo_documento: 'ORDEN_INTERNA', serie: '', ultimo_numero: val }];
+                                                                }
+                                                            });
+                                                        }} className="w-24 px-3 py-2 text-center bg-white border-2 border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-700 focus:bg-white transition-all outline-none shadow-sm" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* NOTAS DE CREDITO FACTURA */}
+                                            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between hover:border-rose-100 transition-all group space-y-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="space-y-1">
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-bold bg-rose-50 text-rose-700 uppercase tracking-widest">N. CRÉDITO FACTURA</span>
+                                                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Serie</h5>
+                                                    </div>
+                                                    <input value={brSerieNcF} onChange={e => setBrSerieNcF(e.target.value.toUpperCase())} className="w-24 px-3 py-2 text-center bg-slate-50 border-2 border-slate-100 focus:border-rose-500 rounded-xl font-black text-slate-800 uppercase text-lg transition-all outline-none" maxLength={4} />
+                                                </div>
+                                                {isEditingBranch && (
+                                                    <div className="space-y-1.5 pt-3 border-t border-slate-50 flex justify-between items-center">
+                                                        <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider font-sans">Sgte. Correlativo</span>
+                                                        <input type="number" min="0" value={(brCorrelativos.find(c => c.tipo_documento === '07' && c.serie.toUpperCase() === brSerieNcF.toUpperCase())?.ultimo_numero ?? 0) + 1} onChange={e => {
+                                                            const val = Math.max(0, (parseInt(e.target.value) || 1) - 1);
+                                                            setBrCorrelativos(prev => {
+                                                                const idx = prev.findIndex(c => c.tipo_documento === '07' && c.serie.toUpperCase() === brSerieNcF.toUpperCase());
+                                                                if (idx > -1) {
+                                                                    const copy = [...prev];
+                                                                    copy[idx] = { ...copy[idx], ultimo_numero: val };
+                                                                    return copy;
+                                                                } else {
+                                                                    return [...prev, { tipo_documento: '07', serie: brSerieNcF.toUpperCase(), ultimo_numero: val }];
+                                                                }
+                                                            });
+                                                        }} className="w-24 px-3 py-2 text-center bg-slate-50 border-2 border-slate-155 rounded-xl text-sm font-mono font-bold text-rose-650 focus:bg-white transition-all outline-none" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* NOTAS DE CREDITO BOLETA */}
+                                            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between hover:border-rose-100 transition-all group space-y-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="space-y-1">
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-bold bg-rose-50 text-rose-700 uppercase tracking-widest">N. CRÉDITO BOLETA</span>
+                                                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Serie</h5>
+                                                    </div>
+                                                    <input value={brSerieNcB} onChange={e => setBrSerieNcB(e.target.value.toUpperCase())} className="w-24 px-3 py-2 text-center bg-slate-50 border-2 border-slate-100 focus:border-rose-500 rounded-xl font-black text-slate-800 uppercase text-lg transition-all outline-none" maxLength={4} />
+                                                </div>
+                                                {isEditingBranch && (
+                                                    <div className="space-y-1.5 pt-3 border-t border-slate-50 flex justify-between items-center">
+                                                        <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider font-sans">Sgte. Correlativo</span>
+                                                        <input type="number" min="0" value={(brCorrelativos.find(c => c.tipo_documento === '07' && c.serie.toUpperCase() === brSerieNcB.toUpperCase())?.ultimo_numero ?? 0) + 1} onChange={e => {
+                                                            const val = Math.max(0, (parseInt(e.target.value) || 1) - 1);
+                                                            setBrCorrelativos(prev => {
+                                                                const idx = prev.findIndex(c => c.tipo_documento === '07' && c.serie.toUpperCase() === brSerieNcB.toUpperCase());
+                                                                if (idx > -1) {
+                                                                    const copy = [...prev];
+                                                                    copy[idx] = { ...copy[idx], ultimo_numero: val };
+                                                                    return copy;
+                                                                } else {
+                                                                    return [...prev, { tipo_documento: '07', serie: brSerieNcB.toUpperCase(), ultimo_numero: val }];
+                                                                }
+                                                            });
+                                                        }} className="w-24 px-3 py-2 text-center bg-slate-50 border-2 border-slate-155 rounded-xl text-sm font-mono font-bold text-rose-650 focus:bg-white transition-all outline-none" />
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

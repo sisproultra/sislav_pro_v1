@@ -237,7 +237,7 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
             <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} /><input type="text" placeholder="Cliente, serie..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"/></div>
             <div className="relative"><select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)} className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none bg-indigo-50 text-indigo-700 appearance-none cursor-pointer"><option value="ALL">TODOS LOS PERIODOS</option>{periods.map(p => <option key={p.val} value={p.val}>{p.label}</option>)}</select><Calendar className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" size={14} /></div>
-            <div className="relative"><select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none cursor-pointer"><option value="ALL">Todos los Tipos</option><option value={InvoiceType.BOLETA}>Boletas</option><option value={InvoiceType.FACTURA}>Facturas</option><option value={InvoiceType.NOTA_VENTA}>Notas de Venta</option><option value={InvoiceType.NOTA_CREDITO}>Notas de Crédito</option></select><Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} /></div>
+            <div className="relative"><select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none cursor-pointer"><option value="ALL">Todos los Tipos</option><option value={InvoiceType.BOLETA}>Boletas</option><option value={InvoiceType.FACTURA}>Facturas</option><option value={InvoiceType.NOTA_VENTA}>{company?.custom_nv_name || company?.modulos_config?.custom_nv_name || 'Notas de Venta'}</option><option value={InvoiceType.NOTA_CREDITO}>Notas de Crédito</option></select><Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} /></div>
             <div className="relative"><select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none cursor-pointer"><option value="ALL">Todos los Estados</option><option value="ACCEPTED">Aceptados SUNAT</option><option value="PENDING">Pendientes / Internos</option><option value="REJECTED">Rechazados</option><option value="VOIDED">Anulados (Con NC)</option></select><AlertTriangle className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} /></div>
             <div className="relative"><input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-600"/><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} /></div>
         </div>
@@ -247,9 +247,16 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
             <div className="p-12 text-center text-gray-400"><div className="flex justify-center mb-4"><Table size={48} className="opacity-20" /></div><p>No se encontraron comprobantes.</p></div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-sm">
-                <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold border-b border-gray-200">
-                  <tr><th className="px-6 py-4">Fecha</th><th className="px-6 py-4">Comprobante</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4 text-right">Total</th><th className="px-6 py-4 text-center min-w-[200px]">Estado SUNAT</th><th className="px-6 py-4 text-center">Acciones</th></tr>
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="bg-gray-50 text-gray-600 uppercase text-[10px] font-bold border-b border-gray-200">
+                  <tr>
+                    <th className="px-2 py-1.5 font-bold uppercase text-gray-500">Fecha</th>
+                    <th className="px-2 py-1.5 font-bold uppercase text-gray-500">Comprobante</th>
+                    <th className="px-2 py-1.5 font-bold uppercase text-gray-500">Cliente</th>
+                    <th className="px-2 py-1.5 font-bold uppercase text-gray-500 text-right">Total</th>
+                    <th className="px-2 py-1.5 font-bold uppercase text-gray-500 text-center w-32">Estado SUNAT</th>
+                    <th className="px-2 py-1.5 font-bold uppercase text-gray-500 text-right pr-4">Acciones</th>
+                  </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {sortedInvoices.map((inv) => {
@@ -269,75 +276,75 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                     
                     return (
                       <tr key={inv.id} className={`transition-colors ${rowClass}`}>
-                        <td className="px-6 py-4 text-gray-600 whitespace-nowrap align-top">
-                          <div className="flex flex-col gap-1">
+                        <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap align-top">
+                          <div className="flex flex-col gap-0.5">
                             <div>
-                              <div className="text-[10px] text-gray-400 font-bold uppercase">Venta</div>
-                              <div className="font-medium">{formatDateSafe(inv.date)}</div>
-                              <div className="text-[10px]">{formatTimeSafe(inv.date)}</div>
+                              <div className="text-[9px] text-gray-400 font-bold uppercase">Venta</div>
+                              <div className="font-semibold">{formatDateSafe(inv.date)}</div>
+                              <div className="text-[9px]">{formatTimeSafe(inv.date)}</div>
                             </div>
-                            {inv.fecha_emision && (
-                              <div className="mt-1 pt-1 border-t border-gray-100">
-                                <div className="text-[10px] text-indigo-400 font-bold uppercase">Emisión</div>
-                                <div className="font-medium text-indigo-700">{formatDateSafe(inv.fecha_emision)}</div>
-                                <div className="text-[10px] text-indigo-500">{formatTimeSafe(inv.fecha_emision)}</div>
+                            {inv.fecha_emision && formatDateSafe(inv.date) !== formatDateSafe(inv.fecha_emision) && (
+                              <div className="mt-0.5 pt-0.5 border-t border-gray-100">
+                                <div className="text-[9px] text-indigo-400 font-bold uppercase">Emisión</div>
+                                <div className="font-semibold text-indigo-700">{formatDateSafe(inv.fecha_emision)}</div>
+                                <div className="text-[9px] text-indigo-500">{formatTimeSafe(inv.fecha_emision)}</div>
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap align-top">
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${inv.type === InvoiceType.FACTURA ? 'bg-blue-100 text-blue-800' : (inv.type === InvoiceType.NOTA_VENTA ? 'bg-gray-200 text-gray-700' : (inv.type === InvoiceType.NOTA_CREDITO ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'))}`}>
-                                  {inv.type === InvoiceType.FACTURA ? 'FACTURA' : (inv.type === InvoiceType.NOTA_VENTA ? 'NOTA VENTA' : (inv.type === InvoiceType.NOTA_CREDITO ? 'NOTA CRÉDITO' : 'BOLETA'))}
+                        <td className="px-2 py-1.5 font-medium text-gray-900 whitespace-nowrap align-top">
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5">
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${inv.type === InvoiceType.FACTURA ? 'bg-blue-100 text-blue-800' : (inv.type === InvoiceType.NOTA_VENTA ? 'bg-gray-200 text-gray-700' : (inv.type === InvoiceType.NOTA_CREDITO ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'))}`}>
+                                  {inv.type === InvoiceType.FACTURA ? 'FACTURA' : (inv.type === InvoiceType.NOTA_VENTA ? (company?.custom_nv_name || company?.modulos_config?.custom_nv_name || 'NOTA VENTA').toUpperCase() : (inv.type === InvoiceType.NOTA_CREDITO ? 'NOTA CRÉDITO' : 'BOLETA'))}
                                 </span>
                                 
                                 <button
                                     onClick={(e) => { e.stopPropagation(); handleDirectPrint(inv); }}
-                                    className="p-1.5 hover:bg-indigo-50 rounded-lg text-brand-primary transition-all shadow-sm border border-brand-primary/20 bg-white"
+                                    className="p-1 hover:bg-indigo-50 rounded text-brand-primary transition-all shadow-sm border border-brand-primary/20 bg-white"
                                     title="Imprimir Documento del Cliente"
                                 >
-                                    <Printer size={14} className="animate-pulse" />
+                                    <Printer size={12} className="animate-pulse" />
                                 </button>
 
-                                <span className={isVoided ? 'line-through text-red-600 font-black' : ''}>
+                                <span className={`text-xs ${isVoided ? 'line-through text-red-600 font-black' : 'font-semibold'}`}>
                                   {inv.serie}-{String(inv.correlativo).padStart(8, '0')}
                                 </span>
-                                {isVoided && <span className="ml-2 px-1.5 py-1 bg-red-700 text-white text-[10px] font-black rounded-lg uppercase animate-bounce shadow-lg ring-4 ring-red-200 flex items-center gap-1 border-2 border-white">
-                                  <Ban size={10} /> ANULADO
+                                {isVoided && <span className="ml-1 px-1 py-0.5 bg-red-700 text-white text-[9px] font-black rounded uppercase shadow flex items-center gap-0.5 border border-white">
+                                  <Ban size={8} /> ANULADO
                                 </span>}
                             </div>
                             
                             {/* HASH DEL COMPROBANTE - BAJO EL DOCUMENTO */}
                             {inv.sunatResponse?.hash && (
-                                <div className="text-[9px] font-mono text-slate-400 flex items-center gap-1.5 mt-1 bg-slate-50 border border-slate-100 w-fit px-1.5 py-0.5 rounded">
-                                    <ShieldCheck size={10} className="text-indigo-400" />
+                                <div className="text-[8px] font-mono text-slate-400 flex items-center gap-1 mt-0.5 bg-slate-50 border border-slate-100 w-fit px-1 py-0.2 rounded">
+                                    <ShieldCheck size={8} className="text-indigo-400" />
                                     {inv.sunatResponse.hash}
                                 </div>
                             )}
 
                             {inv.relatedDocument && (
-                                <div className="text-[10px] text-gray-500 flex items-center gap-1 bg-white border border-gray-200 rounded px-1 w-fit mt-1">
-                                <Undo2 size={10} />Ref: {inv.relatedDocument.serie}-{inv.relatedDocument.correlativo}
+                                <div className="text-[9px] text-gray-500 flex items-center gap-1 bg-white border border-gray-200 rounded px-1 w-fit mt-0.5">
+                                <Undo2 size={8} />Ref: {inv.relatedDocument.serie}-{inv.relatedDocument.correlativo}
                                 </div>
                             )}
                             {isVoided && (
-                                <div className="mt-2 flex flex-col gap-1">
-                                    <div className="flex items-center gap-1.5 bg-red-600 text-white 
-                                                    font-black px-3 py-1 rounded-lg text-[11px] w-fit shadow-sm">
-                                        <Ban size={12} /> ANULADO
-                                        <span className="font-normal opacity-80 text-[9px]">
+                                <div className="mt-1 flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1 bg-red-600 text-white 
+                                                    font-black px-1.5 py-0.5 rounded text-[9px] w-fit shadow-sm">
+                                        <Ban size={10} /> ANULADO
+                                        <span className="font-normal opacity-80 text-[8px]">
                                             {voidingNc ? `NC: ${voidingNc.serie}-${String(voidingNc.correlativo).padStart(8, '0')}` : 'CON NOTA DE CRÉDITO'}
                                         </span>
                                     </div>
                                     {voidingNc?.sunatResponse?.pdfUrl && (
-                                        <div className="flex gap-2 ml-1">
-                                            <a href={voidingNc.sunatResponse.pdfUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] text-red-500 font-bold hover:underline">
-                                                <FileText size={8} /> PDF NC
+                                        <div className="flex gap-1.5 ml-0.5">
+                                            <a href={voidingNc.sunatResponse.pdfUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 text-[8px] text-red-500 font-bold hover:underline">
+                                                <FileText size={7} /> PDF NC
                                             </a>
                                             {voidingNc.sunatResponse.xmlUrl && (
-                                                <a href={voidingNc.sunatResponse.xmlUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[9px] text-indigo-500 font-bold hover:underline">
-                                                    <FileCode size={8} /> XML NC
+                                                <a href={voidingNc.sunatResponse.xmlUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 text-[8px] text-indigo-500 font-bold hover:underline">
+                                                    <FileCode size={7} /> XML NC
                                                 </a>
                                             )}
                                         </div>
@@ -346,80 +353,80 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-gray-600 align-top">
-                          <div className={`font-medium truncate max-w-[180px] ${isVoided ? 'line-through text-gray-400' : 'text-gray-900'}`} title={inv.client.name}>
+                        <td className="px-2 py-1.5 text-gray-600 align-top">
+                          <div className={`font-semibold truncate max-w-[150px] ${isVoided ? 'line-through text-gray-400' : 'text-gray-900'}`} title={inv.client.name}>
                             {inv.client.name}
                           </div>
-                          <div className="flex flex-col gap-0.5 mt-1">
-                            <div className="text-xs font-mono text-gray-500">{inv.client.docType}: {inv.client.docNumber}</div>
+                          <div className="flex flex-col gap-0.5 mt-0.5">
+                            <div className="text-[10px] font-mono text-gray-500">{inv.client.docType}: {inv.client.docNumber}</div>
                             {inv.client.phone && (
-                              <div className="text-[10px] font-bold text-indigo-500 flex items-center gap-1 uppercase tracking-tight">
-                                <Phone size={10} /> {inv.client.phone}
+                              <div className="text-[9px] font-bold text-indigo-500 flex items-center gap-1 uppercase tracking-tight">
+                                <Phone size={8} /> {inv.client.phone}
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-right whitespace-nowrap align-top">
-                          <span className={`font-bold ${inv.type === InvoiceType.NOTA_CREDITO ? 'text-red-600' : (isVoided ? 'line-through text-gray-400' : 'text-gray-900')}`}>
+                        <td className="px-2 py-1.5 text-right whitespace-nowrap align-top">
+                          <span className={`font-bold text-xs ${inv.type === InvoiceType.NOTA_CREDITO ? 'text-red-600' : (isVoided ? 'line-through text-gray-400' : 'text-gray-900')}`}>
                             {inv.type === InvoiceType.NOTA_CREDITO ? '-' : ''} S/ {inv.totals.total.toFixed(2)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-center align-top relative">
-                          <div className="flex flex-col items-center gap-1">
+                        <td className="px-2 py-1.5 text-center align-top relative">
+                          <div className="flex flex-col items-center gap-0.5">
                             {inv.sunatStatus === 'ACCEPTED' ? (
                               isVoided ? (
-                                <div className="flex flex-col items-center gap-1">
-                                  <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-600 border border-gray-200">
-                                    <Ban size={12} /> ANULADO
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className="flex items-center gap-0.5 px-1.5 py-0.2 bg-gray-100 text-gray-600 border border-gray-200 rounded text-[10px] font-bold">
+                                    <Ban size={10} /> ANULADO
                                   </span>
                                   {inv.notes && inv.notes.includes('NC') && (
-                                    <div className="flex items-center gap-1 text-[9px] text-red-500 font-black uppercase">
-                                      <RotateCcw size={10} /> 
+                                    <div className="flex items-center gap-0.5 text-[8px] text-red-500 font-black uppercase">
+                                      <RotateCcw size={8} /> 
                                       {inv.notes.match(/\[(.*?)\]/)?.[1] || 'CON NOTA CRÉDITO'}
                                     </div>
                                   )}
                                 </div>
                               ) : (
-                                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700 border border-green-200">
-                                  <CheckCircle2 size={12} /> ACEPTADO
+                                <span className="flex items-center gap-0.5 px-1.5 py-0.2 bg-green-100 text-green-700 border border-green-200 rounded text-[10px] font-bold">
+                                  <CheckCircle2 size={10} /> ACEPTADO
                                 </span>
                               )
                             ) : inv.sunatStatus === 'REJECTED' ? (
-                              <div className="flex flex-col items-center gap-2">
-                                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
-                                    <XCircle size={12} /> RECHAZADO
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="flex items-center gap-0.5 px-1.5 py-0.2 bg-red-100 text-red-700 border border-red-200 rounded text-[10px] font-bold">
+                                    <XCircle size={10} /> RECHAZADO
                                 </span>
                                 {canRetry && onRetrySunat && (
                                     <button 
                                         onClick={() => onRetrySunat(inv)}
-                                        className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-md hover:bg-red-700 font-bold flex items-center gap-1 shadow-sm transition-all"
+                                        className="text-[8px] bg-red-600 text-white px-1.5 py-0.2 rounded hover:bg-red-700 font-bold flex items-center gap-0.5 shadow-sm transition-all"
                                     >
-                                        <ArrowRightLeft size={10} /> RE-INTENTAR
+                                        <ArrowRightLeft size={8} /> RE-INTENTAR
                                     </button>
                                 )}
                               </div>
                             ) : (
-                              <div className="flex flex-col items-center gap-2">
-                                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
-                                    <AlertTriangle size={12} /> {inv.type === InvoiceType.NOTA_VENTA ? 'INTERNO' : 'PENDIENTE'}
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="flex items-center gap-0.5 px-1.5 py-0.2 bg-yellow-100 text-yellow-700 border border-yellow-200 rounded text-[10px] font-bold">
+                                    <AlertTriangle size={10} /> {inv.type === InvoiceType.NOTA_VENTA ? 'INTERNO' : 'PENDIENTE'}
                                 </span>
                                 {canRetry && onRetrySunat && (
                                     <button 
                                         onClick={() => onRetrySunat(inv)}
-                                        className="text-[10px] bg-amber-600 text-white px-2 py-0.5 rounded-md hover:bg-amber-700 font-bold flex items-center gap-1 shadow-sm transition-all"
+                                        className="text-[8px] bg-amber-600 text-white px-1.5 py-0.2 rounded hover:bg-amber-700 font-bold flex items-center gap-0.5 shadow-sm transition-all"
                                     >
-                                        <ArrowRightLeft size={10} /> ENVIAR AHORA
+                                        <ArrowRightLeft size={8} /> ENVIAR AHORA
                                     </button>
                                 )}
                               </div>
                             )}
                             {inv.sunatResponse?.description && (
-                              <p className="text-[9px] text-gray-400 leading-tight max-w-[150px] italic text-center">{inv.sunatResponse.description}</p>
+                              <p className="text-[8px] text-gray-400 leading-tight max-w-[125px] italic text-center">{inv.sunatResponse.description}</p>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 align-top">
-                          <div className="flex justify-end gap-1 flex-wrap">
+                        <td className="px-2 py-1.5 align-top">
+                          <div className="flex justify-end items-center gap-1 flex-wrap">
                             <button 
                               onClick={() => handleSendWA(inv)} 
                               disabled={isSendingWa} 

@@ -104,6 +104,7 @@ export interface Company extends BaseEntity {
     cobranza?: boolean;
     cobranza_activada_at?: string;
     modulos_config?: Record<string, any>;
+    custom_nv_name?: string;
     mostrar_codigo_barras?: boolean;
     doc_enforce_enabled?: boolean;
     doc_enforce_threshold?: number;

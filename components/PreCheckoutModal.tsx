@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, Ticket, Check, Trash2, Wallet, StickyNote, AlertCircle, CreditCard, Banknote, Smartphone, QrCode, Landmark, DollarSign, CalendarCheck, Edit3, Tag, Loader2 } from 'lucide-react';
 import { PaymentMethodConfig, CartItem, Company } from '../types';
 import { dbValidateCoupon, dbRedeemCoupon } from '../services/dbService';
+import { getPeruDateTime } from '../utils/calculations';
 
 interface PreCheckoutModalProps {
   isOpen: boolean;
@@ -89,7 +90,7 @@ const PreCheckoutModal: React.FC<PreCheckoutModalProps> = ({ isOpen, onClose, on
         setIsCouponMode(false);
         setCouponError('');
         setShowDateConfirmation(false);
-        setIssueDate(initialIssueDate || new Date().toISOString().split('T')[0]);
+        setIssueDate(initialIssueDate || getPeruDateTime().date);
     }
   }, [isOpen, totalAmount, isDelivery, initialIssueDate]);
 
