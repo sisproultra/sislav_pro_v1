@@ -3,6 +3,7 @@ import { X, FileText, User, Search, Plus, CheckCircle2, AlertCircle, ArrowRightL
 import { motion, AnimatePresence } from 'motion/react';
 import { Invoice, InvoiceType, Client, Company } from '../types';
 import ClientModal from './ClientModal';
+import { dbGetClients } from '../services/dbService';
 
 interface ConvertInvoiceModalProps {
   isOpen: boolean;
@@ -28,6 +29,8 @@ const ConvertInvoiceModal: React.FC<ConvertInvoiceModalProps> = ({
   const [targetType, setTargetType] = useState<InvoiceType>(InvoiceType.BOLETA);
   const [selectedClient, setSelectedClient] = useState<Client>(invoice.client);
   const [clientSearch, setClientSearch] = useState('');
+  const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
+  const [isSearchingClients, setIsSearchingClients] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -40,14 +43,30 @@ const ConvertInvoiceModal: React.FC<ConvertInvoiceModalProps> = ({
     }
   }, [isOpen, invoice]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!clientSearch) {
+      setClientSuggestions([]);
+      return;
+    }
 
-  const clientSuggestions = clientSearch 
-    ? clients.filter(c => 
-        c.name.toLowerCase().includes(clientSearch.toLowerCase()) || 
-        c.docNumber.includes(clientSearch)
-      ).slice(0, 5) 
-    : [];
+    const timer = setTimeout(async () => {
+      setIsSearchingClients(true);
+      try {
+        const res = await dbGetClients(1, 100, clientSearch);
+        if (res && res.clients) {
+          setClientSuggestions(res.clients);
+        }
+      } catch (e) {
+        console.error("Error al buscar clientes:", e);
+      } finally {
+        setIsSearchingClients(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [clientSearch]);
+
+  if (!isOpen) return null;
 
   const isValidForFactura = selectedClient.docType === 'RUC';
   const canConvert = targetType === InvoiceType.FACTURA ? isValidForFactura : true;
@@ -150,27 +169,34 @@ const ConvertInvoiceModal: React.FC<ConvertInvoiceModalProps> = ({
                     value={clientSearch}
                     onChange={(e) => setClientSearch(e.target.value)}
                     placeholder="Buscar por DNI, RUC o Nombre..."
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-all shadow-inner"
+                    className="w-full pl-12 pr-12 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-all shadow-inner"
                 />
-                {clientSearch && (
+                {isSearchingClients && (
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                    <Loader2 size={16} className="animate-spin text-indigo-500" />
+                  </div>
+                )}
+                {clientSearch && !isSearchingClients && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                        {clientSuggestions.map(c => (
-                            <div 
-                                key={c.id} 
-                                onClick={() => { setSelectedClient(c); setClientSearch(''); }}
-                                className="p-4 hover:bg-slate-50 cursor-pointer border-b border-slate-50 flex items-center gap-3 transition-colors"
-                            >
-                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                                    <User size={14} />
+                        <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
+                            {clientSuggestions.map(c => (
+                                <div 
+                                    key={c.id} 
+                                    onClick={() => { setSelectedClient(c); setClientSearch(''); }}
+                                    className="p-4 hover:bg-slate-50 cursor-pointer flex items-center gap-3 transition-colors"
+                                >
+                                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                                        <User size={14} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="font-extrabold text-slate-800 text-[11px] uppercase truncate">{c.name}</p>
+                                        <p className="text-[9px] text-slate-400 font-mono font-bold tracking-tighter">{c.docType}: {c.docNumber}</p>
+                                    </div>
+                                    <ArrowRightLeft size={14} className="text-slate-200" />
                                 </div>
-                                <div className="flex-1">
-                                    <p className="font-extrabold text-slate-800 text-[11px] uppercase truncate">{c.name}</p>
-                                    <p className="text-[9px] text-slate-400 font-mono font-bold tracking-tighter">{c.docType}: {c.docNumber}</p>
-                                </div>
-                                <ArrowRightLeft size={14} className="text-slate-200" />
-                            </div>
-                        ))}
-                        {clientSuggestions.length === 0 && <div className="p-6 text-center text-[11px] text-slate-400 font-bold uppercase tracking-widest italic bg-slate-50/50">No se encontraron resultados</div>}
+                            ))}
+                            {clientSuggestions.length === 0 && <div className="p-6 text-center text-[11px] text-slate-400 font-bold uppercase tracking-widest italic bg-slate-50/50">No se encontraron resultados</div>}
+                        </div>
                     </div>
                 )}
             </div>
