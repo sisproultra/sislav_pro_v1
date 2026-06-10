@@ -1138,7 +1138,7 @@ export const dbCreateClient = async (client: any): Promise<Client> => {
         telefono: client.phone, 
         email: client.email, 
         direccion: client.address?.toUpperCase() || '-', 
-        google_maps_url: client.google_maps_url, 
+        google_maps_url: client.googleMapsUrl !== undefined ? client.googleMapsUrl : client.google_maps_url, 
         latitud: client.latitud !== undefined ? client.latitud : client.latitude, 
         longitud: client.longitud !== undefined ? client.longitud : client.longitude, 
         mensaje_alerta: client.alertMessage, 
