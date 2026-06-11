@@ -184,7 +184,7 @@ export const printQuoteDirectly = async (quote: PausedSale, company: Company, pa
               color: #000;
               -webkit-print-color-adjust: exact;
             }
-            tr, table, div, p, img {
+            tr {
               page-break-inside: avoid;
               break-inside: avoid;
             }
@@ -386,7 +386,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
               color: #000;
               -webkit-print-color-adjust: exact;
             }
-            tr, table, div, p, img {
+            tr {
               page-break-inside: avoid;
               break-inside: avoid;
             }
