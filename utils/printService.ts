@@ -146,12 +146,13 @@ export const printQuoteDirectly = async (quote: PausedSale, company: Company, pa
     if (!iframe) {
         iframe = document.createElement('iframe');
         iframe.id = 'print-iframe';
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
+        iframe.style.position = 'absolute';
+        iframe.style.left = '-9999px';
+        iframe.style.top = '0';
+        iframe.style.width = '80mm';
+        iframe.style.height = '100px';
         iframe.style.border = '0';
+        iframe.style.overflow = 'visible';
         document.body.appendChild(iframe);
     }
 
@@ -169,6 +170,11 @@ export const printQuoteDirectly = async (quote: PausedSale, company: Company, pa
           <title>SISLAV - Cotización</title>
           <style>
             @page { margin: 0; size: 80mm auto; }
+            html, body {
+              height: auto !important;
+              min-height: 100% !important;
+              overflow: visible !important;
+            }
             body { 
               margin: 0; padding: 4mm; 
               font-family: Arial, Helvetica, sans-serif; 
@@ -177,6 +183,10 @@ export const printQuoteDirectly = async (quote: PausedSale, company: Company, pa
               line-height: 1.2; 
               color: #000;
               -webkit-print-color-adjust: exact;
+            }
+            tr, table, div, p, img {
+              page-break-inside: avoid;
+              break-inside: avoid;
             }
             .text-center { text-align: center; }
             .bold { font-weight: bold; }
@@ -291,6 +301,7 @@ export const printQuoteDirectly = async (quote: PausedSale, company: Company, pa
 };
 
 export const printInvoiceDirectly = async (invoice: Invoice, company: Company, passedConfig?: any, clientOnly = false) => {
+    console.log("[Print] printInvoiceDirectly - clientOnly:", clientOnly, "invoice:", invoice.serie + "-" + invoice.correlativo);
     const config = passedConfig || await dbGetTicketConfig(company.id).catch(() => null);
     
     // Create hidden iframe for printing
@@ -298,12 +309,13 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
     if (!iframe) {
         iframe = document.createElement('iframe');
         iframe.id = 'print-iframe';
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
+        iframe.style.position = 'absolute';
+        iframe.style.left = '-9999px';
+        iframe.style.top = '0';
+        iframe.style.width = '80mm';
+        iframe.style.height = '100px';
         iframe.style.border = '0';
+        iframe.style.overflow = 'visible';
         document.body.appendChild(iframe);
     }
 
@@ -360,6 +372,11 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
           <title>SISLAV - Impresión Directa</title>
           <style>
             @page { margin: 0; size: 80mm auto; }
+            html, body {
+              height: auto !important;
+              min-height: 100% !important;
+              overflow: visible !important;
+            }
             body { 
               margin: 0; padding: 4mm; 
               font-family: Arial, Helvetica, sans-serif; 
@@ -368,6 +385,10 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
               line-height: 1.2; 
               color: #000;
               -webkit-print-color-adjust: exact;
+            }
+            tr, table, div, p, img {
+              page-break-inside: avoid;
+              break-inside: avoid;
             }
             .text-center { text-align: center; }
             .bold { font-weight: bold; }
