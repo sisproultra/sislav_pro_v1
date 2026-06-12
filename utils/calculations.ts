@@ -87,7 +87,8 @@ export const formatDateSafe = (dateStr: string | undefined): string => {
     }
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return '-';
-    return d.toLocaleDateString(undefined, { 
+    return d.toLocaleDateString('es-PE', { 
+        timeZone: 'America/Lima',
         year: 'numeric', 
         month: '2-digit', 
         day: '2-digit' 
@@ -95,13 +96,14 @@ export const formatDateSafe = (dateStr: string | undefined): string => {
 };
 
 /**
- * Retorna la hora formateada en la zona horaria local del navegador.
+ * Retorna la hora formateada forzada a la zona horaria de Perú.
  */
 export const formatTimeSafe = (dateStr: string | undefined): string => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleTimeString(undefined, { 
+    return d.toLocaleTimeString('es-PE', { 
+        timeZone: 'America/Lima',
         hour: '2-digit', 
         minute: '2-digit', 
         second: '2-digit',
@@ -110,7 +112,7 @@ export const formatTimeSafe = (dateStr: string | undefined): string => {
 };
 
 /**
- * Retorna fecha y hora completa local.
+ * Retorna fecha y hora completa forzada a la zona horaria de Perú.
  */
 export const formatDateTimeSafe = (dateStr: string | undefined): string => {
     if (!dateStr) return '-';
@@ -141,7 +143,7 @@ export const getPeruDateTime = () => {
     const date = `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
     const time = `${getPart('hour')}:${getPart('minute')}:${getPart('second')}`;
     
-    return { date, time, iso: `${date}T${time}` };
+    return { date, time, iso: `${date}T${time}-05:00` };
 };
 
 /**
