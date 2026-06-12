@@ -8,7 +8,7 @@ import {
     ListFilter, Shirt, Check, Store, Truck, Smartphone, Loader2, Navigation,
     MoreVertical, PackageCheck, Send, Edit, Waves, Wind, DollarSign, Save, CreditCard, Banknote, QrCode, Landmark, Wallet,
     Square, CheckSquare, Maximize2, MapPin, ExternalLink, Info, History, ArrowLeft, Tag, ArrowRightLeft,
-    ChevronLeft, ChevronRight, FileSpreadsheet, Ban
+    ChevronLeft, ChevronRight, FileSpreadsheet, Ban, ChevronUp, ChevronDown, ArrowUpDown
 } from 'lucide-react';
 import { printInvoiceDirectly } from '../utils/printService';
 import OrderItemsDetailModal from '../components/OrderItemsDetailModal';
@@ -115,6 +115,79 @@ const CircularProgress = ({ percent, color: customColor }: { percent: number; co
     );
 };
 
+const renderPaymentMethodBadge = (payments: any[] | undefined) => {
+    if (!payments || payments.length === 0) {
+        return (
+            <div className="flex flex-col items-center">
+                <span className="text-slate-400 font-bold text-[9px] uppercase tracking-wider bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">-</span>
+            </div>
+        );
+    }
+
+    const uniqueMethods = Array.from(new Set(
+        payments
+            .map(p => p.metodo_pago_name?.trim().toUpperCase() || 'EFECTIVO')
+            .filter(Boolean)
+    ));
+
+    if (uniqueMethods.length === 0) {
+        return (
+            <div className="flex flex-col items-center">
+                <span className="text-slate-400 font-bold text-[9px] uppercase tracking-wider bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">-</span>
+            </div>
+        );
+    }
+
+    let text = '';
+    let styleClass = '';
+    
+    if (uniqueMethods.length > 1) {
+        text = 'MIXTO';
+        styleClass = 'bg-fuchsia-600 text-white border-fuchsia-700 shadow-sm';
+    } else {
+        const method = uniqueMethods[0];
+        text = method;
+        if (method === 'EFECTIVO' || method.includes('CASH')) {
+            styleClass = 'bg-emerald-600 text-white border-emerald-700 shadow-sm';
+        } else if (method === 'YAPE') {
+            styleClass = 'bg-indigo-600 text-white border-indigo-700 shadow-sm';
+        } else if (method === 'PLIN') {
+            styleClass = 'bg-teal-600 text-white border-teal-700 shadow-sm';
+        } else if (method.includes('TARJETA') || method.includes('CARD') || method.includes('VISA') || method.includes('MASTERCARD')) {
+            styleClass = 'bg-blue-600 text-white border-blue-700 shadow-sm';
+        } else if (method.includes('TRANSF') || method.includes('DEPOSITO') || method.includes('BANCO') || method.includes('BCP') || method.includes('BBVA') || method.includes('INTERBANK')) {
+            styleClass = 'bg-amber-500 text-white border-amber-600 shadow-sm';
+        } else {
+            styleClass = 'bg-slate-600 text-white border-slate-700 shadow-sm';
+        }
+    }
+
+    const sortedPayments = [...payments].sort((a, b) => {
+        const dA = a.date ? new Date(a.date).getTime() : 0;
+        const dB = b.date ? new Date(b.date).getTime() : 0;
+        return dB - dA;
+    });
+
+    const latestPayment = sortedPayments[0];
+    const formattedDate = latestPayment && latestPayment.date ? formatDateSafe(latestPayment.date) : '';
+    const formattedTime = latestPayment && latestPayment.date ? formatTimeSafe(latestPayment.date) : '';
+
+    return (
+        <div className="flex flex-col items-center justify-center gap-1">
+            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg border text-[9px] font-black uppercase tracking-wider ${styleClass}`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-white/80" />
+                {text}
+            </span>
+            {formattedDate && (
+                <div className="text-[10px] text-slate-500 font-mono tracking-tight leading-none text-center">
+                    <div>{formattedDate}</div>
+                    <div className="text-[9px] text-slate-400 mt-0.5">{formattedTime}</div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const MyOrders: React.FC<MyOrdersProps> = ({
     invoices, total, currentPage, onPageChange, onSearch, company, onUpdateStatus, onEditOrder, onAddPayment, onUnifiedAction, onAddClient, paymentMethods, clients, onUpdateItemStatus, canManage = true, globalColors = [], ticketConfig, globalStats, currentUser, onOpenWaCampaign, onConvertInvoice
 }) => {
@@ -131,6 +204,23 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
     const [viewerPhotos, setViewerPhotos] = useState<string[]>([]);
     const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+
+    const [sortField, setSortField] = useState<'cliente' | 'pago' | null>(null);
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | null>(null);
+
+    const handleSort = (field: 'cliente' | 'pago') => {
+        if (sortField === field) {
+            if (sortOrder === 'asc') {
+                setSortOrder('desc');
+            } else {
+                setSortField(null);
+                setSortOrder(null);
+            }
+        } else {
+            setSortField(field);
+            setSortOrder('asc');
+        }
+    };
 
     const [payAmount, setPayAmount] = useState('');
     const [payments, setPayments] = useState<PaymentEntry[]>([]);
@@ -223,7 +313,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     }, [invoices]);
 
     const filteredInvoices = useMemo(() => {
-        return invoices.filter(inv => {
+        let list = invoices.filter(inv => {
             if (inv.orderStatus === 'CANCELADO') return false;
             if (inv.type === '07') return false;
             
@@ -240,7 +330,35 @@ const MyOrders: React.FC<MyOrdersProps> = ({
             
             return true;
         });
-    }, [invoices, selectedSummaryFilter]);
+
+        if (sortField && sortOrder) {
+            list = [...list].sort((a, b) => {
+                if (sortField === 'cliente') {
+                    const nameA = (a.client?.name || '').trim().toUpperCase();
+                    const nameB = (b.client?.name || '').trim().toUpperCase();
+                    if (nameA < nameB) return sortOrder === 'asc' ? -1 : 1;
+                    if (nameA > nameB) return sortOrder === 'asc' ? 1 : -1;
+                    return 0;
+                } else if (sortField === 'pago') {
+                    const getPaymentsLatestDate = (inv: Invoice) => {
+                        if (!inv.payments || inv.payments.length === 0) return 0;
+                        const dates = inv.payments
+                            .map(p => p.date ? new Date(p.date).getTime() : 0)
+                            .filter(Boolean);
+                        if (dates.length === 0) return 0;
+                        return Math.max(...dates);
+                    };
+
+                    const timeA = getPaymentsLatestDate(a);
+                    const timeB = getPaymentsLatestDate(b);
+                    return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+                }
+                return 0;
+            });
+        }
+
+        return list;
+    }, [invoices, selectedSummaryFilter, sortField, sortOrder]);
 
     const handleExportExcel = async () => {
         setIsExporting(true);
@@ -748,8 +866,33 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                     <tr className="text-xs font-bold uppercase tracking-widest">
                                         <th className="px-6 py-6">Orden</th>
                                         <th className="px-6 py-6">Documento</th>
-                                        <th className="px-6 py-6">Cliente</th>
+                                        <th 
+                                            className="px-6 py-6 cursor-pointer select-none hover:bg-black/10 transition-colors"
+                                            onClick={() => handleSort('cliente')}
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                <span>Cliente</span>
+                                                {sortField === 'cliente' ? (
+                                                    sortOrder === 'asc' ? <ChevronUp size={14} className="inline-block text-white" /> : <ChevronDown size={14} className="inline-block text-white" />
+                                                ) : (
+                                                    <ArrowUpDown size={12} className="opacity-60 inline-block text-white/70" />
+                                                )}
+                                            </div>
+                                        </th>
                                         <th className="px-6 py-6">Finanzas</th>
+                                        <th 
+                                            className="px-6 py-6 cursor-pointer select-none hover:bg-black/10 transition-colors text-center"
+                                            onClick={() => handleSort('pago')}
+                                        >
+                                            <div className="flex items-center justify-center gap-1.5">
+                                                <span>Pago</span>
+                                                {sortField === 'pago' ? (
+                                                    sortOrder === 'asc' ? <ChevronUp size={14} className="inline-block text-white" /> : <ChevronDown size={14} className="inline-block text-white" />
+                                                ) : (
+                                                    <ArrowUpDown size={12} className="opacity-60 inline-block text-white/70" />
+                                                )}
+                                            </div>
+                                        </th>
                                         <th className="px-6 py-6 text-center">Progreso de Lavado</th>
                                         <th className="px-6 py-6 text-center">Entregas</th>
                                         <th className="px-6 py-6 text-center">Acciones</th>
@@ -860,6 +1003,9 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                         <div className="flex justify-between border-b border-slate-100 pb-1"><span className="text-slate-400">Pagado:</span><span className="text-blue-600">S/ {(inv.prePaymentAmount || 0).toFixed(2)}</span></div>
                                                         <div className="flex justify-between pt-1"><span className="text-slate-400">Saldo:</span><span className={balance > 0 ? 'text-rose-600 font-black' : 'text-emerald-600'}>S/ {balance.toFixed(2)}</span></div>
                                                     </div>
+                                                </td>
+                                                <td className="px-6 py-5 text-center">
+                                                    {renderPaymentMethodBadge(inv.payments)}
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <div className="flex justify-center items-center">
@@ -983,6 +1129,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                         <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tighter ${inv.type === InvoiceType.FACTURA ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
                                                             {inv.type === InvoiceType.FACTURA ? 'FACTURA' : (inv.type === InvoiceType.NOTA_VENTA ? 'NOTA VENTA' : 'BOLETA')}
                                                         </span>
+                                                        {renderPaymentMethodBadge(inv.payments)}
                                                         <div className="flex items-center space-x-1.5">
                                                             <button
                                                                 onClick={() => handleDirectPrint(inv)}
