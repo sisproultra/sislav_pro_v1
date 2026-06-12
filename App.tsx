@@ -1486,7 +1486,7 @@ export default function App() {
 
             // 2. Construir la invoice completa con el correlativo NUEVO de la BD
             //    (NO usar el correlativo viejo de la nota de venta)
-            const now = new Date().toISOString();
+            const now = getPeruDateTime().iso;
             const fullInvoice: Invoice = { 
                 ...invoice, 
                 type: targetType, 

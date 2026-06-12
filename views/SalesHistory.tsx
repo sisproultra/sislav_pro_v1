@@ -13,7 +13,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import VoidReasonModal from '../components/VoidReasonModal';
 import ConvertInvoiceModal from '../components/ConvertInvoiceModal';
 import * as XLSX from 'xlsx';
-import { formatDateSafe, formatTimeSafe } from '../utils/calculations';
+import { formatDateSafe, formatTimeSafe, getPeruDateTime } from '../utils/calculations';
 import { sendInvoiceViaWhatsApp, generateWhatsAppLink } from '../services/whatsappService';
 
 interface SalesHistoryProps {
@@ -32,10 +32,15 @@ interface SalesHistoryProps {
 
 const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients, onViewReceipt, onVoidInvoice, onDeleteInvoice, onConvertInvoice, onRetrySunat, onSendSummary, onAddClient, ticketConfig }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('ALL');
-  const [filterStatus, setFilterStatus] = useState('ALL');
-  const [filterDate, setFilterDate] = useState('');
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('ALL');
+  const [startDate, setStartDate] = useState(() => {
+      const { date } = getPeruDateTime();
+      const [year, month] = date.split('-');
+      return `${year}-${month}-01`;
+  });
+  const [endDate, setEndDate] = useState(() => {
+      const { date } = getPeruDateTime();
+      return date;
+  });
 
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
   const [invoiceToVoid, setInvoiceToVoid] = useState<Invoice | null>(null);
@@ -45,18 +50,6 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
   const [sendingWaId, setSendingWaId] = useState<string | null>(null);
   const [sentSuccessIds, setSentSuccessIds] = useState<Set<string>>(new Set());
 
-  const periods = useMemo(() => {
-      const list = [];
-      const now = new Date();
-      for (let i = 0; i < 24; i++) {
-          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-          const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-          const label = d.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' }).toUpperCase();
-          list.push({ val, label });
-      }
-      return list;
-  }, []);
-
   const filteredInvoices = invoices.filter(inv => {
       // Solo mostrar Boletas y Facturas en Documentos Electrónicos
       if (inv.type !== InvoiceType.BOLETA && inv.type !== InvoiceType.FACTURA) return false;
@@ -65,23 +58,21 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
       const isElectronicVoided = inv.orderStatus === 'CANCELADO' || (inv as any).status === 'anulado';
       
       if (inv.orderStatus === 'CANCELADO' && !isElectronicVoided) return false;
-      if (selectedPeriod !== 'ALL' && !inv.date.startsWith(selectedPeriod)) return false;
-      const term = searchTerm.toLowerCase();
-      const matchesSearch = inv.client.name.toLowerCase().includes(term) || 
-                            `${inv.serie}-${inv.correlativo}`.toLowerCase().includes(term) ||
-                            inv.client.docNumber.includes(term);
+      
+      const term = searchTerm.toLowerCase().trim();
+      const clientName = inv.client?.name || '';
+      const clientDoc = inv.client?.docNumber || '';
+      const invoiceRef = `${inv.serie}-${inv.correlativo}`;
+      const matchesSearch = !term || 
+                            clientName.toLowerCase().includes(term) || 
+                            invoiceRef.toLowerCase().includes(term) ||
+                            clientDoc.includes(term);
       if (!matchesSearch) return false;
-      if (filterType !== 'ALL' && inv.type !== filterType) return false;
-      if (filterStatus !== 'ALL') {
-          if (filterStatus === 'ACCEPTED' && inv.sunatStatus !== 'ACCEPTED') return false;
-          if (filterStatus === 'PENDING' && inv.sunatStatus !== 'PENDING' && inv.sunatStatus !== 'INTERNAL') return false;
-          if (filterStatus === 'REJECTED' && inv.sunatStatus !== 'REJECTED') return false;
-          if (filterStatus === 'VOIDED') {
-              const isVoided = invoices.some(n => n.type === InvoiceType.NOTA_CREDITO && n.sunatStatus === 'ACCEPTED' && n.relatedDocument?.serie === inv.serie && n.relatedDocument?.correlativo === inv.correlativo);
-              if (!isVoided) return false;
-          }
-      }
-      if (filterDate && !inv.date.startsWith(filterDate)) return false;
+
+      // Filtro por rango de fechas de emisión
+      const invDateStr = (inv.fecha_emision || inv.date).split('T')[0];
+      if (startDate && invDateStr < startDate) return false;
+      if (endDate && invDateStr > endDate) return false;
       return true;
   });
 
@@ -94,15 +85,17 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
   // Cálculo de venta neta del periodo considerando NCs aunque no se listen como filas
   const totalSales = useMemo(() => {
     return invoices.filter(inv => {
-        if (selectedPeriod !== 'ALL' && !inv.date.startsWith(selectedPeriod)) return false;
+        if (inv.type !== InvoiceType.BOLETA && inv.type !== InvoiceType.FACTURA && inv.type !== InvoiceType.NOTA_CREDITO) return false;
+        const invDateStr = (inv.fecha_emision || inv.date).split('T')[0];
+        if (startDate && invDateStr < startDate) return false;
+        if (endDate && invDateStr > endDate) return false;
         return true;
     }).reduce((sum, inv) => {
         if (inv.sunatStatus !== 'ACCEPTED') return sum;
-        if (inv.type !== InvoiceType.BOLETA && inv.type !== InvoiceType.FACTURA && inv.type !== InvoiceType.NOTA_CREDITO) return sum;
         const isNC = inv.type === InvoiceType.NOTA_CREDITO;
         return isNC ? sum - inv.totals.total : sum + inv.totals.total;
     }, 0);
-  }, [invoices, selectedPeriod]);
+  }, [invoices, startDate, endDate]);
   
   const getVoidingNc = (targetInv: Invoice) => {
     // Primero intentar por ID relacionado si existe
@@ -207,7 +200,7 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
           const ws = XLSX.utils.json_to_sheet(rows);
           const wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, "RegVentas");
-          XLSX.writeFile(wb, `REGISTRO_VENTAS_14_1_${selectedPeriod}.xlsx`);
+          XLSX.writeFile(wb, `REGISTRO_VENTAS_14_1_${startDate}_${endDate}.xlsx`);
       } catch (e) { alert("Error exportando Excel"); } finally { setIsExporting(false); }
   };
 
@@ -239,12 +232,41 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
             </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
-            <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} /><input type="text" placeholder="Cliente, serie..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"/></div>
-            <div className="relative"><select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)} className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none bg-indigo-50 text-indigo-700 appearance-none cursor-pointer"><option value="ALL">TODOS LOS PERIODOS</option>{periods.map(p => <option key={p.val} value={p.val}>{p.label}</option>)}</select><Calendar className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" size={14} /></div>
-            <div className="relative"><select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none cursor-pointer"><option value="ALL">Todos los Tipos</option><option value={InvoiceType.BOLETA}>Boletas</option><option value={InvoiceType.FACTURA}>Facturas</option></select><Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} /></div>
-            <div className="relative"><select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none cursor-pointer"><option value="ALL">Todos los Estados</option><option value="ACCEPTED">Aceptados SUNAT</option><option value="PENDING">Pendientes / Internos</option><option value="REJECTED">Rechazados</option><option value="VOIDED">Anulados (Con NC)</option></select><AlertTriangle className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} /></div>
-            <div className="relative"><input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-600"/><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} /></div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+            <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input 
+                    type="text" 
+                    placeholder="Cliente, serie..." 
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+            </div>
+            <div className="relative flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Desde:</span>
+                <div className="relative w-full">
+                    <input 
+                        type="date" 
+                        value={startDate} 
+                        onChange={(e) => setStartDate(e.target.value)} 
+                        className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-600"
+                    />
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                </div>
+            </div>
+            <div className="relative flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Hasta:</span>
+                <div className="relative w-full">
+                    <input 
+                        type="date" 
+                        value={endDate} 
+                        onChange={(e) => setEndDate(e.target.value)} 
+                        className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-600"
+                    />
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                </div>
+            </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

@@ -10,7 +10,7 @@ import {
     ORDER_STATUS_MAP, Employee, GlobalColor, PromoBanner, ItemDetalle, SunatResponse, CampaignTemplate,
     InventoryCount, GuiaRemision, WaTemplate, WaTemplateCategory
 } from '../types';
-import { formatOrderNumber, getNextLetter, roundToOneDecimal } from '../utils/calculations';
+import { formatOrderNumber, getNextLetter, roundToOneDecimal, getPeruDateTime } from '../utils/calculations';
 import { fixEncoding } from '../utils/stringUtils';
 import { getSaasGlobalConfig } from './saasService';
 
@@ -3823,7 +3823,7 @@ export const dbConvertInvoice = async (invoiceId: string, targetType: InvoiceTyp
             correlativo: nextNumber,
             cliente_id: finalClient.id,
             sunat_status: 'PENDING',
-            fecha_emision: new Date().toISOString()
+            fecha_emision: getPeruDateTime().iso
         })
         .eq('id', invoiceId)
         .select()
