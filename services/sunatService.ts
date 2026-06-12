@@ -311,13 +311,16 @@ export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): P
           };
       }
 
-      const successVal = body.success === true || body.success === 'true' || body.status === 'OK' || body.data?.success === true || body.codigo === '0' || body.code === 200 || body?.errors === undefined;
-      const descVal = body.message || body.msg || body.description || body.data?.message || (successVal ? "Comprobante generado y enviado con éxito" : "Error de emisión");
+      const successVal = body.cod_sunat !== undefined 
+          ? (String(body.cod_sunat) === '0' || body.cod_sunat === 0) 
+          : (body.success === true || body.success === 'true' || body.status === 'OK' || body.data?.success === true || body.codigo === '0' || body.code === 200 || body?.errors === undefined);
+          
+      const descVal = body.msj_sunat || body.cdr_data?.description || body.message || body.msg || body.description || body.data?.message || (successVal ? "Comprobante generado y enviado con éxito" : "Error de emisión");
 
       const pdfUrl = body.ruta_pdf || body.url_pdf || body.pdf || body.data?.ruta_pdf || body.data?.url_pdf || body.data?.pdf || "";
       const xmlUrl = body.ruta_xml || body.url_xml || body.xml || body.data?.ruta_xml || body.data?.url_xml || body.data?.xml || "";
       const cdrUrl = body.ruta_cdr || body.url_cdr || body.cdr || body.data?.ruta_cdr || body.data?.url_cdr || body.data?.cdr || "";
-      const hashVal = body.hash || body.firma || body.hash_cpe || body.data?.hash || body.data?.firma || "---";
+      const hashVal = body.hash_cdr || body.cdr_data?.digest_value || body.hash || body.firma || body.hash_cpe || body.data?.hash || body.data?.firma || "---";
 
       return {
           success: successVal,
