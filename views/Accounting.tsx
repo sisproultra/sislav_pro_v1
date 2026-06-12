@@ -70,7 +70,7 @@ const Accounting: React.FC<AccountingProps> = ({ invoices, paymentMethods, compa
     const filteredInvoices = useMemo(() => {
         if (filterByType === 'VENTA') {
             return invoices.filter(inv => {
-                const date = inv.date.split('T')[0];
+                const date = (inv.date || '').slice(0, 10);
                 const inDateRange = date >= startDate && date <= endDate;
                 const matchesDocType = docTypeFilter === 'ALL' || inv.type === docTypeFilter;
                 

@@ -2122,11 +2122,18 @@ export const dbGetInvoicesForReport = async (filter: 'TO_COLLECT' | 'TO_DELIVER'
     }
 };
 
-export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, searchTerm: string = ''): Promise<{ invoices: Invoice[], total: number }> => {
+export const dbGetInvoices = async (
+    page: number = 1, 
+    pageSize: number = 50, 
+    searchTerm: string = '',
+    onlyElectronic: boolean = false,
+    startDate?: string,
+    endDate?: string
+): Promise<{ invoices: Invoice[], total: number }> => {
     const branchId = getActiveBranchId();
     if (!branchId) return { invoices: [], total: 0 };
 
-    const cacheKey = `invoices_${branchId}_p${page}_s${pageSize}_q${searchTerm}`;
+    const cacheKey = `invoices_${branchId}_p${page}_s${pageSize}_q${searchTerm}_elec${onlyElectronic}_start${startDate || ''}_end${endDate || ''}`;
     const cached = getCached(cacheKey, 30000); // 30s TTL for invoices to optimize egress
     if (cached) return cached;
     try {
@@ -2141,6 +2148,19 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
             .eq('sucursal_id', branchId)
             .eq('empresa_holding_id', holdingId);
 
+        if (onlyElectronic) {
+            query = query.in('tipo_documento_codigo', ['01', '03', '07']);
+        }
+
+        const dateField = onlyElectronic ? 'fecha_emision' : 'fecha_recepcion';
+
+        if (startDate) {
+            query = query.gte(dateField, `${startDate}T00:00:00-05:00`);
+        }
+        if (endDate) {
+            query = query.lte(dateField, `${endDate}T23:59:59-05:00`);
+        }
+
         if (searchTerm) {
             let intelligentSearch = searchTerm.trim().toUpperCase();
             
@@ -2150,11 +2170,11 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
 
             if (rangePattern.test(intelligentSearch)) {
                 const [, start, end] = intelligentSearch.match(rangePattern)!;
-                query = query.gte('fecha_recepcion', `${start}T00:00:00-05:00`)
-                             .lte('fecha_recepcion', `${end}T23:59:59-05:00`);
+                query = query.gte(dateField, `${start}T00:00:00-05:00`)
+                             .lte(dateField, `${end}T23:59:59-05:00`);
             } else if (datePattern.test(intelligentSearch)) {
-                query = query.gte('fecha_recepcion', `${intelligentSearch}T00:00:00-05:00`)
-                             .lte('fecha_recepcion', `${intelligentSearch}T23:59:59-05:00`);
+                query = query.gte(dateField, `${intelligentSearch}T00:00:00-05:00`)
+                             .lte(dateField, `${intelligentSearch}T23:59:59-05:00`);
             } else {
                 const ticketPattern = /^([A-Z]+)[-]?([0-9]+)$/i;
                 const match = intelligentSearch.match(ticketPattern);
@@ -2200,7 +2220,7 @@ export const dbGetInvoices = async (page: number = 1, pageSize: number = 50, sea
         }
 
         const { data: ventas, count, error: vError } = await query
-            .order('fecha_recepcion', { ascending: false })
+            .order(dateField, { ascending: false })
             .range(from, to);
 
         if (vError) {

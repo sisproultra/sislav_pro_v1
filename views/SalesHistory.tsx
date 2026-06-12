@@ -1,12 +1,12 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Invoice, InvoiceType, OrderStatus, IdentityDocumentType, Company, Client } from '../types';
 import { 
     FileText, CheckCircle2, AlertTriangle, Eye, XCircle, Undo2, Ban, 
     FileCode, FileArchive, Search, Filter, Calendar, Trash2, 
     FileWarning, Download, Table, MessageCircle, Loader2, 
     ExternalLink, Check, ArrowRightLeft, Phone, ShieldCheck, FileCheck, RotateCcw,
-    Printer
+    Printer, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { printInvoiceDirectly } from '../utils/printService';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -15,6 +15,8 @@ import ConvertInvoiceModal from '../components/ConvertInvoiceModal';
 import * as XLSX from 'xlsx';
 import { formatDateSafe, formatTimeSafe, getPeruDateTime } from '../utils/calculations';
 import { sendInvoiceViaWhatsApp, generateWhatsAppLink } from '../services/whatsappService';
+import { useQuery } from '@tanstack/react-query';
+import { dbGetInvoices } from '../services/dbService';
 
 interface SalesHistoryProps {
   invoices: Invoice[];
@@ -30,7 +32,7 @@ interface SalesHistoryProps {
   ticketConfig?: any;
 }
 
-const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients, onViewReceipt, onVoidInvoice, onDeleteInvoice, onConvertInvoice, onRetrySunat, onSendSummary, onAddClient, ticketConfig }) => {
+const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices: initialInvoices, company, clients, onViewReceipt, onVoidInvoice, onDeleteInvoice, onConvertInvoice, onRetrySunat, onSendSummary, onAddClient, ticketConfig }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState(() => {
       const { date } = getPeruDateTime();
@@ -50,9 +52,28 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
   const [sendingWaId, setSendingWaId] = useState<string | null>(null);
   const [sentSuccessIds, setSentSuccessIds] = useState<Set<string>>(new Set());
 
-  const filteredInvoices = invoices.filter(inv => {
-      // Solo mostrar Boletas y Facturas en Documentos Electrónicos
-      if (inv.type !== InvoiceType.BOLETA && inv.type !== InvoiceType.FACTURA) return false;
+  // Search/Filters with Server Side retrieval of up to 1000 electronic invoices in active range
+  const { data: dbData, isLoading: isQueryLoading } = useQuery({
+      queryKey: ['invoices', 'electronic', company?.id, startDate, endDate, searchTerm],
+      queryFn: () => dbGetInvoices(1, 1000, searchTerm, true, startDate, endDate),
+      enabled: !!company?.id,
+      staleTime: 10 * 1000,
+  });
+
+  const activeInvoices = dbData?.invoices || [];
+
+  const filteredInvoices = activeInvoices.filter(inv => {
+      // Un documento se considera electrónico si su tipo es Boleta/Factura,
+      // o si su sunatStatus es 'ACCEPTED' y su descripción indica que es Boleta o Factura o ha sido aceptada.
+      const isAcceptedElec = inv.sunatStatus === 'ACCEPTED' && 
+                             inv.sunatResponse?.description && 
+                             (inv.sunatResponse.description.toLowerCase().includes('boleta') || 
+                              inv.sunatResponse.description.toLowerCase().includes('factura') || 
+                              inv.sunatResponse.description.toLowerCase().includes('aceptada'));
+
+      const isBaseTypeElec = inv.type === InvoiceType.BOLETA || inv.type === InvoiceType.FACTURA;
+
+      if (!isBaseTypeElec && !isAcceptedElec) return false;
 
       // Permitir mostrar anulados si son comprobantes electrónicos que fueron aceptados (para ver la marca de NC)
       const isElectronicVoided = inv.orderStatus === 'CANCELADO' || (inv as any).status === 'anulado';
@@ -70,7 +91,7 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
       if (!matchesSearch) return false;
 
       // Filtro por rango de fechas de emisión
-      const invDateStr = (inv.fecha_emision || inv.date).split('T')[0];
+      const invDateStr = (inv.fecha_emision || inv.date || '').slice(0, 10);
       if (startDate && invDateStr < startDate) return false;
       if (endDate && invDateStr > endDate) return false;
       return true;
@@ -82,29 +103,56 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
       return dateB - dateA;
   });
 
+  // Client Side smooth pagination for rendering table
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
+
+  useEffect(() => {
+      setCurrentPage(1);
+  }, [startDate, endDate, searchTerm]);
+
+  const paginatedInvoices = useMemo(() => {
+      const startIdx = (currentPage - 1) * itemsPerPage;
+      return sortedInvoices.slice(startIdx, startIdx + itemsPerPage);
+  }, [sortedInvoices, currentPage]);
+
+  const totalPages = Math.ceil(sortedInvoices.length / itemsPerPage);
+
   // Cálculo de venta neta del periodo considerando NCs aunque no se listen como filas
   const totalSales = useMemo(() => {
-    return invoices.filter(inv => {
-        if (inv.type !== InvoiceType.BOLETA && inv.type !== InvoiceType.FACTURA && inv.type !== InvoiceType.NOTA_CREDITO) return false;
-        const invDateStr = (inv.fecha_emision || inv.date).split('T')[0];
+    return activeInvoices.filter(inv => {
+        const isAcceptedElec = inv.sunatStatus === 'ACCEPTED' && 
+                               inv.sunatResponse?.description && 
+                               (inv.sunatResponse.description.toLowerCase().includes('boleta') || 
+                                inv.sunatResponse.description.toLowerCase().includes('factura') || 
+                                inv.sunatResponse.description.toLowerCase().includes('aceptada'));
+
+        const isBaseTypeElec = inv.type === InvoiceType.BOLETA || inv.type === InvoiceType.FACTURA;
+        
+        if (!isBaseTypeElec && !isAcceptedElec && inv.type !== InvoiceType.NOTA_CREDITO) return false;
+
+        const invDateStr = (inv.fecha_emision || inv.date || '').slice(0, 10);
         if (startDate && invDateStr < startDate) return false;
         if (endDate && invDateStr > endDate) return false;
         return true;
     }).reduce((sum, inv) => {
         if (inv.sunatStatus !== 'ACCEPTED') return sum;
-        const isNC = inv.type === InvoiceType.NOTA_CREDITO;
+        const isNC = inv.type === InvoiceType.NOTA_CREDITO || 
+                     (inv.serie && inv.serie.toUpperCase().startsWith('F') && inv.serie.length > 1 && inv.serie[1] === 'C') ||
+                     (inv.serie && inv.serie.toUpperCase().startsWith('BC')) ||
+                     (inv.sunatResponse?.description && inv.sunatResponse.description.toLowerCase().includes('crédito'));
         return isNC ? sum - inv.totals.total : sum + inv.totals.total;
     }, 0);
-  }, [invoices, startDate, endDate]);
+  }, [activeInvoices, startDate, endDate]);
   
   const getVoidingNc = (targetInv: Invoice) => {
     // Primero intentar por ID relacionado si existe
     if (targetInv.relatedNcId) {
-        const found = invoices.find(i => i.id === targetInv.relatedNcId);
+        const found = activeInvoices.find(i => i.id === targetInv.relatedNcId);
         if (found) return found;
     }
     // Si no, buscar por referencia de serie/correlativo
-    return invoices.find(inv => 
+    return activeInvoices.find(inv => 
         inv.type === InvoiceType.NOTA_CREDITO && 
         inv.sunatStatus === 'ACCEPTED' && 
         inv.relatedDocument && 
@@ -189,7 +237,7 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
       setIsExporting(true);
       try {
           const rows = sortedInvoices.map((inv, index) => {
-              const datePart = inv.date.split('T')[0].split('-').reverse().join('-');
+              const datePart = (inv.date || '').slice(0, 10).split('-').reverse().join('-');
               let tipDocClie = inv.client.docType === 'DNI' ? '1' : (inv.client.docType === 'RUC' ? '6' : '0');
               const isNC = inv.type === InvoiceType.NOTA_CREDITO;
               const sign = isNC ? -1 : 1;
@@ -270,7 +318,12 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          {sortedInvoices.length === 0 ? (
+          {isQueryLoading && activeInvoices.length === 0 ? (
+            <div className="p-12 text-center text-gray-400">
+              <div className="flex justify-center mb-4"><Loader2 className="animate-spin text-indigo-600" size={48} /></div>
+              <p>Cargando comprobantes electrónicos desde el servidor...</p>
+            </div>
+          ) : sortedInvoices.length === 0 ? (
             <div className="p-12 text-center text-gray-400"><div className="flex justify-center mb-4"><Table size={48} className="opacity-20" /></div><p>No se encontraron comprobantes.</p></div>
           ) : (
             <div className="overflow-x-auto">
@@ -286,19 +339,36 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {sortedInvoices.map((inv) => {
+                  {paginatedInvoices.map((inv) => {
                     const voidingNc = getVoidingNc(inv);
                     const isVoided = !!voidingNc || inv.status === 'anulado' || (inv as any).orderStatus === 'CANCELADO' || !!inv.relatedNcId;
                     
+                    // Un documento se considera electrónico si su tipo es Boleta/Factura,
+                    // o de lo contrario por su serie o descripción de sunatResponse.
+                    const isFactura = inv.type === InvoiceType.FACTURA || 
+                                      (inv.serie && inv.serie.toUpperCase().startsWith('F')) ||
+                                      (inv.sunatResponse?.description && inv.sunatResponse.description.toLowerCase().includes('factura'));
+
+                    const isBoleta = inv.type === InvoiceType.BOLETA || 
+                                     (inv.serie && inv.serie.toUpperCase().startsWith('B')) ||
+                                     (inv.sunatResponse?.description && inv.sunatResponse.description.toLowerCase().includes('boleta'));
+
+                    const isNC = inv.type === InvoiceType.NOTA_CREDITO || 
+                                 (inv.serie && inv.serie.toUpperCase().startsWith('F') && inv.serie.length > 1 && inv.serie[1] === 'C') ||
+                                 (inv.serie && inv.serie.toUpperCase().startsWith('BC')) ||
+                                 (inv.sunatResponse?.description && inv.sunatResponse.description.toLowerCase().includes('crédito'));
+
+                    const isElec = isFactura || isBoleta || isNC;
+
                     // Bloquear botón de anular si ya está anulado para evitar duplicados
-                    const canVoid = (inv.type === InvoiceType.BOLETA || inv.type === InvoiceType.FACTURA) && inv.sunatStatus === 'ACCEPTED' && !isVoided;
+                    const canVoid = (isBoleta || isFactura) && inv.sunatStatus === 'ACCEPTED' && !isVoided;
                     
                     const canDelete = inv.type === InvoiceType.NOTA_VENTA && inv.orderStatus !== 'ENTREGADO';
                     const canConvert = inv.type === InvoiceType.NOTA_VENTA && !isVoided;
                     const isSendingWa = sendingWaId === inv.id;
                     const isSent = sentSuccessIds.has(inv.id);
-                    const rowClass = isVoided ? 'bg-red-100 hover:bg-red-100 border-l-4 border-l-red-500 opacity-75' : (inv.type === InvoiceType.NOTA_CREDITO ? 'bg-orange-50/30 hover:bg-orange-50' : 'hover:bg-gray-50');
-                    const canRetry = (inv.type === InvoiceType.BOLETA || inv.type === InvoiceType.FACTURA || inv.type === InvoiceType.NOTA_CREDITO) && 
+                    const rowClass = isVoided ? 'bg-red-100 hover:bg-red-100 border-l-4 border-l-red-500 opacity-75' : (isNC ? 'bg-orange-50/30 hover:bg-orange-50' : 'hover:bg-gray-50');
+                    const canRetry = isElec && 
                                      (inv.sunatStatus === 'REJECTED' || inv.sunatStatus === 'PENDING') && !isVoided;
                     
                     return (
@@ -322,8 +392,8 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                         <td className="px-2 py-1.5 font-medium text-gray-900 whitespace-nowrap align-top">
                           <div className="flex flex-col gap-0.5">
                             <div className="flex items-center gap-1.5">
-                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${inv.type === InvoiceType.FACTURA ? 'bg-blue-100 text-blue-800' : (inv.type === InvoiceType.NOTA_VENTA ? 'bg-gray-200 text-gray-700' : (inv.type === InvoiceType.NOTA_CREDITO ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'))}`}>
-                                  {inv.type === InvoiceType.FACTURA ? 'FACTURA' : (inv.type === InvoiceType.NOTA_VENTA ? (company?.custom_nv_name || company?.modulos_config?.custom_nv_name || 'NOTA VENTA').toUpperCase() : (inv.type === InvoiceType.NOTA_CREDITO ? 'NOTA CRÉDITO' : 'BOLETA'))}
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${isFactura ? 'bg-blue-100 text-blue-800' : (isNC ? 'bg-orange-100 text-orange-800' : (inv.type === InvoiceType.NOTA_VENTA ? 'bg-gray-200 text-gray-700' : 'bg-green-100 text-green-800'))}`}>
+                                  {isFactura ? 'FACTURA' : (isNC ? 'NOTA CRÉDITO' : (inv.type === InvoiceType.NOTA_VENTA ? (company?.custom_nv_name || company?.modulos_config?.custom_nv_name || 'NOTA VENTA').toUpperCase() : 'BOLETA'))}
                                 </span>
                                 
                                 <button
@@ -394,8 +464,8 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                           </div>
                         </td>
                         <td className="px-2 py-1.5 text-right whitespace-nowrap align-top">
-                          <span className={`font-bold text-xs ${inv.type === InvoiceType.NOTA_CREDITO ? 'text-red-600' : (isVoided ? 'line-through text-gray-400' : 'text-gray-900')}`}>
-                            {inv.type === InvoiceType.NOTA_CREDITO ? '-' : ''} S/ {inv.totals.total.toFixed(2)}
+                          <span className={`font-bold text-xs ${isNC ? 'text-red-600' : (isVoided ? 'line-through text-gray-400' : 'text-gray-900')}`}>
+                            {isNC ? '-' : ''} S/ {inv.totals.total.toFixed(2)}
                           </span>
                         </td>
                         <td className="px-2 py-1.5 text-center align-top relative">
@@ -435,7 +505,7 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                             ) : (
                               <div className="flex flex-col items-center gap-1">
                                 <span className="flex items-center gap-0.5 px-1.5 py-0.2 bg-yellow-100 text-yellow-700 border border-yellow-200 rounded text-[10px] font-bold">
-                                    <AlertTriangle size={10} /> {inv.type === InvoiceType.NOTA_VENTA ? 'INTERNO' : 'PENDIENTE'}
+                                    <AlertTriangle size={10} /> {isElec ? 'PENDIENTE' : (inv.type === InvoiceType.NOTA_VENTA ? 'INTERNO' : 'PENDIENTE')}
                                 </span>
                                 {canRetry && onRetrySunat && (
                                     <button 
@@ -544,6 +614,75 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          {/* PAGINATION FOOTER */}
+          {totalPages > 1 && (
+            <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 flex items-center justify-between sm:px-6">
+              <div className="flex-1 flex justify-between sm:hidden">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-xs font-semibold rounded-md text-gray-700 bg-white hover:bg-gray-50 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  Anterior
+                </button>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-xs font-semibold rounded-md text-gray-700 bg-white hover:bg-gray-50 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  Siguiente
+                </button>
+              </div>
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs text-gray-700">
+                    Mostrando <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> a{' '}
+                    <span className="font-semibold">
+                      {Math.min(currentPage * itemsPerPage, sortedInvoices.length)}
+                    </span>{' '}
+                    de <span className="font-semibold">{sortedInvoices.length}</span> comprobantes
+                  </p>
+                </div>
+                <div>
+                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    <button
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center px-3 py-2 rounded-l-md border border-gray-300 bg-white text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                    >
+                      Primero
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    
+                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-xs font-semibold text-gray-700">
+                      Pág {currentPage} de {totalPages}
+                    </span>
+
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="relative inline-flex items-center px-3 py-2 rounded-r-md border border-gray-300 bg-white text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                    >
+                      Último
+                    </button>
+                  </nav>
+                </div>
+              </div>
             </div>
           )}
         </div>
