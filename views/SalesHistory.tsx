@@ -58,11 +58,11 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
   }, []);
 
   const filteredInvoices = invoices.filter(inv => {
-      // No mostrar Notas de Crédito como filas independientes a menos que se filtre por ellas
-      if (inv.type === InvoiceType.NOTA_CREDITO && filterType !== InvoiceType.NOTA_CREDITO) return false;
+      // Solo mostrar Boletas y Facturas en Documentos Electrónicos
+      if (inv.type !== InvoiceType.BOLETA && inv.type !== InvoiceType.FACTURA) return false;
 
       // Permitir mostrar anulados si son comprobantes electrónicos que fueron aceptados (para ver la marca de NC)
-      const isElectronicVoided = (inv.type === InvoiceType.BOLETA || inv.type === InvoiceType.FACTURA) && (inv.orderStatus === 'CANCELADO' || (inv as any).status === 'anulado');
+      const isElectronicVoided = inv.orderStatus === 'CANCELADO' || (inv as any).status === 'anulado';
       
       if (inv.orderStatus === 'CANCELADO' && !isElectronicVoided) return false;
       if (selectedPeriod !== 'ALL' && !inv.date.startsWith(selectedPeriod)) return false;
@@ -85,7 +85,11 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
       return true;
   });
 
-  const sortedInvoices = [...filteredInvoices].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sortedInvoices = [...filteredInvoices].sort((a, b) => {
+      const dateA = new Date(a.fecha_emision || a.date).getTime();
+      const dateB = new Date(b.fecha_emision || b.date).getTime();
+      return dateB - dateA;
+  });
 
   // Cálculo de venta neta del periodo considerando NCs aunque no se listen como filas
   const totalSales = useMemo(() => {
@@ -93,7 +97,8 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
         if (selectedPeriod !== 'ALL' && !inv.date.startsWith(selectedPeriod)) return false;
         return true;
     }).reduce((sum, inv) => {
-        if (inv.sunatStatus !== 'ACCEPTED' && inv.type !== InvoiceType.NOTA_VENTA) return sum;
+        if (inv.sunatStatus !== 'ACCEPTED') return sum;
+        if (inv.type !== InvoiceType.BOLETA && inv.type !== InvoiceType.FACTURA && inv.type !== InvoiceType.NOTA_CREDITO) return sum;
         const isNC = inv.type === InvoiceType.NOTA_CREDITO;
         return isNC ? sum - inv.totals.total : sum + inv.totals.total;
     }, 0);
@@ -237,7 +242,7 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices, company, clients,
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
             <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} /><input type="text" placeholder="Cliente, serie..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"/></div>
             <div className="relative"><select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)} className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none bg-indigo-50 text-indigo-700 appearance-none cursor-pointer"><option value="ALL">TODOS LOS PERIODOS</option>{periods.map(p => <option key={p.val} value={p.val}>{p.label}</option>)}</select><Calendar className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" size={14} /></div>
-            <div className="relative"><select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none cursor-pointer"><option value="ALL">Todos los Tipos</option><option value={InvoiceType.BOLETA}>Boletas</option><option value={InvoiceType.FACTURA}>Facturas</option><option value={InvoiceType.NOTA_VENTA}>{company?.custom_nv_name || company?.modulos_config?.custom_nv_name || 'Notas de Venta'}</option><option value={InvoiceType.NOTA_CREDITO}>Notas de Crédito</option></select><Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} /></div>
+            <div className="relative"><select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none cursor-pointer"><option value="ALL">Todos los Tipos</option><option value={InvoiceType.BOLETA}>Boletas</option><option value={InvoiceType.FACTURA}>Facturas</option></select><Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} /></div>
             <div className="relative"><select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none cursor-pointer"><option value="ALL">Todos los Estados</option><option value="ACCEPTED">Aceptados SUNAT</option><option value="PENDING">Pendientes / Internos</option><option value="REJECTED">Rechazados</option><option value="VOIDED">Anulados (Con NC)</option></select><AlertTriangle className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} /></div>
             <div className="relative"><input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-600"/><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} /></div>
         </div>
