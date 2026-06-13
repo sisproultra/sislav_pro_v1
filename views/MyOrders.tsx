@@ -251,6 +251,75 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     const [showConfirmUnified, setShowConfirmUnified] = useState(false);
     const [activeModalTab, setActiveModalTab] = useState<'pagos' | 'entrega'>('entrega');
 
+    // Reportes - Cobrados Tab states
+    const [reportInvoices, setReportInvoices] = useState<Invoice[]>([]);
+    const [isLoadingReportInvoices, setIsLoadingReportInvoices] = useState(false);
+    const [activeReportTab, setActiveReportTab] = useState<'general' | 'cobrados'>('general');
+    const [cobradosMethod, setCobradosMethod] = useState<string>('ALL');
+    const [cobradosStart, setCobradosStart] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [cobradosEnd, setCobradosEnd] = useState<string>(new Date().toISOString().split('T')[0]);
+
+    useEffect(() => {
+        if (isReportModalOpen) {
+            const loadReportInvoices = async () => {
+                setIsLoadingReportInvoices(true);
+                try {
+                    const data = await dbGetInvoicesForReport('ALL');
+                    setReportInvoices(data || []);
+                } catch (e) {
+                    console.error("Error loading report invoices:", e);
+                } finally {
+                    setIsLoadingReportInvoices(false);
+                }
+            };
+            loadReportInvoices();
+        } else {
+            setActiveReportTab('general');
+        }
+    }, [isReportModalOpen]);
+
+    const filteredPayments = useMemo(() => {
+        if (!reportInvoices || reportInvoices.length === 0) return [];
+        
+        const list: any[] = [];
+        reportInvoices.forEach(inv => {
+            if (!inv.payments || inv.payments.length === 0) return;
+            
+            inv.payments.forEach(paymentItem => {
+                const p = paymentItem as any;
+                const pMethod = (p.metodo_pago_name || p.metodos_pago?.nombre || 'EFECTIVO').trim().toUpperCase();
+                
+                // Filter by payment method
+                if (cobradosMethod !== 'ALL') {
+                    if (pMethod !== cobradosMethod.toUpperCase()) return;
+                }
+                
+                // Filter by date range
+                const dateStr = p.fecha_pago || p.date || p.fecha || inv.date;
+                if (!dateStr) return;
+                
+                const pDateOnly = new Date(dateStr).toISOString().split('T')[0];
+                if (cobradosStart && pDateOnly < cobradosStart) return;
+                if (cobradosEnd && pDateOnly > cobradosEnd) return;
+                
+                list.push({
+                    ...p,
+                    paymentDate: dateStr,
+                    invoiceCode: (inv as any).codigo_orden || `${inv.serie}-${inv.correlativo}`,
+                    clientName: inv.client?.name || 'CLIENTE VARIOS',
+                    invoiceId: inv.id,
+                    methodName: pMethod
+                });
+            });
+        });
+
+        return list.sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
+    }, [reportInvoices, cobradosMethod, cobradosStart, cobradosEnd]);
+
+    const cobradosTotalSum = useMemo(() => {
+        return filteredPayments.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
+    }, [filteredPayments]);
+
     const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim() || '#0054A6';
     const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--brand-secondary').trim() || '#10B981';
     const currency = company.moneda_simbolo || 'S/';
@@ -1851,7 +1920,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-100"
+                            className={`bg-white rounded-3xl w-full ${activeReportTab === 'cobrados' ? 'max-w-2xl' : 'max-w-md'} overflow-hidden shadow-2xl border border-gray-100 transition-all duration-300`}
                         >
                             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                                 <div>
@@ -1865,126 +1934,270 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                 </button>
                             </div>
 
+                            {/* Pestañas de Reporte */}
+                            <div className="flex border-b border-gray-100 bg-gray-50/50 p-1 gap-1">
+                                <button
+                                    onClick={() => setActiveReportTab('general')}
+                                    className={`flex-1 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                                        activeReportTab === 'general'
+                                            ? 'bg-white text-indigo-700 shadow-sm border border-indigo-100'
+                                            : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                                    }`}
+                                >
+                                    Ventas y Campañas
+                                </button>
+                                <button
+                                    onClick={() => setActiveReportTab('cobrados')}
+                                    className={`flex-1 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                                        activeReportTab === 'cobrados'
+                                            ? 'bg-white text-indigo-700 shadow-sm border border-indigo-100'
+                                            : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                                    }`}
+                                >
+                                    Cobrados
+                                </button>
+                            </div>
+
                             <div className="p-6 space-y-4">
-                                 {/* Reportes Diarios */}
-                                <div className="space-y-3 pt-2">
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Reporte de Ventas Diarias</h4>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button 
-                                            onClick={() => handleDailySalesReport(new Date().toISOString().split('T')[0])}
-                                            className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-50 hover:border-indigo-200 transition-all group"
-                                        >
-                                            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                                                <Clock size={20} />
+                                {activeReportTab === 'general' ? (
+                                    <>
+                                         {/* Reportes Diarios */}
+                                        <div className="space-y-3 pt-2">
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Reporte de Ventas Diarias</h4>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <button 
+                                                    onClick={() => handleDailySalesReport(new Date().toISOString().split('T')[0])}
+                                                    className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-50 hover:border-indigo-200 transition-all group"
+                                                >
+                                                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                                                        <Clock size={20} />
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <div className="text-xs font-black text-slate-800">HOY</div>
+                                                        <div className="text-[9px] font-bold text-slate-400">Ventas de hoy</div>
+                                                    </div>
+                                                </button>
+                                                <button 
+                                                    onClick={() => {
+                                                        const yesterday = new Date();
+                                                        yesterday.setDate(yesterday.getDate() - 1);
+                                                        handleDailySalesReport(yesterday.toISOString().split('T')[0]);
+                                                    }}
+                                                    className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-50 hover:border-indigo-200 transition-all group"
+                                                >
+                                                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                                                        <History size={20} />
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <div className="text-xs font-black text-slate-800">AYER</div>
+                                                        <div className="text-[9px] font-bold text-slate-400">Ventas de ayer</div>
+                                                    </div>
+                                                </button>
                                             </div>
-                                            <div className="text-left">
-                                                <div className="text-xs font-black text-slate-800">HOY</div>
-                                                <div className="text-[9px] font-bold text-slate-400">Ventas de hoy</div>
-                                            </div>
-                                        </button>
-                                        <button 
-                                            onClick={() => {
-                                                const yesterday = new Date();
-                                                yesterday.setDate(yesterday.getDate() - 1);
-                                                handleDailySalesReport(yesterday.toISOString().split('T')[0]);
-                                            }}
-                                            className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-50 hover:border-indigo-200 transition-all group"
-                                        >
-                                            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                                                <History size={20} />
-                                            </div>
-                                            <div className="text-left">
-                                                <div className="text-xs font-black text-slate-800">AYER</div>
-                                                <div className="text-[9px] font-bold text-slate-400">Ventas de ayer</div>
-                                            </div>
-                                        </button>
-                                    </div>
-                                    
-                                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3 group hover:bg-indigo-50 hover:border-indigo-200 transition-all">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                                                <Calendar size={20} />
-                                            </div>
-                                            <div className="text-left">
-                                                <div className="text-xs font-black text-slate-800 uppercase">Rango de Fechas</div>
-                                                <div className="text-[9px] font-bold text-slate-400">Seleccionar desde / hasta</div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <input 
-                                                type="date" 
-                                                defaultValue={new Date().toISOString().split('T')[0]}
-                                                id="report-start"
-                                                className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
-                                            />
-                                            <span className="text-slate-400 text-[10px] font-bold">al</span>
-                                            <input 
-                                                type="date" 
-                                                defaultValue={new Date().toISOString().split('T')[0]}
-                                                id="report-end"
-                                                className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
-                                            />
-                                            <button 
-                                                onClick={() => {
-                                                    const start = (document.getElementById('report-start') as HTMLInputElement)?.value;
-                                                    const end = (document.getElementById('report-end') as HTMLInputElement)?.value;
-                                                    if (start && end) handleDailySalesReport(start, end);
-                                                }}
-                                                className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700"
-                                            >
-                                                <Search size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {selectedSummaryFilter === 'TO_COLLECT' && (
-                                    <button
-                                        onClick={async () => {
-                                            const allData = await dbGetInvoicesForReport('TO_COLLECT');
-                                            const uniqueDebtorsMap = new Map<string, Contact>();
                                             
-                                            allData.forEach((inv, idx) => {
-                                                const client = inv.client;
-                                                if (!client) return;
-                                                
-                                                let rawPhone = client.phone || '';
-                                                let clean = rawPhone.replace(/\D/g, '');
-                                                if (clean.length === 9 && (clean.startsWith('9') || clean.startsWith('8'))) {
-                                                    clean = '51' + clean;
-                                                }
-                                                
-                                                if (clean.length > 5 && !uniqueDebtorsMap.has(clean)) {
-                                                    uniqueDebtorsMap.set(clean, {
-                                                        id: client.id || `inv-${inv.id}-${idx}`,
-                                                        name: client.name || 'Cliente',
-                                                        phone: clean,
-                                                        status: 'pending' as const
-                                                    });
-                                                }
-                                            });
-
-                                            const debtors = Array.from(uniqueDebtorsMap.values());
-                                            if (onOpenWaCampaign) onOpenWaCampaign(debtors);
-                                            setIsReportModalOpen(false);
-                                        }}
-                                        className="w-full flex items-center justify-between p-5 bg-green-500 border border-green-600 rounded-2xl hover:bg-green-600 transition-all shadow-lg shadow-green-200 group"
-                                    >
-                                        <div className="flex items-center gap-4 text-white">
-                                            <div className="p-2 bg-white/20 rounded-xl group-hover:rotate-12 transition-transform">
-                                                <img src="https://iili.io/BWIGQGs.png" alt="WA" className="w-6 h-6 object-contain brightness-0 invert" />
-                                            </div>
-                                            <div className="text-left">
-                                                <div className="font-black text-base leading-none">Campaña Recordatorio</div>
-                                                <div className="text-[10px] font-bold opacity-80 uppercase tracking-tighter mt-1">Lanzar cobranza masiva WA</div>
+                                            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3 group hover:bg-indigo-50 hover:border-indigo-200 transition-all">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                                                        <Calendar size={20} />
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <div className="text-xs font-black text-slate-800 uppercase">Rango de Fechas</div>
+                                                        <div className="text-[9px] font-bold text-slate-400">Seleccionar desde / hasta</div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        type="date" 
+                                                        defaultValue={new Date().toISOString().split('T')[0]}
+                                                        id="report-start"
+                                                        className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
+                                                    />
+                                                    <span className="text-slate-400 text-[10px] font-bold">al</span>
+                                                    <input 
+                                                        type="date" 
+                                                        defaultValue={new Date().toISOString().split('T')[0]}
+                                                        id="report-end"
+                                                        className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
+                                                    />
+                                                    <button 
+                                                        onClick={() => {
+                                                            const start = (document.getElementById('report-start') as HTMLInputElement)?.value;
+                                                            const end = (document.getElementById('report-end') as HTMLInputElement)?.value;
+                                                            if (start && end) handleDailySalesReport(start, end);
+                                                        }}
+                                                        className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700"
+                                                    >
+                                                        <Search size={14} />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
-                                        <Send className="text-white opacity-40" />
-                                    </button>
+
+                                        {selectedSummaryFilter === 'TO_COLLECT' && (
+                                            <button
+                                                onClick={async () => {
+                                                    const allData = await dbGetInvoicesForReport('TO_COLLECT');
+                                                    const uniqueDebtorsMap = new Map<string, Contact>();
+                                                    
+                                                    allData.forEach((inv, idx) => {
+                                                        const client = inv.client;
+                                                        if (!client) return;
+                                                        
+                                                        let rawPhone = client.phone || '';
+                                                        let clean = rawPhone.replace(/\D/g, '');
+                                                        if (clean.length === 9 && (clean.startsWith('9') || clean.startsWith('8'))) {
+                                                            clean = '51' + clean;
+                                                        }
+                                                        
+                                                        if (clean.length > 5 && !uniqueDebtorsMap.has(clean)) {
+                                                            uniqueDebtorsMap.set(clean, {
+                                                                id: client.id || `inv-${inv.id}-${idx}`,
+                                                                name: client.name || 'Cliente',
+                                                                phone: clean,
+                                                                status: 'pending' as const
+                                                            });
+                                                        }
+                                                    });
+
+                                                    const debtors = Array.from(uniqueDebtorsMap.values());
+                                                    if (onOpenWaCampaign) onOpenWaCampaign(debtors);
+                                                    setIsReportModalOpen(false);
+                                                }}
+                                                className="w-full flex items-center justify-between p-5 bg-green-500 border border-green-600 rounded-2xl hover:bg-green-600 transition-all shadow-lg shadow-green-200 group"
+                                            >
+                                                <div className="flex items-center gap-4 text-white">
+                                                    <div className="p-2 bg-white/20 rounded-xl group-hover:rotate-12 transition-transform">
+                                                        <img src="https://iili.io/BWIGQGs.png" alt="WA" className="w-6 h-6 object-contain brightness-0 invert" />
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <div className="font-black text-base leading-none">Campaña Recordatorio</div>
+                                                        <div className="text-[10px] font-bold opacity-80 uppercase tracking-tighter mt-1">Lanzar cobranza masiva WA</div>
+                                                    </div>
+                                                </div>
+                                                <Send className="text-white opacity-40" />
+                                            </button>
+                                        )}
+                                    </>
+                                ) : (
+                                    /* Seccion de Cobrados */
+                                    <div className="space-y-4">
+                                        {/* Filtros */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                                            <div>
+                                                <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 pl-1">Método de Pago</label>
+                                                <select
+                                                    value={cobradosMethod}
+                                                    onChange={(e) => setCobradosMethod(e.target.value)}
+                                                    className="w-full bg-white border border-slate-250 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-indigo-500"
+                                                >
+                                                    <option value="ALL">TODOS LOS MÉTODOS</option>
+                                                    {paymentMethods.map(pm => (
+                                                        <option key={pm.id} value={pm.name.toUpperCase()}>{pm.name.toUpperCase()}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 pl-1">Rango del Pago</label>
+                                                <div className="flex items-center gap-1.5">
+                                                    <input 
+                                                        type="date" 
+                                                        value={cobradosStart}
+                                                        onChange={(e) => setCobradosStart(e.target.value)}
+                                                        className="flex-1 bg-white border border-slate-250 rounded-xl px-2 py-2 text-xs font-black text-slate-700 outline-none focus:border-indigo-500"
+                                                    />
+                                                    <span className="text-slate-400 text-[10px] font-black">al</span>
+                                                    <input 
+                                                        type="date" 
+                                                        value={cobradosEnd}
+                                                        onChange={(e) => setCobradosEnd(e.target.value)}
+                                                        className="flex-1 bg-white border border-slate-250 rounded-xl px-2 py-2 text-xs font-black text-slate-700 outline-none focus:border-indigo-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Totalizador */}
+                                        <div className="flex justify-between items-center bg-indigo-50 border border-indigo-100 rounded-2xl p-4 shadow-sm">
+                                            <div>
+                                                <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block">Total Cobrado</span>
+                                                <span className="text-2xl font-black text-indigo-700">S/ {cobradosTotalSum.toFixed(2)}</span>
+                                            </div>
+                                            <div className="px-3 py-1 bg-white border border-indigo-100 rounded-lg text-[9px] font-black text-indigo-500 uppercase tracking-wider">
+                                                {filteredPayments.length} abonos
+                                            </div>
+                                        </div>
+
+                                        {/* Resultados */}
+                                        {isLoadingReportInvoices ? (
+                                            <div className="flex flex-col items-center justify-center py-12 gap-3">
+                                                <Loader2 className="animate-spin text-indigo-600" size={32} />
+                                                <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Cargando abonos...</span>
+                                            </div>
+                                        ) : (
+                                            <div className="max-h-[280px] overflow-y-auto pr-1 space-y-2 border border-slate-100 rounded-2xl bg-slate-50/50 p-2">
+                                                {filteredPayments.length === 0 ? (
+                                                    <div className="text-center py-12 text-slate-400 font-bold uppercase text-[10px] tracking-widest leading-relaxed">
+                                                        No se encontraron cobros registrados<br />para los filtros seleccionados
+                                                    </div>
+                                                ) : (
+                                                    filteredPayments.map((p, idx) => {
+                                                        let badgeStyle = 'bg-slate-600 text-white border-slate-700 shadow-sm';
+                                                        if (p.methodName === 'EFECTIVO' || p.methodName.includes('CASH')) {
+                                                            badgeStyle = 'bg-emerald-600 text-white border-emerald-700';
+                                                        } else if (p.methodName === 'YAPE') {
+                                                            badgeStyle = 'bg-indigo-600 text-white border-indigo-700';
+                                                        } else if (p.methodName === 'PLIN') {
+                                                            badgeStyle = 'bg-teal-600 text-white border-teal-700';
+                                                        } else if (p.methodName.includes('TARJETA') || p.methodName.includes('CARD') || p.methodName.includes('VISA') || p.methodName.includes('MASTERCARD')) {
+                                                            badgeStyle = 'bg-blue-600 text-white border-blue-700';
+                                                        } else if (p.methodName.includes('TRANSF') || p.methodName.includes('DEPOSITO') || p.methodName.includes('BANCO') || p.methodName.includes('BCP') || p.methodName.includes('BBVA') || p.methodName.includes('INTERBANK')) {
+                                                            badgeStyle = 'bg-amber-500 text-white border-amber-600';
+                                                        }
+                                                        
+                                                        const dateFormatted = p.paymentDate ? formatDateSafe(p.paymentDate) : '-';
+                                                        const timeFormatted = p.paymentDate ? formatTimeSafe(p.paymentDate) : '';
+
+                                                        return (
+                                                            <div key={p.id || idx} className="bg-white border border-slate-150/70 rounded-xl p-3 flex justify-between items-center hover:border-slate-300 transition-colors shadow-sm">
+                                                                <div className="space-y-0.5">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="text-[10px] font-black text-slate-800 uppercase">{p.invoiceCode}</span>
+                                                                        <span className="text-[9px] font-bold text-slate-300">•</span>
+                                                                        <span className="text-[10px] font-black text-slate-600 uppercase truncate max-w-[150px]">{p.clientName}</span>
+                                                                    </div>
+                                                                    <div className="text-[9px] text-slate-400 font-mono flex items-center gap-1.5">
+                                                                        <span>{dateFormatted}</span>
+                                                                        <span className="text-slate-300">|</span>
+                                                                        <span>{timeFormatted}</span>
+                                                                        {p.registrado_por && (
+                                                                            <>
+                                                                                <span className="text-slate-300">|</span>
+                                                                                <span className="text-[8px] bg-slate-50 px-1 py-0.5 rounded text-slate-400 uppercase font-black truncate max-w-[100px]">
+                                                                                    {p.registrado_por}
+                                                                                </span>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-lg border text-[8px] font-black uppercase tracking-wider ${badgeStyle}`}>
+                                                                        {p.methodName}
+                                                                    </span>
+                                                                    <span className="text-xs font-black text-slate-900 leading-none">
+                                                                        S/ {Number(p.monto).toFixed(2)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                             
-                            <div className="p-4 bg-gray-50 text-[10px] text-gray-400 text-center uppercase tracking-widest font-bold">
+                            <div className="p-4 bg-gray-50 text-[10px] text-gray-400 text-center uppercase tracking-widest font-bold border-t border-gray-100">
                                 Sislav AI • Report Engine v2.0
                             </div>
                         </motion.div>
