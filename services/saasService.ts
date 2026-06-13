@@ -454,6 +454,8 @@ export const getSaasBranches = async (empresaId?: string, page: number = 1, page
             sunat_url: b.sunat_url,
             sol_user: b.sol_user,
             sol_pass: b.sol_pass,
+            firma_pass: b.firma_pass,
+            firmaPass: b.firma_pass,
             serie_boleta: b.serie_boleta,
             serie_factura: b.serie_factura,
             serie_nv: b.serie_nv,
