@@ -355,6 +355,7 @@ export default function App() {
         // Forzar limpieza de cache interno de dbService
         invalidateCache('invoices');
         invalidateCache('orderStats');
+        invalidateCache('payment_methods');
 
         // Solo invalidar queries dinámicas, no las estáticas
         queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -365,6 +366,7 @@ export default function App() {
         queryClient.invalidateQueries({ queryKey: ['activeCashSession'] });
         queryClient.invalidateQueries({ queryKey: ['expenses'] });
         queryClient.invalidateQueries({ queryKey: ['employees'] });
+        queryClient.invalidateQueries({ queryKey: ['paymentMethods'] });
         
         // Solo refrescar sucursal si es refresh manual explícito del usuario
         if (manual && activeSucursal?.id) {

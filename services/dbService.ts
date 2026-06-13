@@ -3245,21 +3245,34 @@ export const dbGetPaymentMethods = async (): Promise<PaymentMethodConfig[]> => {
     // Fetch images separately
     const { data: imgs } = await supabase.from('global_cat_metodos_pago').select('id, url');
     const imgMap = new Map((imgs || []).map(i => [i.id, i.url]));
+    const imgColorMap = new Map((imgs || []).map(i => {
+        const urlStr = i.url || '';
+        const colorMatch = urlStr.match(/#color=([^#]+)/);
+        const col = colorMatch ? decodeURIComponent(colorMatch[1]) : null;
+        return [i.id, col];
+    }));
     
     const STORAGE_BASE = `${SUPABASE_URL}/storage/v1/object/public/laundry-assets/global/c-metodo-pago/`;
     
     const results = pms.map(pm => {
-        let resolvedIcon = pm.icono || imgMap.get(pm.imagen_id) || 'CreditCard';
+        let rawIcon = pm.icono || imgMap.get(pm.imagen_id) || 'CreditCard';
+        let resolvedIcon = rawIcon.split('#')[0];
         if (resolvedIcon && !resolvedIcon.startsWith('http') && !resolvedIcon.startsWith('data:') && resolvedIcon.includes('.')) {
             resolvedIcon = `${STORAGE_BASE}${resolvedIcon}`;
         }
+        
+        // Fallback color resolution
+        const fallbackColor = pm.imagen_id ? imgColorMap.get(pm.imagen_id) : null;
+        const resolvedColor = pm.color || fallbackColor || '#4f46e5';
+
         return { 
             id: pm.id, 
             name: pm.nombre, 
             isActive: pm.activo, 
             isSuspended: pm.suspendido || false,
             icon: resolvedIcon, 
-            fontColor: pm.color, 
+            color: resolvedColor,
+            fontColor: resolvedColor, 
             imagen_id: pm.imagen_id,
             sunatCode: pm.codigo_sunat || '01'
         };
@@ -3279,7 +3292,8 @@ export const dbSavePaymentMethod = async (pm: Omit<PaymentMethodConfig, 'id'>) =
         suspendido: pm.isSuspended || false,
         icono: pm.icon, 
         codigo_sunat: pm.sunatCode, 
-        imagen_id: pm.imagen_id 
+        imagen_id: pm.imagen_id,
+        color: pm.color
     });
     if (error) throw error;
     invalidateCache('payment_methods');
@@ -3293,6 +3307,7 @@ export const dbUpdatePaymentMethod = async (id: string, pm: Partial<PaymentMetho
     if (pm.icon !== undefined) payload.icono = pm.icon;
     if (pm.sunatCode) payload.codigo_sunat = pm.sunatCode;
     if (pm.imagen_id !== undefined) payload.imagen_id = pm.imagen_id;
+    if (pm.color !== undefined) payload.color = pm.color;
     const { error = null } = await supabase.from('metodos_pago').update(payload).eq('id', id);
     if (error) throw error;
     invalidateCache('payment_methods');

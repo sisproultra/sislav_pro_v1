@@ -1606,7 +1606,7 @@ export const SuperAdmin: React.FC<{
         setCatalogItem({
             nombre: modulo === 'VIDEO' ? item.title : item.nombre,
             url: modulo === 'COLOR' ? item.url_imagen : (modulo === 'VIDEO' ? item.youtubeUrl : item.url),
-            hex: item.hex || '#FFFFFF',
+            hex: item.color || item.hex || '#4F46E5',
             tipo: item.tipo || 'LAVADORA',
             modulo_id: item.modulo_id || ''
         });
@@ -1616,7 +1616,7 @@ export const SuperAdmin: React.FC<{
     const startAddingCatalogItem = (modulo: string) => {
         setEditingCatalogId(null);
         setCurrentCatalogModule(modulo);
-        setCatalogItem({ nombre: '', url: '', hex: '#FFFFFF', tipo: 'LAVADORA', modulo_id: '' });
+        setCatalogItem({ nombre: '', url: '', hex: '#4F46E5', tipo: 'LAVADORA', modulo_id: '' });
         setIsCatalogModalOpen(true);
     };
 
@@ -2345,7 +2345,12 @@ export const SuperAdmin: React.FC<{
                                                     {globalConfig?.defaultPaymentImages.map(img => (
                                                         <div key={img.id} className="bg-black/40 border border-white/5 p-3 rounded-2xl relative group">
                                                             <div className="aspect-square flex items-center justify-center"><img src={img.url} className="max-w-full max-h-full object-contain" /></div>
-                                                            <p className="text-[7px] font-bold text-center text-slate-500 mt-1 uppercase truncate">{img.nombre}</p>
+                                                            <p className="text-[7px] font-bold text-center text-slate-400 mt-1 uppercase truncate flex items-center justify-center gap-1 leading-none">
+                                                                {img.color && (
+                                                                    <span className="w-1.5 h-1.5 rounded-full inline-block shrink-0 border border-white/10" style={{ backgroundColor: img.color }} />
+                                                                )}
+                                                                <span>{img.nombre}</span>
+                                                            </p>
                                                             <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                                                 <button onClick={() => startEditingCatalogItem(img, 'METODO_PAGO')} className="p-1 bg-amber-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Edit size={10}/></button>
                                                                 <button onClick={() => handleDeleteCatalogItem(img, 'METODO_PAGO')} className="p-1 bg-rose-600 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Trash2 size={10}/></button>
@@ -3640,17 +3645,19 @@ export const SuperAdmin: React.FC<{
                                     </div>
                                 )}
 
-                                {currentCatalogModule === 'COLOR' && (
+                                {(currentCatalogModule === 'COLOR' || currentCatalogModule === 'METODO_PAGO') && (
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Color HEX</label>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">
+                                            {currentCatalogModule === 'COLOR' ? 'Color HEX' : 'Color Distintivo (HEX)'}
+                                        </label>
                                         <div className="flex gap-4 items-center bg-black/40 border-2 border-white/10 rounded-2xl p-2.5">
                                             <input 
                                                 type="color" 
-                                                value={catalogItem.hex} 
+                                                value={catalogItem.hex || '#4F46E5'} 
                                                 onChange={e => setCatalogItem({...catalogItem, hex: e.target.value})} 
                                                 className="w-12 h-12 rounded-xl cursor-pointer bg-transparent border-none shadow-lg"
                                             />
-                                            <span className="text-sm font-mono font-bold text-slate-300 uppercase">{catalogItem.hex}</span>
+                                            <span className="text-sm font-mono font-bold text-slate-300 uppercase">{catalogItem.hex || '#4F46E5'}</span>
                                         </div>
                                     </div>
                                 )}

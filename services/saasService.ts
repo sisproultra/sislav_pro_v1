@@ -91,7 +91,18 @@ export const getSaasGlobalConfig = async (): Promise<SaasGlobalConfig> => {
                 };
             }),
             defaultCategoryImages: (cats || []).map((c: any) => ({ id: c.id, name: c.nombre, url: c.url })),
-            defaultPaymentImages: (payments || []).map((p: any) => ({ id: p.id, name: p.nombre, url: p.url })),
+            defaultPaymentImages: (payments || []).map((p: any) => {
+                const url = p.url || '';
+                const colorMatch = url.match(/#color=([^#]+)/);
+                const color = colorMatch ? decodeURIComponent(colorMatch[1]) : '#4f46e5';
+                return {
+                    id: p.id,
+                    name: p.nombre,
+                    nombre: p.nombre,
+                    url: url.split('#')[0],
+                    color: color
+                };
+            }),
             defaultMachineImages: (machines || []).map((m: any) => ({ id: m.id, name: m.nombre, url: m.url, type: m.tipo })),
             globalModules: baseConfig?.modulos_globales || {},
             bannerCobro: baseConfig?.banner_cobro,
@@ -204,7 +215,8 @@ export const addGlobalCatalogItem = async (item: { nombre: string, url?: string,
             break;
         case 'METODO_PAGO': 
             table = "global_cat_metodos_pago"; 
-            payload.url = item.url;
+            const cleanUrl = item.url ? item.url.split('#')[0] : '';
+            payload.url = cleanUrl + (item.hex ? '#color=' + encodeURIComponent(item.hex) : '');
             break;
         case 'MAQUINA': 
             table = "global_cat_maquinas"; 
@@ -255,7 +267,11 @@ export const updateGlobalCatalogItem = async (id: string, modulo: string, item: 
             break;
         case 'METODO_PAGO': 
             table = "global_cat_metodos_pago"; 
-            if (item.url) payload.url = item.url;
+            if (item.url || item.hex) {
+                const existingUrl = item.url || '';
+                const cleanUrl = existingUrl.split('#')[0];
+                payload.url = cleanUrl + (item.hex ? '#color=' + encodeURIComponent(item.hex) : '');
+            }
             break;
         case 'MAQUINA': 
             table = "global_cat_maquinas"; 

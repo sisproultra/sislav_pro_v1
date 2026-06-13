@@ -221,9 +221,19 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
                     
                     const IconComponent = (LucideIcons as any)[iconName] || (LucideIcons as any)[pm?.icon || ''] || Banknote;
                     return (
-                      <div key={idx} className="bg-white p-3 md:p-4 rounded-2xl shadow-lg border border-slate-100 flex items-center justify-between group hover:border-emerald-200 transition-all">
+                      <div key={idx} className="bg-white p-3 md:p-4 rounded-2xl shadow-lg border border-slate-100 flex items-center justify-between group hover:border-slate-200 transition-all">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-slate-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden border border-slate-100">
+                          <div 
+                            className="w-10 h-10 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden border"
+                            style={(pm?.color || pm?.fontColor) ? {
+                              color: pm.color || pm.fontColor,
+                              borderColor: `${pm.color || pm.fontColor}33`,
+                              backgroundColor: `${pm.color || pm.fontColor}11`
+                            } : {
+                              backgroundColor: '#f8fafc',
+                              borderColor: '#f1f5f9'
+                            }}
+                          >
                             {hasCustomIcon ? (
                               <img src={pm.icon} alt={pm.name} className="w-full h-full object-contain p-1.5" />
                             ) : (

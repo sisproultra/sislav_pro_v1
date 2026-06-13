@@ -28,6 +28,7 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [sunatCode, setSunatCode] = useState('009'); 
+  const [color, setColor] = useState('#4f46e5');
   
   // Image State
   const [selectedImageId, setSelectedImageId] = useState<string>(''); 
@@ -37,6 +38,7 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
       setEditingId(null);
       setName('');
       setSunatCode('009');
+      setColor('#4f46e5');
       setSelectedImageId('');
       setPreviewUrl('');
       setIsModalOpen(true);
@@ -46,6 +48,7 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
       setEditingId(pm.id);
       setName(pm.name);
       setSunatCode(pm.sunatCode);
+      setColor(pm.color || pm.fontColor || '#4f46e5');
       setSelectedImageId(pm.imagen_id || '');
       setPreviewUrl(pm.icon || '');
       setIsModalOpen(true);
@@ -73,6 +76,9 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
   const selectFromCatalog = (catalogItem: GlobalPaymentImage) => {
       setSelectedImageId(catalogItem.id);
       setPreviewUrl(catalogItem.url);
+      if (catalogItem.color) {
+          setColor(catalogItem.color);
+      }
       setIsCatalogSelectorOpen(false);
   };
 
@@ -86,7 +92,8 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
             name: name.toUpperCase(),
             sunatCode,
             imagen_id: selectedImageId || null,
-            icon: previewUrl
+            icon: previewUrl,
+            color
         };
 
         if (editingId) {
@@ -168,7 +175,10 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
                           </div>
                           <div className="min-w-0 flex-1">
                               <h3 className={`font-bold text-base uppercase leading-tight truncate ${isAnulado ? 'text-red-900 line-through' : isSuspended ? 'text-amber-900' : 'text-slate-800'}`}>{pm.name}</h3>
-                              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">SUNAT: {pm.sunatCode}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SUNAT: {pm.sunatCode}</p>
+                                  <span className="w-2 h-2 rounded-full inline-block border border-slate-200 shrink-0 shadow-inner" style={{ backgroundColor: pm.color || pm.fontColor || '#4f46e5' }} />
+                              </div>
                           </div>
                       </div>
 
@@ -252,6 +262,44 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
                                   {SUNAT_PAYMENT_CODES.map(c => <option key={c.code} value={c.code}>{c.code} - {c.label}</option>)}
                               </select>
                           </div>
+                          <div>
+                               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Color Distintivo del Método</label>
+                               <div className="flex flex-wrap gap-2.5 items-center">
+                                   {[
+                                       { name: 'Indigo', value: '#4f46e5' },
+                                       { name: 'Emerald', value: '#10b981' },
+                                       { name: 'Blue', value: '#3b82f6' },
+                                       { name: 'Amber', value: '#f59e0b' },
+                                       { name: 'Rose', value: '#f43f5e' },
+                                       { name: 'Slate', value: '#64748b' },
+                                       { name: 'Violet', value: '#8b5cf6' },
+                                       { name: 'Teal', value: '#0d9488' }
+                                   ].map(preset => (
+                                       <button
+                                           key={preset.value}
+                                           type="button"
+                                           onClick={() => setColor(preset.value)}
+                                           className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 relative ${color.toLowerCase() === preset.value.toLowerCase() ? 'border-slate-900 scale-110 shadow-md' : 'border-transparent'}`}
+                                           style={{ backgroundColor: preset.value }}
+                                           title={preset.name}
+                                       >
+                                           {color.toLowerCase() === preset.value.toLowerCase() && (
+                                               <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold font-sans">✓</span>
+                                           )}
+                                       </button>
+                                   ))}
+                                   
+                                   <div className="flex items-center gap-2.5 ml-2.5 pl-3 border-l border-slate-200">
+                                       <input 
+                                           type="color" 
+                                           value={color} 
+                                           onChange={e => setColor(e.target.value)} 
+                                           className="w-8 h-8 rounded-full border border-slate-300 cursor-pointer p-0 bg-transparent overflow-hidden shrink-0" 
+                                       />
+                                       <span className="text-xs font-mono font-bold text-slate-500 uppercase">{color}</span>
+                                   </div>
+                               </div>
+                          </div>
                       </div>
 
                       <button type="submit" disabled={isSubmitting || isUploading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-5 rounded-3xl shadow-2xl shadow-indigo-600/30 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 uppercase text-xs tracking-widest">
@@ -275,7 +323,12 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
                               <div className="aspect-square p-4">
                                 <img src={img.url} className="w-full h-full object-contain" alt={img.name} />
                               </div>
-                              <p className="bg-slate-900 p-2 text-[8px] font-bold text-center uppercase text-indigo-400 truncate w-full">{img.name}</p>
+                              <p className="bg-slate-900 p-2 text-[8px] font-bold uppercase text-indigo-400 truncate w-full flex items-center justify-center gap-1.5 leading-none">
+                                  {img.color && (
+                                      <span className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0 inline-block align-middle" style={{ backgroundColor: img.color }} />
+                                  )}
+                                  <span className="align-middle truncate">{img.name}</span>
+                              </p>
                           </button>
                       ))}
                   </div>

@@ -309,6 +309,7 @@ export interface PaymentMethodConfig {
     sunatCode: string;
     imagen_id?: string;
     color?: string;
+    fontColor?: string;
 }
 
 export interface Expense extends BaseEntity { 
@@ -368,7 +369,7 @@ export interface PickupRequest extends BaseEntity {
 
 export interface GlobalHelpVideo { id: string; title: string; youtubeUrl: string; category?: string; modulo_id?: string; }
 export interface GlobalCategoryImage { id: string; name: string; url: string; }
-export interface GlobalPaymentImage { id: string; name: string; url: string; }
+export interface GlobalPaymentImage { id: string; name: string; url: string; color?: string; }
 export interface GlobalColor {
     id: string;
     nombre: string;

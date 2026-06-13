@@ -115,7 +115,7 @@ const CircularProgress = ({ percent, color: customColor }: { percent: number; co
     );
 };
 
-const renderPaymentMethodBadge = (payments: any[] | undefined) => {
+const renderPaymentMethodBadge = (payments: any[] | undefined, paymentMethods: PaymentMethodConfig[] = []) => {
     if (!payments || payments.length === 0) {
         return (
             <div className="flex flex-col items-center">
@@ -124,13 +124,41 @@ const renderPaymentMethodBadge = (payments: any[] | undefined) => {
         );
     }
 
-    const uniqueMethods = Array.from(new Set(
-        payments
-            .map(p => p.metodo_pago_name?.trim().toUpperCase() || 'EFECTIVO')
-            .filter(Boolean)
-    ));
+    const uniqueMethodsInfo = payments.map(p => {
+        const rawName = (p.metodo_pago_name || p.metodos_pago?.nombre || 'EFECTIVO').trim().toUpperCase();
+        
+        // Match by ID first
+        if (p.metodo_pago_id) {
+            const pm = paymentMethods.find(x => x.id === p.metodo_pago_id);
+            if (pm) {
+                return {
+                    name: pm.name?.trim().toUpperCase() || rawName,
+                    color: pm.color || pm.fontColor,
+                    icon: pm.icon
+                };
+            }
+        }
+        
+        // Then match by name
+        const pmByName = paymentMethods.find(x => x.name?.trim().toUpperCase() === rawName);
+        if (pmByName) {
+            return {
+                name: pmByName.name?.trim().toUpperCase() || rawName,
+                color: pmByName.color || pmByName.fontColor,
+                icon: pmByName.icon
+            };
+        }
+        
+        return {
+            name: rawName,
+            color: null,
+            icon: null
+        };
+    }).filter(x => x.name);
 
-    if (uniqueMethods.length === 0) {
+    const uniqueNames = Array.from(new Set(uniqueMethodsInfo.map(u => u.name)));
+
+    if (uniqueNames.length === 0) {
         return (
             <div className="flex flex-col items-center">
                 <span className="text-slate-400 font-bold text-[9px] uppercase tracking-wider bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">-</span>
@@ -140,14 +168,20 @@ const renderPaymentMethodBadge = (payments: any[] | undefined) => {
 
     let text = '';
     let styleClass = '';
+    let customStyle: React.CSSProperties = {};
+    const first = uniqueMethodsInfo[0];
     
-    if (uniqueMethods.length > 1) {
+    if (uniqueNames.length > 1) {
         text = 'MIXTO';
         styleClass = 'bg-fuchsia-600 text-white border-fuchsia-700 shadow-sm';
     } else {
-        const method = uniqueMethods[0];
+        const method = first.name;
         text = method;
-        if (method === 'EFECTIVO' || method.includes('CASH')) {
+        
+        if (first.color) {
+            styleClass = 'text-white border-transparent shadow-sm';
+            customStyle = { backgroundColor: first.color, borderColor: first.color };
+        } else if (method === 'EFECTIVO' || method.includes('CASH')) {
             styleClass = 'bg-emerald-600 text-white border-emerald-700 shadow-sm';
         } else if (method === 'YAPE') {
             styleClass = 'bg-indigo-600 text-white border-indigo-700 shadow-sm';
@@ -172,11 +206,65 @@ const renderPaymentMethodBadge = (payments: any[] | undefined) => {
     const formattedDate = latestPayment && latestPayment.date ? formatDateSafe(latestPayment.date) : '';
     const formattedTime = latestPayment && latestPayment.date ? formatTimeSafe(latestPayment.date) : '';
 
+    // Render payment method logo or Lucide icon dynamically
+    const renderPaymentIconElement = () => {
+        if (uniqueNames.length > 1) {
+            return <ArrowRightLeft size={14} className="shrink-0" />;
+        }
+
+        const iconValue = first.icon;
+        
+        if (iconValue && (iconValue.startsWith('http') || iconValue.startsWith('data:') || iconValue.includes('/') || iconValue.includes('.'))) {
+            return (
+                <img 
+                    src={iconValue} 
+                    className="object-contain rounded bg-white shrink-0 shadow-xs border border-white/20" 
+                    style={{
+                        width: '22px',
+                        height: '22px',
+                        minWidth: '22px',
+                        minHeight: '22px',
+                        padding: '1px'
+                    }}
+                    alt={text}
+                    referrerPolicy="no-referrer"
+                />
+            );
+        }
+
+        const checkName = text.toUpperCase();
+        if (checkName === 'YAPE' || checkName === 'PLIN') {
+            return <QrCode size={14} className="shrink-0 opacity-95" />;
+        } else if (checkName === 'EFECTIVO' || checkName.includes('CASH') || checkName === 'EFECTIVO SOLES') {
+            return <Banknote size={14} className="shrink-0 opacity-95" />;
+        } else if (checkName.includes('TARJETA') || checkName.includes('CARD') || checkName.includes('VISA') || checkName.includes('MASTERCARD')) {
+            return <CreditCard size={14} className="shrink-0 opacity-95" />;
+        } else if (checkName.includes('TRANSF') || checkName.includes('DEPOSITO') || checkName.includes('BANCO') || checkName.includes('BCP') || checkName.includes('BBVA') || checkName.includes('INTERBANK')) {
+            return <Landmark size={14} className="shrink-0 opacity-95" />;
+        }
+
+        if (iconValue) {
+            const normalized = iconValue.toLowerCase();
+            if (normalized === 'creditcard') return <CreditCard size={14} className="shrink-0 opacity-95" />;
+            if (normalized === 'banknote') return <Banknote size={14} className="shrink-0 opacity-95" />;
+            if (normalized === 'qrcode') return <QrCode size={14} className="shrink-0 opacity-95" />;
+            if (normalized === 'landmark') return <Landmark size={14} className="shrink-0 opacity-95" />;
+            if (normalized === 'wallet') return <Wallet size={14} className="shrink-0 opacity-95" />;
+        }
+
+        return <CreditCard size={14} className="shrink-0 opacity-95" />;
+    };
+
     return (
         <div className="flex flex-col items-center justify-center gap-1">
-            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg border text-[9px] font-black uppercase tracking-wider ${styleClass}`}>
-                <span className="w-1.5 h-1.5 rounded-full bg-white/80" />
-                {text}
+            <span 
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[9px] font-black uppercase tracking-wider ${styleClass}`}
+                style={customStyle}
+            >
+                <span className="flex items-center justify-center shrink-0">
+                    {renderPaymentIconElement()}
+                </span>
+                <span>{text}</span>
             </span>
             {formattedDate && (
                 <div className="text-[10px] text-slate-500 font-mono tracking-tight leading-none text-center">
@@ -1074,7 +1162,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5 text-center">
-                                                    {renderPaymentMethodBadge(inv.payments)}
+                                                    {renderPaymentMethodBadge(inv.payments, paymentMethods)}
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <div className="flex justify-center items-center">
@@ -1198,7 +1286,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                         <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tighter ${inv.type === InvoiceType.FACTURA ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
                                                             {inv.type === InvoiceType.FACTURA ? 'FACTURA' : (inv.type === InvoiceType.NOTA_VENTA ? 'NOTA VENTA' : 'BOLETA')}
                                                         </span>
-                                                        {renderPaymentMethodBadge(inv.payments)}
+                                                        {renderPaymentMethodBadge(inv.payments, paymentMethods)}
                                                         <div className="flex items-center space-x-1.5">
                                                             <button
                                                                 onClick={() => handleDirectPrint(inv)}
