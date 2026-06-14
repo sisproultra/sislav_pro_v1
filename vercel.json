@@ -17,6 +17,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/correlativos/obtener-siguiente",
+      "destination": "/api/correlativos-obtener-siguiente.ts"
+    },
+    {
       "source": "/api/auth/recover-password",
       "destination": "/api/auth/recover-password.ts"
     },

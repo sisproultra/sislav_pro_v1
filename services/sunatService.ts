@@ -311,11 +311,46 @@ export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): P
           };
       }
 
-      const successVal = body.cod_sunat !== undefined 
-          ? (String(body.cod_sunat) === '0' || body.cod_sunat === 0) 
-          : (body.success === true || body.success === 'true' || body.status === 'OK' || body.data?.success === true || body.codigo === '0' || body.code === 200 || body?.errors === undefined);
-          
-      const descVal = body.msj_sunat || body.cdr_data?.description || body.message || body.msg || body.description || body.data?.message || (successVal ? "Comprobante generado y enviado con éxito" : "Error de emisión");
+      const rawCodSunat = body.cod_sunat !== undefined ? String(body.cod_sunat).trim() : null;
+      const descriptionText = body.msj_sunat || body.cdr_data?.description || body.message || body.msg || body.description || body.data?.message || "";
+      
+      const isSunatDown = 
+          rawCodSunat === '0109' || 
+          rawCodSunat === '0101' ||
+          rawCodSunat === '0111' ||
+          (rawCodSunat && Number(rawCodSunat) >= 100 && Number(rawCodSunat) < 2000) ||
+          descriptionText.toUpperCase().includes("AUTENTICACIN NO EST DISPONIBLE") ||
+          descriptionText.toUpperCase().includes("AUTENTICACION NO ESTA DISPONIBLE") ||
+          descriptionText.toUpperCase().includes("NO PUEDE RESPONDER SU SOLICITUD") ||
+          descriptionText.toUpperCase().includes("SERVICIO DE AUTENTICACION NO EST") ||
+          descriptionText.toUpperCase().includes("SERVICIO NO DISPONIBLE") ||
+          descriptionText.toUpperCase().includes("CONEXION CON SUNAT") ||
+          descriptionText.toUpperCase().includes("TIEMPO DE ESPERA AGOTADO");
+
+      let successVal = false;
+      let isPendingVal = false;
+      let descVal = descriptionText;
+
+      if (rawCodSunat !== null) {
+          if (rawCodSunat === '0' || rawCodSunat === '0000') {
+              successVal = true;
+          } else if (isSunatDown) {
+              isPendingVal = true;
+              descVal = "⚠️ SUNAT FUERA DE SERVICIO: El sistema de SUNAT o su servicio de autenticación no está disponible en este momento. El comprobante ha sido grabado de forma exitosa y queda en estado PENDIENTE de envío para ser retransmitido de forma automática más adelante.";
+          } else {
+              successVal = false;
+          }
+      } else {
+          successVal = body.success === true || body.success === 'true' || body.status === 'OK' || body.data?.success === true || body.codigo === '0' || body.code === 200 || body?.errors === undefined;
+          if (!successVal && isSunatDown) {
+              isPendingVal = true;
+              descVal = "⚠️ SUNAT FUERA DE SERVICIO: El sistema de SUNAT o su servicio de autenticación no está disponible en este momento. El comprobante ha sido grabado de forma exitosa y queda en estado PENDIENTE de envío para ser retransmitido de forma automática más adelante.";
+          }
+      }
+
+      if (!successVal && !isPendingVal) {
+          descVal = descVal || "Error de emisión";
+      }
 
       const pdfUrl = body.ruta_pdf || body.url_pdf || body.pdf || body.data?.ruta_pdf || body.data?.url_pdf || body.data?.pdf || "";
       const xmlUrl = body.ruta_xml || body.url_xml || body.xml || body.data?.ruta_xml || body.data?.url_xml || body.data?.xml || "";
@@ -324,6 +359,7 @@ export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): P
 
       return {
           success: successVal,
+          isPending: isPendingVal,
           description: descVal,
           hash: hashVal,
           pdfUrl,
