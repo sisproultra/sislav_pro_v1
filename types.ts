@@ -725,6 +725,8 @@ export interface SaasBranch {
     sunat_url?: string;
     sol_user?: string;
     sol_pass?: string;
+    firma_pass?: string;
+    firmaPass?: string;
     serie_boleta?: string;
     serie_factura?: string;
     serie_nv?: string;

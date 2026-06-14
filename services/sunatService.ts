@@ -1,6 +1,6 @@
 
 import { Invoice, Company, SunatResponse, InvoiceType, IgvType } from '../types';
-import { getPeruDateTime } from '../utils/calculations';
+import { getPeruDateTime, getPeruLocalDateString } from '../utils/calculations';
 
 /**
  * Convierte un número decimal a representación textual en castellano para facturación.
@@ -49,7 +49,7 @@ export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): P
   
   const peruTime = getPeruDateTime();
   const dateToUse = invoice.fecha_emision || invoice.date;
-  const fechaEmision = dateToUse ? dateToUse.split('T')[0] : peruTime.date;
+  const fechaEmision = dateToUse ? getPeruLocalDateString(dateToUse) : peruTime.date;
   
   let solUser = (company.solUser || "").trim() || "MODDATOS";
   let solPass = (company.solPass || "").trim() || "moddatos";
@@ -370,7 +370,7 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
 
   const peruTime = getPeruDateTime();
   const dateToUse = invoice.fecha_emision || invoice.date;
-  const fechaEmision = dateToUse ? dateToUse.split('T')[0] : peruTime.date;
+  const fechaEmision = dateToUse ? getPeruLocalDateString(dateToUse) : peruTime.date;
   
   let horaEmision = peruTime.time;
   if (dateToUse && dateToUse.includes('T')) {
@@ -479,8 +479,8 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
             "documento_que_se_modifica_tipo": invoice.relatedDocument.type,
             "documento_que_se_modifica_serie": invoice.relatedDocument.serie.toUpperCase().trim(),
             "documento_que_se_modifica_numero": String(invoice.relatedDocument.correlativo),
-            "documento_que_se_modifica_fecha": invoice.relatedDocument.date ? invoice.relatedDocument.date.split('T')[0] : "",
-            "fecha_documento_referencia": invoice.relatedDocument.date ? invoice.relatedDocument.date.split('T')[0] : ""
+            "documento_que_se_modifica_fecha": invoice.relatedDocument.date ? getPeruLocalDateString(invoice.relatedDocument.date) : "",
+            "fecha_documento_referencia": invoice.relatedDocument.date ? getPeruLocalDateString(invoice.relatedDocument.date) : ""
         } : {})
     },
     "items": invoice.items.map((item, idx) => {
@@ -631,7 +631,7 @@ export const sendSummaryToSunat = async (invoices: Invoice[], company: Company) 
      };
   }
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getPeruDateTime().date;
   const dateFormatted = today.replace(/-/g, '');
 
   const payload = {

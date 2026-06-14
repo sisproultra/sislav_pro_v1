@@ -1,7 +1,25 @@
 import { Invoice, Company, IgvType, PaymentMethod, IdentityDocumentType } from '../types';
 
 // Helper to format date YYYY-MM-DD
-const formatDate = (dateStr: string) => dateStr.split('T')[0];
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr.split('T')[0];
+  try {
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(d);
+  } catch {
+    return dateStr.split('T')[0];
+  }
+};
 // Helper to format time HH:mm:ss
 const formatTime = (dateStr: string) => {
   const d = new Date(dateStr);

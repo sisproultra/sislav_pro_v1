@@ -3834,19 +3834,50 @@ export const dbConvertInvoice = async (invoiceId: string, targetType: InvoiceTyp
     const branchId = getActiveBranchId();
     if (!branchId) throw new Error("No hay contexto de sucursal");
 
-    // 1. Obtener el siguiente correlativo usando el RPC atómico (bloquea la fila en Postgres)
-    const { data: nextNumber, error: rpcError } = await supabase.rpc('obtener_siguiente_correlativo', {
-        p_sucursal_id: branchId,
-        p_tipo_documento: targetType,
-        p_serie: targetSerie
-    });
+    // 1. Obtener el siguiente correlativo usando la API segura del servidor (que usa Service Role para saltar RLS)
+    let nextNumber: number;
+    try {
+        const response = await fetch('/api/correlativos/obtener-siguiente', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                branchId,
+                targetType,
+                targetSerie
+            })
+        });
 
-    if (rpcError) {
-        console.error("❌ Error al obtener correlativo via RPC:", rpcError);
-        if (rpcError.message?.includes('violates row-level security policy')) {
-            throw new Error("ERROR DE PERMISOS: No se pudo asignar el correlativo. Asegúrese de que la serie esté configurada en la sucursal o contacte al administrador.");
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            const message = errData.error || `HTTP ${response.status}`;
+            if (message.includes('violates row-level security policy')) {
+                throw new Error("ERROR DE PERMISOS: No se pudo asignar el correlativo. Asegúrese de que la serie esté configurada en la sucursal o contacte al administrador.");
+            }
+            throw new Error(message);
         }
-        throw rpcError;
+
+        const resJson = await response.json();
+        nextNumber = resJson.nextNumber;
+    } catch (apiError: any) {
+        console.warn("⚠️ Fallo en llamada a API de correlativos segura, intentando contingencia directa via RPC:", apiError);
+        
+        // Contingencia directa via RPC (mantener compatibilidad)
+        const { data: fallbackNumber, error: rpcError } = await supabase.rpc('obtener_siguiente_correlativo', {
+            p_sucursal_id: branchId,
+            p_tipo_documento: targetType,
+            p_serie: targetSerie
+        });
+
+        if (rpcError) {
+            console.error("❌ Error al obtener correlativo via RPC de contingencia:", rpcError);
+            if (rpcError.message?.includes('violates row-level security policy')) {
+                throw new Error("ERROR DE PERMISOS: No se pudo asignar el correlativo. Asegúrese de que la serie esté configurada en la sucursal o contacte al administrador.");
+            }
+            throw rpcError;
+        }
+        nextNumber = fallbackNumber;
     }
 
     // 2. Actualizar la venta con el número garantizado

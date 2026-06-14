@@ -1440,6 +1440,9 @@ export const SuperAdmin: React.FC<{
     const handleSaveBranch = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
+        
+        const originalBranch = isEditingBranch ? branches.find(b => b.id === editingBranchId) as any : null;
+
         const branchData: any = { 
             empresaId: selectedCompany?.id,
             name: brName,
@@ -1450,9 +1453,9 @@ export const SuperAdmin: React.FC<{
             phone: brPhone || null,
             modo_sunat: brModoSunat,
             sunat_url: brSunatUrl,
-            sol_user: brSolUser,
-            sol_pass: brSolPass,
-            firma_pass: brFirmaPass,
+            sol_user: brSolUser || (originalBranch?.sol_user || "MODDATOS"),
+            sol_pass: brSolPass || (originalBranch?.sol_pass || "moddatos"),
+            firma_pass: brFirmaPass || (originalBranch?.firma_pass || originalBranch?.firmaPass || ''),
             serie_boleta: brSerieBoleta,
             serie_factura: brSerieFactura,
             serie_nv: brSerieNv,

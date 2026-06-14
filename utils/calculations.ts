@@ -147,6 +147,28 @@ export const getPeruDateTime = () => {
 };
 
 /**
+ * Retorna la fecha formateada en formato "YYYY-MM-DD" forzada a la zona horaria de Perú, 
+ * sin importar la zona horaria del servidor o de la base de datos.
+ */
+export const getPeruLocalDateString = (dateStr: string | undefined): string => {
+    if (!dateStr) return '';
+    // Si ya es un formato simple YYYY-MM-DD, lo retornamos como está
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr;
+    }
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'America/Lima',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+    return formatter.format(d);
+};
+
+/**
  * Retorna la fecha de Perú (hoy) restándole 2 días, en formato YYYY-MM-DD.
  */
 export const getRetroactivePeruDate = (): string => {

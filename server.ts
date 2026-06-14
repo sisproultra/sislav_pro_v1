@@ -432,6 +432,40 @@ async function startServer() {
     }
   });
 
+  // Endpoint: Obtener el siguiente correlativo usando bypass de RLS con supabaseAdmin
+  app.post('/api/correlativos/obtener-siguiente', async (req, res) => {
+    const { branchId, targetType, targetSerie } = req.body;
+
+    if (!branchId || !targetType) {
+      return res.status(400).json({ error: 'branchId y targetType son requeridos' });
+    }
+
+    try {
+      console.log(`🚀 [Server Config] Obtener correlativo para Branch: ${branchId}, Tipo: ${targetType}, Serie: ${targetSerie}`);
+
+      if (!supabaseAdmin) {
+        throw new Error('Supabase Admin no inicializado en el servidor.');
+      }
+
+      const { data: nextNumber, error: rpcError } = await supabaseAdmin.rpc('obtener_siguiente_correlativo', {
+        p_sucursal_id: branchId,
+        p_tipo_documento: targetType,
+        p_serie: targetSerie || ''
+      });
+
+      if (rpcError) {
+        console.error("❌ Error en RPC obtener_siguiente_correlativo via server:", rpcError);
+        throw rpcError;
+      }
+
+      console.log(`✅ Correlativo asignado via server admin: ${nextNumber}`);
+      res.json({ success: true, nextNumber });
+    } catch (error: any) {
+      console.error('❌ Error en obtener-siguiente correlativo API:', error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Endpoint: Dynamic Manifest for PWA
   app.get('/manifest.json', async (req, res) => {
     const slug = req.query.s as string;
