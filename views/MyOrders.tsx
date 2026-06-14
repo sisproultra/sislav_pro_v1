@@ -20,7 +20,7 @@ import LogisticsDispatchModal from '../components/LogisticsDispatchModal';
 import Tracking from './Tracking';
 import { dbUpdateInvoiceDiscount, dbGetInvoicesForReport } from '../services/dbService';
 import { sendInvoiceViaWhatsApp, generateWhatsAppLink } from '../services/whatsappService';
-import { formatOrderNumber, formatDateSafe, formatTimeSafe, formatDateTimeSafe } from '../utils/calculations';
+import { formatOrderNumber, formatDateSafe, formatTimeSafe, formatDateTimeSafe, getPeruDateTime, getPeruLocalDateString } from '../utils/calculations';
 
 interface MyOrdersProps {
     invoices: Invoice[];
@@ -344,8 +344,8 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     const [isLoadingReportInvoices, setIsLoadingReportInvoices] = useState(false);
     const [activeReportTab, setActiveReportTab] = useState<'general' | 'cobrados'>('general');
     const [cobradosMethod, setCobradosMethod] = useState<string>('ALL');
-    const [cobradosStart, setCobradosStart] = useState<string>(new Date().toISOString().split('T')[0]);
-    const [cobradosEnd, setCobradosEnd] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [cobradosStart, setCobradosStart] = useState<string>(getPeruDateTime().date);
+    const [cobradosEnd, setCobradosEnd] = useState<string>(getPeruDateTime().date);
 
     useEffect(() => {
         if (isReportModalOpen) {
@@ -386,7 +386,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                 const dateStr = p.fecha_pago || p.date || p.fecha || inv.date;
                 if (!dateStr) return;
                 
-                const pDateOnly = new Date(dateStr).toISOString().split('T')[0];
+                const pDateOnly = getPeruLocalDateString(dateStr);
                 if (cobradosStart && pDateOnly < cobradosStart) return;
                 if (cobradosEnd && pDateOnly > cobradosEnd) return;
                 
@@ -545,7 +545,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
 
             const wb = utils.book_new();
             utils.book_append_sheet(wb, ws, 'Ordenes');
-            writeFile(wb, `Reporte_Ordenes_${new Date().toISOString().split('T')[0]}.xlsx`);
+            writeFile(wb, `Reporte_Ordenes_${getPeruDateTime().date}.xlsx`);
         } finally { setIsExporting(false); }
     };
 
@@ -560,7 +560,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
             
             const allData = await dbGetInvoicesForReport('ALL');
             const dailyInvoices = allData.filter(inv => {
-                const invDate = new Date(inv.date).toISOString().split('T')[0];
+                const invDate = getPeruLocalDateString(inv.date);
                 if (endDateStr) {
                     return invDate >= dateStr && invDate <= endDateStr;
                 }
@@ -965,7 +965,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                 </div>
                                 <div className="flex items-center gap-2 mb-0.5">
                                     <span className="text-[8px] font-black text-brand-primary uppercase tracking-widest">
-                                        Venta: {selectedReportDate === new Date().toISOString().split('T')[0] && !reportEndDate ? 'HOY' : 
+                                        Venta: {selectedReportDate === getPeruDateTime().date && !reportEndDate ? 'HOY' : 
                                                reportEndDate ? `${selectedReportDate} al ${reportEndDate}` : selectedReportDate}
                                     </span>
                                     <button onClick={clearDailyReport} className="p-0.5 hover:bg-slate-100 rounded-full text-slate-400">
@@ -2054,7 +2054,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Reporte de Ventas Diarias</h4>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <button 
-                                                    onClick={() => handleDailySalesReport(new Date().toISOString().split('T')[0])}
+                                                    onClick={() => handleDailySalesReport(getPeruDateTime().date)}
                                                     className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-50 hover:border-indigo-200 transition-all group"
                                                 >
                                                     <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
@@ -2067,9 +2067,14 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                 </button>
                                                 <button 
                                                     onClick={() => {
-                                                        const yesterday = new Date();
-                                                        yesterday.setDate(yesterday.getDate() - 1);
-                                                        handleDailySalesReport(yesterday.toISOString().split('T')[0]);
+                                                        const peruNow = getPeruDateTime();
+                                                        const [year, month, day] = peruNow.date.split('-').map(Number);
+                                                        const dateObj = new Date(year, month - 1, day);
+                                                        dateObj.setDate(dateObj.getDate() - 1);
+                                                        const yStr = dateObj.getFullYear();
+                                                        const mStr = String(dateObj.getMonth() + 1).padStart(2, '0');
+                                                        const dStr = String(dateObj.getDate()).padStart(2, '0');
+                                                        handleDailySalesReport(`${yStr}-${mStr}-${dStr}`);
                                                     }}
                                                     className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-50 hover:border-indigo-200 transition-all group"
                                                 >
@@ -2096,14 +2101,14 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                 <div className="flex items-center gap-2">
                                                     <input 
                                                         type="date" 
-                                                        defaultValue={new Date().toISOString().split('T')[0]}
+                                                        defaultValue={getPeruDateTime().date}
                                                         id="report-start"
                                                         className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
                                                     />
                                                     <span className="text-slate-400 text-[10px] font-bold">al</span>
                                                     <input 
                                                         type="date" 
-                                                        defaultValue={new Date().toISOString().split('T')[0]}
+                                                        defaultValue={getPeruDateTime().date}
                                                         id="report-end"
                                                         className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
                                                     />
