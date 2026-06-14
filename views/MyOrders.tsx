@@ -28,6 +28,8 @@ interface MyOrdersProps {
     currentPage: number;
     onPageChange: (page: number, search: string) => void;
     onSearch: (page: number, search: string) => void;
+    onFilterChange?: (filter: 'NONE' | 'TO_COLLECT' | 'TO_DELIVER') => void;
+    selectedFilter?: 'NONE' | 'TO_COLLECT' | 'TO_DELIVER';
     company: Company;
     onUpdateStatus: (id: string, status: OrderStatus) => Promise<void>;
     onEditOrder?: (invoice: Invoice) => void;
@@ -277,7 +279,7 @@ const renderPaymentMethodBadge = (payments: any[] | undefined, paymentMethods: P
 };
 
 const MyOrders: React.FC<MyOrdersProps> = ({
-    invoices, total, currentPage, onPageChange, onSearch, company, onUpdateStatus, onEditOrder, onAddPayment, onUnifiedAction, onAddClient, paymentMethods, clients, onUpdateItemStatus, canManage = true, globalColors = [], ticketConfig, globalStats, currentUser, onOpenWaCampaign, onConvertInvoice
+    invoices, total, currentPage, onPageChange, onSearch, onFilterChange, selectedFilter, company, onUpdateStatus, onEditOrder, onAddPayment, onUnifiedAction, onAddClient, paymentMethods, clients, onUpdateItemStatus, canManage = true, globalColors = [], ticketConfig, globalStats, currentUser, onOpenWaCampaign, onConvertInvoice
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isSearching, setIsSearching] = useState(false);
@@ -317,7 +319,20 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
-    const [selectedSummaryFilter, setSelectedSummaryFilter] = useState<'NONE' | 'TO_COLLECT' | 'TO_DELIVER'>('NONE');
+    const [selectedSummaryFilter, setSelectedSummaryFilter] = useState<'NONE' | 'TO_COLLECT' | 'TO_DELIVER'>(selectedFilter || 'NONE');
+
+    useEffect(() => {
+        if (selectedFilter !== undefined) {
+            setSelectedSummaryFilter(selectedFilter);
+        }
+    }, [selectedFilter]);
+
+    const handleSetSummaryFilter = (filter: 'NONE' | 'TO_COLLECT' | 'TO_DELIVER') => {
+        setSelectedSummaryFilter(filter);
+        if (onFilterChange) {
+            onFilterChange(filter);
+        }
+    };
     const [selectedItemsToDeliver, setSelectedItemsToDeliver] = useState<Set<string>>(new Set());
 
     const [sendingWaId, setSendingWaId] = useState<string | null>(null);
@@ -396,7 +411,8 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                     invoiceCode: (inv as any).codigo_orden || `${inv.serie}-${inv.correlativo}`,
                     clientName: inv.client?.name || 'CLIENTE VARIOS',
                     invoiceId: inv.id,
-                    methodName: pMethod
+                    methodName: pMethod,
+                    invoice: inv
                 });
             });
         });
@@ -922,7 +938,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                         <div className="flex items-center gap-2">
                             <div className="relative group">
                                 <div 
-                                    onClick={() => setSelectedSummaryFilter(selectedSummaryFilter === 'TO_COLLECT' ? 'NONE' : 'TO_COLLECT')}
+                                    onClick={() => handleSetSummaryFilter(selectedSummaryFilter === 'TO_COLLECT' ? 'NONE' : 'TO_COLLECT')}
                                     className={`bg-white border ${selectedSummaryFilter === 'TO_COLLECT' ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-slate-100'} px-5 py-3 rounded-[2rem] flex flex-col items-center justify-center min-w-[110px] shadow-sm transition-all cursor-pointer hover:-translate-y-1 active:scale-95`}
                                 >
                                     <span className="text-[9px] font-bold text-amber-500 uppercase tracking-tighter leading-none">Por Cobrar</span>
@@ -932,7 +948,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
 
                             <div className="relative group">
                                 <div 
-                                    onClick={() => setSelectedSummaryFilter(selectedSummaryFilter === 'TO_DELIVER' ? 'NONE' : 'TO_DELIVER')}
+                                    onClick={() => handleSetSummaryFilter(selectedSummaryFilter === 'TO_DELIVER' ? 'NONE' : 'TO_DELIVER')}
                                     className={`bg-white border ${selectedSummaryFilter === 'TO_DELIVER' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-100'} px-5 py-3 rounded-[2rem] flex flex-col items-center justify-center min-w-[110px] shadow-sm transition-all cursor-pointer hover:-translate-y-1 active:scale-95`}
                                 >
                                     <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-tighter leading-none">Por Entregar</span>
@@ -941,7 +957,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                 <button 
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setSelectedSummaryFilter('TO_DELIVER');
+                                        handleSetSummaryFilter('TO_DELIVER');
                                         setIsReportModalOpen(true);
                                     }}
                                     className="absolute -top-1.5 -right-1.5 p-1.5 bg-black text-white rounded-full shadow-lg border border-white/20 hover:scale-110 active:scale-90 transition-all z-10"
@@ -984,7 +1000,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
 
                         <button 
                             onClick={() => {
-                                setSelectedSummaryFilter('NONE');
+                                handleSetSummaryFilter('NONE');
                                 setIsReportModalOpen(true);
                             }}
                             className="p-3 bg-white border border-gray-200 rounded-2xl text-gray-600 hover:text-brand-primary hover:border-brand-primary/30 shadow-sm transition-all hover:scale-110 active:scale-90"
@@ -2008,7 +2024,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className={`bg-white rounded-3xl w-full ${activeReportTab === 'cobrados' ? 'max-w-2xl' : 'max-w-md'} overflow-hidden shadow-2xl border border-gray-100 transition-all duration-300`}
+                            className={`bg-white rounded-3xl w-full ${activeReportTab === 'cobrados' ? 'max-w-3xl md:max-w-4xl' : 'max-w-md'} overflow-hidden shadow-2xl border border-gray-100 transition-all duration-300`}
                         >
                             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                                 <div>
@@ -2184,7 +2200,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                     className="w-full bg-white border border-slate-250 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-indigo-500"
                                                 >
                                                     <option value="ALL">TODOS LOS MÉTODOS</option>
-                                                    {paymentMethods.map(pm => (
+                                                    {paymentMethods.filter(pm => pm.isActive !== false && !pm.isSuspended).map(pm => (
                                                         <option key={pm.id} value={pm.name.toUpperCase()}>{pm.name.toUpperCase()}</option>
                                                     ))}
                                                 </select>
@@ -2250,35 +2266,94 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                         const dateFormatted = p.paymentDate ? formatDateSafe(p.paymentDate) : '-';
                                                         const timeFormatted = p.paymentDate ? formatTimeSafe(p.paymentDate) : '';
 
+                                                        const inv = p.invoice;
+                                                        let docTypeLabel = 'Nota de Venta';
+                                                        let docTypeColor = 'bg-slate-100 text-slate-800 border-slate-200';
+
+                                                        if (inv) {
+                                                            if (inv.type === InvoiceType.BOLETA) {
+                                                                docTypeLabel = 'Boleta';
+                                                                docTypeColor = 'bg-blue-100 text-blue-900 border-blue-200';
+                                                            } else if (inv.type === InvoiceType.FACTURA) {
+                                                                docTypeLabel = 'Factura';
+                                                                docTypeColor = 'bg-indigo-100 text-indigo-900 border-indigo-200';
+                                                            } else if (inv.type === InvoiceType.NOTA_CREDITO) {
+                                                                docTypeLabel = 'N. Crédito';
+                                                                docTypeColor = 'bg-rose-100 text-rose-900 border-rose-200';
+                                                            }
+                                                        }
+
                                                         return (
-                                                            <div key={p.id || idx} className="bg-white border border-slate-150/70 rounded-xl p-3 flex justify-between items-center hover:border-slate-300 transition-colors shadow-sm">
-                                                                <div className="space-y-0.5">
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <span className="text-[10px] font-black text-slate-800 uppercase">{p.invoiceCode}</span>
-                                                                        <span className="text-[9px] font-bold text-slate-300">•</span>
-                                                                        <span className="text-[10px] font-black text-slate-600 uppercase truncate max-w-[150px]">{p.clientName}</span>
+                                                            <div key={p.id || idx} className="bg-white border border-slate-150 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between hover:border-slate-300 transition-colors shadow-sm gap-4">
+                                                                <div className="space-y-1.5 min-w-0 flex-1">
+                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                        <span className="text-sm font-bold text-slate-900 uppercase tracking-tight">{p.invoiceCode}</span>
+                                                                        <span className="text-slate-300 text-xs">•</span>
+                                                                        <span className="text-sm font-semibold text-slate-700 uppercase truncate max-w-[200px] sm:max-w-none">{p.clientName}</span>
+                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-black uppercase tracking-wider ${docTypeColor}`}>
+                                                                            {docTypeLabel}
+                                                                        </span>
                                                                     </div>
-                                                                    <div className="text-[9px] text-slate-400 font-mono flex items-center gap-1.5">
-                                                                        <span>{dateFormatted}</span>
+                                                                    <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2">
+                                                                        <span className="font-semibold text-slate-600">{dateFormatted}</span>
                                                                         <span className="text-slate-300">|</span>
-                                                                        <span>{timeFormatted}</span>
+                                                                        <span className="font-mono text-xs text-slate-400">{timeFormatted}</span>
                                                                         {p.registrado_por && (
                                                                             <>
                                                                                 <span className="text-slate-300">|</span>
-                                                                                <span className="text-[8px] bg-slate-50 px-1 py-0.5 rounded text-slate-400 uppercase font-black truncate max-w-[100px]">
+                                                                                <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded-md text-slate-600 font-bold uppercase truncate max-w-[120px]">
                                                                                     {p.registrado_por}
                                                                                 </span>
                                                                             </>
                                                                         )}
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-lg border text-[8px] font-black uppercase tracking-wider ${badgeStyle}`}>
-                                                                        {p.methodName}
-                                                                    </span>
-                                                                    <span className="text-xs font-black text-slate-900 leading-none">
-                                                                        S/ {Number(p.monto).toFixed(2)}
-                                                                    </span>
+                                                                <div className="flex flex-wrap items-center gap-3 shrink-0">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-wider ${badgeStyle}`}>
+                                                                            {p.methodName}
+                                                                        </span>
+                                                                        <span className="text-sm font-black text-slate-900 leading-none">
+                                                                            S/ {Number(p.monto).toFixed(2)}
+                                                                        </span>
+                                                                    </div>
+                                                                    
+                                                                    {/* ACCIONES DE CPE (BOLETA/FACTURA) Y WHATSAPP */}
+                                                                    {(() => {
+                                                                        const inv = p.invoice;
+                                                                        const showConvert = inv && inv.type === InvoiceType.NOTA_VENTA && (company.sunatEnvironment === 'BETA' || company.sunatEnvironment === 'PRODUCTION');
+                                                                        return (
+                                                                            <div className="flex items-center gap-2">
+                                                                                {showConvert && (
+                                                                                    <button
+                                                                                        onClick={(e) => { e.stopPropagation(); setInvoiceToConvert(inv); }}
+                                                                                        className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-200 hover:border-emerald-400 bg-white transition-all active:scale-95 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                                                                        title="Convertir a Boleta o Factura de SUNAT"
+                                                                                    >
+                                                                                        <ArrowRightLeft className="w-4 h-4 text-emerald-600" />
+                                                                                        <span className="text-[10px] font-black uppercase text-emerald-600">Convertir CPE</span>
+                                                                                    </button>
+                                                                                )}
+                                                                                <button 
+                                                                                    onClick={(e) => { e.stopPropagation(); if (inv) handleSendWA(inv); }} 
+                                                                                    className={`relative p-2 rounded-xl border transition-all active:scale-95 flex items-center justify-center gap-1.5 bg-white text-xs font-bold cursor-pointer shadow-sm ${sendingWaId === p.invoiceId ? 'bg-slate-100 border-slate-200 text-slate-500' : 'hover:bg-emerald-50 text-emerald-700 border-slate-250 hover:border-emerald-350'}`}
+                                                                                    title="Enviar por WhatsApp"
+                                                                                >
+                                                                                    {sendingWaId === p.invoiceId ? (
+                                                                                        <Loader2 size={14} className="animate-spin text-emerald-600" />
+                                                                                    ) : (
+                                                                                        <>
+                                                                                            <img src="https://iili.io/fXXft0Q.png" className="w-3.5 h-3.5 object-contain" alt="WA" />
+                                                                                            <span className="text-[10px] font-black uppercase text-slate-700">WhatsApp</span>
+                                                                                            {sentSuccessIds.has(p.invoiceId) && (
+                                                                                                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white animate-bounce" />
+                                                                                            )}
+                                                                                        </>
+                                                                                    )}
+                                                                                </button>
+                                                                            </div>
+                                                                        );
+                                                                    })()}
                                                                 </div>
                                                             </div>
                                                         );

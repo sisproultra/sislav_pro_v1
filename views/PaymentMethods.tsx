@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { PaymentMethodConfig, SUNAT_PAYMENT_CODES, GlobalPaymentImage } from '../types';
 import { dbUploadImage, dbRegisterCatalogImage } from '../services/dbService';
 import { 
-    Plus, X, Upload, Image as ImageIcon, Trash2, Landmark, Check, Ban, Edit, Eye, EyeOff, LayoutGrid, Save, Loader2, RotateCcw, AlertTriangle, Pause, Play
+    Plus, X, Upload, Image as ImageIcon, Trash2, Landmark, Check, Ban, Edit, Eye, EyeOff, LayoutGrid, Save, Loader2, RotateCcw, AlertTriangle, Pause, Play, Copy
 } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -23,6 +23,19 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
   // State para anulación y suspensión
   const [methodToToggle, setMethodToToggle] = useState<PaymentMethodConfig | null>(null);
   const [methodToSuspend, setMethodToSuspend] = useState<PaymentMethodConfig | null>(null);
+
+  // State para copiar ID
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyId = (id: string, e: React.MouseEvent) => {
+      e.stopPropagation(); // Evitar comportamientos no esperados
+      navigator.clipboard.writeText(id).then(() => {
+          setCopiedId(id);
+          setTimeout(() => setCopiedId(null), 2000);
+      }).catch(err => {
+          console.error("Error al copiar ID:", err);
+      });
+  };
 
   // Form State
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -168,6 +181,24 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ methods, globalPaymentC
                               Suspendido
                           </div>
                       )}
+
+                      <button
+                          onClick={(e) => handleCopyId(pm.id, e)}
+                          className={`absolute top-4 z-10 p-1 px-2 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-700 rounded-lg text-[9px] font-bold flex items-center gap-1 border border-slate-200/80 transition-all active:scale-95 shadow-sm cursor-pointer ${isAnulado || isSuspended ? 'right-23' : 'right-4'}`}
+                          title="Copiar ID del método de pago"
+                      >
+                          {copiedId === pm.id ? (
+                              <>
+                                  <Check size={10} className="text-emerald-600 shrink-0" />
+                                  <span className="text-emerald-600 font-extrabold uppercase text-[7px] tracking-tight">Copiado</span>
+                                </>
+                          ) : (
+                              <>
+                                  <Copy size={10} className="shrink-0" />
+                                  <span className="text-[7px] font-bold tracking-tight">ID</span>
+                              </>
+                          )}
+                      </button>
 
                       <div className="p-6 flex items-center gap-5 flex-1">
                           <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden shadow-inner border ${isAnulado ? 'bg-red-50 border-red-100' : isSuspended ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100'}`}>

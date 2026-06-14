@@ -29,6 +29,32 @@ interface DashboardProps {
   onNavigateToPos: () => void;
 }
 
+const parseSafeDate = (dateVal: any): Date => {
+  if (dateVal instanceof Date) return dateVal;
+  if (!dateVal) return new Date();
+  
+  if (typeof dateVal === 'string') {
+    const cleaned = dateVal.trim();
+    // 1. Si comienza con YYYY-MM-DD (e.g. "2026-05-30" o "2026-05-30T00:00:00Z")
+    const isoMatch = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      const year = parseInt(isoMatch[1], 10);
+      const month = parseInt(isoMatch[2], 10);
+      const day = parseInt(isoMatch[3], 10);
+      return new Date(year, month - 1, day, 12, 0, 0); // Mediodía local para evitar saltos de zona horaria
+    }
+    // 2. Si comienza con DD/MM/YYYY o DD-MM-YYYY
+    const dmyMatch = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (dmyMatch) {
+      const day = parseInt(dmyMatch[1], 10);
+      const month = parseInt(dmyMatch[2], 10);
+      const year = parseInt(dmyMatch[3], 10);
+      return new Date(year, month - 1, day, 12, 0, 0);
+    }
+  }
+  return new Date(dateVal);
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ 
   invoices = [], 
   expenses: propExpenses = [],
@@ -119,7 +145,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     // Horario con mayor atención (Peak Hours)
     const hoursMap: Record<number, number> = {};
     activeInvoices.forEach(inv => {
-      const hour = new Date(inv.date).getHours();
+      const hour = parseSafeDate(inv.date).getHours();
       hoursMap[hour] = (hoursMap[hour] || 0) + 1;
     });
     const peakHoursData = Object.entries(hoursMap).map(([hour, count]) => ({
@@ -156,7 +182,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     // % Fidelización (clientes que lavaron en los últimos 30 días)
     const activeClientsCount = new Set(
       activeInvoices
-        .filter(inv => new Date(inv.date) >= thirtyDaysAgo)
+        .filter(inv => parseSafeDate(inv.date) >= thirtyDaysAgo)
         .map(inv => inv.client?.id)
         .filter(Boolean)
     ).size;
@@ -197,7 +223,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     // 1. Procesar Ventas del rango
     currentInvoices.forEach(inv => {
       if (inv.orderStatus === 'CANCELADO') return;
-      const d = new Date(inv.date);
+      const d = parseSafeDate(inv.date);
       const year = d.getFullYear().toString();
       const monthIdx = d.getMonth();
       const month = allMonths[monthIdx];
@@ -218,7 +244,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     // 2. Procesar Recaudos (Pagos) - DESDE pagos_venta
     currentPayments.forEach(p => {
-        const d = new Date(p.fecha_pago);
+        const d = parseSafeDate(p.fecha_pago);
         const dayLabel = getDayLabel(d);
         
         if (collectionsByDay[dayLabel] !== undefined) {
@@ -244,7 +270,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       .sort((a, b) => b.value - a.value);
 
     // Tabla comparativa de ventas por años y meses
-    const allYears = Array.from(new Set(currentInvoices.map(inv => new Date(inv.date).getFullYear()))).sort((a, b) => a - b);
+    const allYears = Array.from(new Set(currentInvoices.map(inv => parseSafeDate(inv.date).getFullYear()))).sort((a, b) => a - b);
     const monthsNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     
     const comparisonData = monthsNames.map((m, mIdx) => {
@@ -253,7 +279,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       allYears.forEach(y => {
         const total = currentInvoices
           .filter(inv => {
-            const d = new Date(inv.date);
+            const d = parseSafeDate(inv.date);
             return d.getFullYear() === y && d.getMonth() === mIdx;
           })
           .reduce((sum, inv) => sum + inv.totals.total, 0);
@@ -266,7 +292,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     const yearTotals = allYears.map(y => {
       const total = currentInvoices
-        .filter(inv => new Date(inv.date).getFullYear() === y)
+        .filter(inv => parseSafeDate(inv.date).getFullYear() === y)
         .reduce((sum, inv) => sum + inv.totals.total, 0);
       return { year: y, total };
     });
@@ -299,7 +325,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     
     setDayDetails({
       date: dayLabel,
-      salesCount: currentInvoices.filter(inv => getDayLabel(new Date(inv.date)) === dayLabel).length,
+      salesCount: currentInvoices.filter(inv => getDayLabel(parseSafeDate(inv.date)) === dayLabel).length,
       totalSales: salesTotal,
       totalCollected: collectedTotal,
       payments: payments
@@ -810,7 +836,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-700">{exp.description}</p>
-                        <p className="text-[10px] text-slate-400 uppercase">{exp.category} • {exp.date ? new Date(exp.date).toLocaleDateString() : '-'}</p>
+                        <p className="text-[10px] text-slate-400 uppercase">{exp.category} • {exp.date ? parseSafeDate(exp.date).toLocaleDateString() : '-'}</p>
                       </div>
                     </div>
                     <span className="text-sm font-black text-rose-500">- S/ {exp.amount.toFixed(2)}</span>

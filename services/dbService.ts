@@ -2092,6 +2092,8 @@ export const dbGetInvoicesForReport = async (filter: 'TO_COLLECT' | 'TO_DELIVER'
             // Mapping simple fields for report
             return {
                 ...v,
+                type: (v.tipo_documento_codigo || '80') as any,
+                orderStatus: (v.estado as OrderStatus) || 'PENDIENTE',
                 date: v.fecha_recepcion || v.fecha || new Date().toISOString(),
                 client: c ? {
                     ...c,
@@ -2128,12 +2130,13 @@ export const dbGetInvoices = async (
     searchTerm: string = '',
     onlyElectronic: boolean = false,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    statusFilter?: 'TO_COLLECT' | 'TO_DELIVER' | 'ALL'
 ): Promise<{ invoices: Invoice[], total: number }> => {
     const branchId = getActiveBranchId();
     if (!branchId) return { invoices: [], total: 0 };
 
-    const cacheKey = `invoices_${branchId}_p${page}_s${pageSize}_q${searchTerm}_elec${onlyElectronic}_start${startDate || ''}_end${endDate || ''}`;
+    const cacheKey = `invoices_${branchId}_p${page}_s${pageSize}_q${searchTerm}_elec${onlyElectronic}_start${startDate || ''}_end${endDate || ''}_sf${statusFilter || 'NONE'}`;
     const cached = getCached(cacheKey, 30000); // 30s TTL for invoices to optimize egress
     if (cached) return cached;
     try {
@@ -2147,6 +2150,10 @@ export const dbGetInvoices = async (
             .select('*, clientes(id, sucursal_id, empresa_holding_id, tipo_documento, dni, nombres, apellidos, telefono, direccion, razon_social, ruc, email, puntos, google_maps_url, latitud, longitud), items_venta(*)', { count: 'exact' })
             .eq('sucursal_id', branchId)
             .eq('empresa_holding_id', holdingId);
+
+        if (statusFilter === 'TO_DELIVER') {
+            query = query.neq('estado', 'ENTREGADO').neq('estado', 'CANCELADO');
+        }
 
         if (onlyElectronic) {
             query = query.in('tipo_documento_codigo', ['01', '03', '07']);
@@ -2442,6 +2449,57 @@ export const dbGetDashboardReportData = async (startDate: string, endDate: strin
 
         if (gError) throw gError;
 
+        // 4. Obtener Ventas Históricas Consolidadas (Si la tabla y políticas RLS existen)
+        let ventasHistoricas: any[] = [];
+        try {
+            const { data: hVentas, error: hVError } = await supabase
+                .from('historico_ventas_consolidadas')
+                .select('*')
+                .eq('sucursal_id', branchId)
+                .gte('fecha', startDate)
+                .lte('fecha', endDate);
+            
+            if (!hVError && hVentas) {
+                ventasHistoricas = hVentas;
+            } else if (hVError) {
+                console.warn("⚠️ Warning fetching historico_ventas_consolidadas:", hVError.message);
+            }
+        } catch (err) {
+            console.error("Error fetching historico_ventas_consolidadas:", err);
+        }
+
+        // 5. Obtener Pagos Históricos Consolizados (Soportando typos como 'z')
+        let pagosHistoricos: any[] = [];
+        try {
+            const tableCandidates = [
+                'historico_pagos_consolizados', // Con 'z' como lo subió el usuario
+                'historico_pagos_consolidados', // Con 'd' estándar
+                'hisorico_pagos_consolizados',  // Typo + 'z'
+                'hisorico_pagos_consolidados'   // Typo + 'd'
+            ];
+            const uniqueCandidates = Array.from(new Set(tableCandidates));
+
+            for (const tableName of uniqueCandidates) {
+                const { data: hPagos, error: hPError } = await supabase
+                    .from(tableName)
+                    .select('*')
+                    .eq('sucursal_id', branchId)
+                    .gte('fecha', startDate)
+                    .lte('fecha', endDate);
+
+                if (!hPError && hPagos) {
+                    pagosHistoricos = hPagos;
+                    break; // Parar loop si tenemos éxito al recuperar datos de una tabla existente
+                } else if (hPError) {
+                    if (!hPError.message.includes("Could not find the table")) {
+                        console.warn(`⚠️ Warning fetching ${tableName}:`, hPError.message);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Error fetching historico_pagos:", err);
+        }
+
         // Mapear ventas al formato Invoice
         const mappedInvoices = (ventas || []).map(v => {
             const c = normalizeRelation(v.clientes);
@@ -2458,15 +2516,70 @@ export const dbGetDashboardReportData = async (startDate: string, endDate: strin
             } as any;
         });
 
+        // Mapear Ventas Históricas a formato compatible con Invoice
+        const mappedHistInvoices = ventasHistoricas.map((hv, idx) => {
+            const valTotal = Number(hv.total_venta || hv.total || 0);
+            return {
+                id: hv.id || `hist-sale-${hv.fecha}-${idx}`,
+                sucursal_id: hv.sucursal_id,
+                empresa_holding_id: hv.empresa_holding_id,
+                codigo_orden: `HIST-${String(hv.id || idx).substring(0, 5).toUpperCase()}`,
+                ordenNumber: `HIST-${String(hv.id || idx).substring(0, 5).toUpperCase()}`,
+                ticketNumber: `HIST-${String(hv.id || idx).substring(0, 5).toUpperCase()}`,
+                fecha_recepcion: hv.fecha,
+                fecha: hv.fecha,
+                date: hv.fecha,
+                total: valTotal,
+                estado: 'ENTREGADO',
+                orderStatus: 'ENTREGADO',
+                client: {
+                    id: 'hist-client-id',
+                    name: 'HISTÓRICO ANTERIOR'
+                },
+                totals: { total: valTotal },
+                items: [
+                    {
+                        id: `item-hist-${hv.id || idx}`,
+                        descripcion: 'Venta consolidada histórica',
+                        price: valTotal,
+                        quantity: 1,
+                        subtotal: valTotal,
+                        categoria_id: 'historico',
+                        categoria_nombre: 'Ventas Históricas'
+                    }
+                ],
+                payments: []
+            } as any;
+        });
+
+        // Mapear Pagos Históricos a formato compatible
+        const mappedHistPayments = pagosHistoricos.map((hp, idx) => {
+            const paymentDate = hp.fecha || hp.fecha_pago;
+            const paymentAmount = Number(hp.total_cobrado || hp.monto || hp.monto_pago || 0);
+            return {
+                id: hp.id || `hist-pay-${paymentDate}-${idx}`,
+                sucursal_id: hp.sucursal_id,
+                empresa_holding_id: hp.empresa_holding_id,
+                fecha_pago: paymentDate,
+                monto: paymentAmount,
+                metodo_pago_name: hp.nombre_metodo || hp.metodo_pago || 'HISTÓRICO / OTROS',
+                venta_codigo: 'HISTÓRICO',
+                cliente_nombre: 'HISTÓRICO ANTERIOR'
+            };
+        });
+
         const result = {
-            invoices: mappedInvoices,
-            payments: (pagos || []).map(p => ({
-                ...p,
-                monto: Number(p.monto),
-                metodo_pago_name: p.metodos_pago?.nombre || 'EFECTIVO',
-                venta_codigo: p.metodos_pago?.nombre ? p.ventas?.codigo_orden : p.ventas?.codigo_orden,
-                cliente_nombre: p.ventas?.clientes ? `${p.ventas.clientes.nombres} ${p.ventas.clientes.apellidos}` : 'CLIENTE'
-            })),
+            invoices: [...mappedInvoices, ...mappedHistInvoices],
+            payments: [
+                ...(pagos || []).map(p => ({
+                    ...p,
+                    monto: Number(p.monto),
+                    metodo_pago_name: p.metodos_pago?.nombre || 'EFECTIVO',
+                    venta_codigo: p.metodos_pago?.nombre ? p.ventas?.codigo_orden : p.ventas?.codigo_orden,
+                    cliente_nombre: p.ventas?.clientes ? `${p.ventas.clientes.nombres} ${p.ventas.clientes.apellidos}` : 'CLIENTE'
+                })),
+                ...mappedHistPayments
+            ],
             expenses: (gastos || []).map(g => ({
                 ...g,
                 amount: Number(g.monto),

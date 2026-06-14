@@ -241,6 +241,7 @@ export default function App() {
     const [invoicesSearch, setInvoicesSearch] = useState('');
     const [invoicesPage, setInvoicesPage] = useState(1);
     const [invoicesTotal, setInvoicesTotal] = useState(0);
+    const [ordersStatusFilter, setOrdersStatusFilter] = useState<'NONE' | 'TO_COLLECT' | 'TO_DELIVER'>('NONE');
     const [initialPickupForPos, setInitialPickupForPos] = useState<PickupRequest | null>(null);
 
     const [trackingId, setTrackingId] = useState<string | null>(() => {
@@ -1227,8 +1228,8 @@ export default function App() {
     });
 
     const { data: invoicesRes, isLoading: isLoadingInvoices } = useQuery({
-        queryKey: ['invoices', activeSucursal?.id, invoicesPage, invoicesSearch],
-        queryFn: () => dbGetInvoices(invoicesPage, 50, invoicesSearch),
+        queryKey: ['invoices', activeSucursal?.id, invoicesPage, invoicesSearch, ordersStatusFilter],
+        queryFn: () => dbGetInvoices(invoicesPage, 50, invoicesSearch, false, undefined, undefined, ordersStatusFilter === 'NONE' ? undefined : ordersStatusFilter),
         enabled: !!activeSucursal?.id && !!authSession,
         staleTime: 30 * 1000, // 30 segundos de vigencia de caché para evitar re-fetching excesivo al navegar
     });
@@ -2121,6 +2122,11 @@ export default function App() {
                 currentPage={invoicesPage} 
                 onPageChange={fetchInvoices} 
                 onSearch={fetchInvoices} 
+                onFilterChange={(filter) => {
+                    setOrdersStatusFilter(filter);
+                    setInvoicesPage(1);
+                }}
+                selectedFilter={ordersStatusFilter}
                 company={activeSucursal!} 
                 onUpdateStatus={dbUpdateInvoiceStatus} 
                 onAddClient={dbCreateClient} 
