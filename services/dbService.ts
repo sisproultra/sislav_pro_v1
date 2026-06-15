@@ -1682,7 +1682,8 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
                     images: audit.unit_images || it.images || [],
                     audioNote: audit.unit_audio || it.audioNote,
                     peso: it.peso_estimado || 0.400,
-                    splitOrder: idx + 1 // Marcador opcional para identificar que es parte de un grupo
+                    splitOrder: idx + 1, // Marcador opcional para identificar que es parte de un grupo
+                    codigo_unidad: it.codigo_unidad || it.unitCode || 'ZZ'
                 });
             });
         } else {
@@ -1700,7 +1701,8 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
                 precio_unitario: finalUnitPrice,
                 descuento_item: totDisc,
                 subtotal: finalSubtotal,
-                peso: (it.peso_estimado || 0.400) * qty
+                peso: (it.peso_estimado || 0.400) * qty,
+                codigo_unidad: it.codigo_unidad || it.unitCode || 'ZZ'
             });
         }
     });
@@ -1898,7 +1900,7 @@ export const dbUpdateOrderItems = async (orderId: string, items: any[], totals: 
             precio_unitario: Number(it.precio_unitario || it.price),
             subtotal: Number(it.subtotal || (it.cantidad * it.precio_unitario)),
             tipo_igv_codigo: it.tipo_igv_codigo || '10',
-            codigo_unidad: it.codigo_unidad || 'ZZ',
+            codigo_unidad: it.codigo_unidad || it.unitCode || 'ZZ',
             valor_unitario: Number(it.valor_unitario),
             igv_item: Number(it.igv_item),
             descuento_item: Number(it.descuento_item || 0),
@@ -1942,7 +1944,7 @@ export const dbUpdateOrderItems = async (orderId: string, items: any[], totals: 
                 precio_original: Number(it.precio_original || it.precio_unitario || it.price),
                 subtotal: Number(it.subtotal || (it.cantidad * it.precio_unitario)),
                 tipo_igv_codigo: it.tipo_igv_codigo || '10',
-                codigo_unidad: it.codigo_unidad || 'ZZ',
+                codigo_unidad: it.codigo_unidad || it.unitCode || 'ZZ',
                 valor_unitario: Number(it.valor_unitario),
                 igv_item: Number(it.igv_item),
                 descuento_item: Number(it.descuento_item || 0),
@@ -2100,6 +2102,19 @@ export const dbGetInvoicesForReport = async (filter: 'TO_COLLECT' | 'TO_DELIVER'
                     name: fixEncoding(c.nombres || 'CLIENTE VARIOS').toUpperCase(),
                     phone: c.telefono || ''
                 } : null,
+                items: (v.items_venta || []).map((it: any) => ({
+                    ...it,
+                    id: it.id,
+                    producto_id: it.producto_id,
+                    name: fixEncoding(it.descripcion),
+                    price: Number(it.precio_unitario),
+                    quantity: Number(it.cantidad),
+                    subtotal: Number(it.subtotal),
+                    status: it.estado,
+                    isAnulado: it.estado_id === 9 || it.estado === 'CANCELADO',
+                    unitCode: it.codigo_unidad || 'NIU',
+                    codigo_unidad: it.codigo_unidad || 'NIU'
+                })),
                 prePaymentAmount: totalPagado,
                 debt: debt,
                 payments: pagosVenta,
@@ -2208,7 +2223,9 @@ export const dbGetPaymentsForReport = async (
                     item_id_raw: it.id,
                     es_ajuste: it.es_ajuste || false,
                     itemDeliveryDate: it.fecha_entrega_item,
-                    audioNote: it.url_audio
+                    audioNote: it.url_audio,
+                    unitCode: it.codigo_unidad || 'NIU',
+                    codigo_unidad: it.codigo_unidad || 'NIU'
                 })),
                 payments: [{
                     id: p.id,
@@ -2417,7 +2434,9 @@ export const dbGetInvoices = async (
                     item_id_raw: it.id,
                     es_ajuste: it.es_ajuste || false,
                     itemDeliveryDate: it.fecha_entrega_item,
-                    audioNote: it.url_audio
+                    audioNote: it.url_audio,
+                    unitCode: it.codigo_unidad || 'NIU',
+                    codigo_unidad: it.codigo_unidad || 'NIU'
                 })), 
                 payments: pagosVenta.map(p => ({ 
                     id: p.id, 
@@ -2766,7 +2785,9 @@ export const dbGetInvoiceFull = async (id: string): Promise<Invoice | null> => {
             status: it.estado,
             estado_id: it.estado_id,
             isAnulado: it.estado_id === 9 || it.estado === 'CANCELADO',
-            audioNote: it.url_audio
+            audioNote: it.url_audio,
+            unitCode: it.codigo_unidad || 'NIU',
+            codigo_unidad: it.codigo_unidad || 'NIU'
         })), 
         payments: (pagos || []).map(p => ({ 
             metodo_pago_id: p.metodo_pago_id, 
@@ -4581,6 +4602,20 @@ export const dbToggleWaTemplate = async (id: string, active: boolean) => {
 
 export const dbGetTrackingInfo = async (id: string) => {
     console.log(`🔍 [dbGetTrackingInfo] Buscando ID: ${id}`);
+    
+    // 0. Intentar consultar al backend primero (evita RLS en clientes públicos)
+    try {
+        const response = await fetch(`/api/tracking/${id}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data && (data.invoice || data.pickup)) {
+                console.log("✅ Tracking obtenido del servidor sin RLS");
+                return data;
+            }
+        }
+    } catch (apiErr) {
+        console.warn("⚠️ Falló la llamada a /api/tracking, usando fallback local:", apiErr);
+    }
     
     // 1. Intentar obtener el recojo primero (sin joins para máxima resiliencia RLS)
     const { data: pickup, error: pErr } = await supabase.from('recojos_delivery').select('*').eq('id', id).maybeSingle();

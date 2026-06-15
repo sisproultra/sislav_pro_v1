@@ -532,8 +532,8 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                         <X size={20} />
                     </button>
 
-                    <div className="bg-white shadow-xl border border-slate-200 flex flex-col min-h-screen sm:min-h-0 sm:rounded-lg overflow-hidden">
-                        <main className="w-full bg-white p-[15px] text-[#000] text-[11px] leading-tight">
+                    <div className="bg-white p-0 shadow-[0_10px_40px_rgba(0,0,0,0.12)] border border-slate-200 rounded-2xl w-full max-w-[380px] font-mono text-[11px] leading-relaxed text-black relative mx-auto mt-6">
+                        <main className="receipt-container w-full bg-white p-[15px] text-[#000] text-[11px] leading-tight rounded-2xl">
                             {/* BEGIN: MainHeader */}
                             <header className="text-center mb-4">
                                 {/* Logo Section */}
@@ -574,23 +574,23 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                             {/* BEGIN: CustomerInfo */}
                             <section className="space-y-0.5 py-1 uppercase">
                                 <div className="flex">
-                                    <span className="w-16">CLIENTE:</span>
-                                    <span className="font-semibold">{invoice.client.name.toUpperCase()}</span>
+                                    <span className="w-16 shrink-0 text-gray-500 font-bold">CLIENTE:</span>
+                                    <span className="font-bold">{invoice.client.name.toUpperCase()}</span>
                                 </div>
                                 <div className="flex">
-                                    <span className="w-16">{invoice.client.docType === 'DNI' ? 'DNI' : invoice.client.docType}:</span>
-                                    <span>{invoice.client.docNumber}</span>
+                                    <span className="w-16 shrink-0 text-gray-500 font-bold">{invoice.client.docType === 'DNI' ? 'DNI' : invoice.client.docType}:</span>
+                                    <span className="font-bold">{invoice.client.docNumber}</span>
                                 </div>
                                 <div className="flex">
-                                    <span className="w-16">TEL:</span>
+                                    <span className="w-16 shrink-0 text-gray-500 font-bold">TEL:</span>
                                     <span>{invoice.client.phone || '-'}</span>
                                 </div>
                                 <div className="flex">
-                                    <span className="w-16">DIR:</span>
+                                    <span className="w-16 shrink-0 text-gray-500 font-bold">DIR:</span>
                                     <span>{invoice.client.address || '-'}</span>
                                 </div>
                                 <div className="flex">
-                                    <span className="w-16">MONEDA:</span>
+                                    <span className="w-16 shrink-0 text-gray-500 font-bold">MONEDA:</span>
                                     <span>SOLES</span>
                                 </div>
                             </section>
@@ -610,6 +610,8 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                                     <tbody className="text-[11px]">
                                         {invoice.items.filter(item => {
                                             const isCanceled = (item as any).estado_id === 9 || 
+                                                               (item as any).status === 'ANULADO' || 
+                                                               item.status === 'CANCELADO' ||
                                                                (item as any).estado === 'CANCELADO' ||
                                                                (item as any).estado === 'ANULADO';
                                             return !isCanceled;
@@ -669,7 +671,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                             <footer className="text-center mt-2 space-y-3">
                                 <div className="flex justify-between uppercase font-bold text-[10px]">
                                     <span>FORMA DE PAGO:</span>
-                                    <span className="uppercase">{((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : 'MÚLTIPLE'}</span>
+                                    <span className="uppercase">{((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'CONTADO')}</span>
                                 </div>
 
                                 {invoice.prePaymentAmount ? (
@@ -690,7 +692,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                                                 referrerPolicy="no-referrer"
                                             />
                                         </div>
-                                        <p className="text-[8px] mt-1 text-gray-500 uppercase">HASH: {invoice.sunatResponse?.hash || '---'}</p>
+                                        <p className="text-[8px] mt-1 text-gray-500 uppercase font-mono">HASH: {invoice.sunatResponse?.hash || '---'}</p>
                                     </div>
                                 )}
                                 
@@ -703,21 +705,25 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                                 <div className="border-t-2 border-black my-2"></div>
 
                                 {/* Entrega info */}
-                                <div className="text-center bg-gray-50 p-2 rounded border border-gray-200">
-                                    <div className="text-[9px] font-bold text-gray-500 uppercase mb-0.5">Entrega Estimada</div>
-                                    <div className="text-[13px] font-extrabold tracking-tight">{fullDeliveryInfo}</div>
+                                <div className="text-center bg-gray-50 p-3 rounded-lg border border-gray-100 mb-4 mt-2">
+                                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Entrega Estimada</div>
+                                    <div className="text-sm font-black text-slate-900">{fullDeliveryInfo}</div>
                                 </div>
 
                                 <div className="text-[10px] text-center leading-tight italic font-bold">
                                     {ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.'}
                                 </div>
 
-                                <div className="text-[9px] font-bold text-gray-400 mt-4 uppercase">
+                                {barcodeUrl && (
+                                    <div className="mt-4 flex flex-col items-center">
+                                        <img src={barcodeUrl} className="max-w-[200px] h-auto grayscale" alt="Barcode" />
+                                    </div>
+                                )}
+
+                                <div className="text-[9px] font-black text-slate-300 mt-4 tracking-[0.3em] uppercase">
                                     SISLAV: software para lavanderia 931200353
                                 </div>
                             </footer>
-                            
-                            <div className="border-t-2 border-black my-2 mt-4"></div>
                         </main>
                     </div>
 

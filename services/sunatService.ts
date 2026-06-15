@@ -563,7 +563,7 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
             "descuento_precio_base": descuentoPrecioBase.toFixed(10),
             "codigo_sunat": "",
             "codigo_producto": item.id ? item.id.substring(0, 15) : `p-${idx}`,
-            "codigo_unidad": item.unitCode || 'NIU', 
+            "codigo_unidad": item.unitCode || item.codigo_unidad || 'NIU', 
             "tipo_igv_codigo": itemIgvType,
             "igv": igv.toFixed(2),
             "subtotal": subtotal.toFixed(2),

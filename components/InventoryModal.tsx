@@ -226,23 +226,36 @@ const InventoryModal: React.FC<InventoryModalProps> = ({
                     </div>
 
                     <div className="bg-slate-50/50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                               <div className="flex justify-between items-center mb-1 ml-1">
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1 font-mono"><Box size={12}/> Unidad Medida (SaaS)</label>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1 font-mono"><Box size={12}/> Unidad (SaaS)</label>
                               </div>
-                              <select required value={umSaas} onChange={(e) => setUmSaas(e.target.value as UmSaas)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-4 py-4 font-black text-sm text-slate-800 appearance-none outline-none focus:bg-white">
+                              <select required value={umSaas} onChange={(e) => setUmSaas(e.target.value as UmSaas)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-4 py-4 font-black text-xs text-slate-800 appearance-none outline-none focus:bg-white">
                                 <option value={UmSaas.UNIDAD}>UNIDAD</option>
                                 <option value={UmSaas.PIEZA}>PIEZA</option>
-                                <option value={UmSaas.KILO}>KILO (Permite decimales)</option>
-                                <option value={UmSaas.METROS}>METROS (Permite decimales)</option>
-                                <option value={UmSaas.LITRO}>LITRO (Permite decimales)</option>
+                                <option value={UmSaas.KILO}>KILO (Decimales)</option>
+                                <option value={UmSaas.METROS}>METROS (Decimales)</option>
+                                <option value={UmSaas.LITRO}>LITRO (Decimales)</option>
                               </select>
                             </div>
 
                             <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 font-mono">Precio Venta ({currency})</label>
-                                <input type="number" required step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 font-black text-3xl outline-none transition-all" style={{ color: company.primaryColor || '#0054A6' }} />
+                              <div className="flex justify-between items-center mb-1 ml-1">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1 font-mono"><Ruler size={12}/> Unidad (SUNAT)</label>
+                              </div>
+                              <select required value={unitCode} onChange={(e) => setUnitCode(e.target.value as UnitCode)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-4 py-4 font-black text-xs text-slate-800 appearance-none outline-none focus:bg-white">
+                                <option value={UnitCode.ZZ}>SERVICIO (ZZ)</option>
+                                <option value={UnitCode.NIU}>UNIDAD (NIU)</option>
+                                <option value={UnitCode.KGM}>KILOGRAMO (KGM)</option>
+                                <option value={UnitCode.MTK}>METRO CUADRADO (MTK)</option>
+                                <option value={UnitCode.LTR}>LITRO (LTR)</option>
+                              </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 font-mono">Precio ({currency})</label>
+                                <input type="number" required step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-4 font-black text-2xl outline-none transition-all" style={{ color: company.primaryColor || '#0054A6' }} />
                             </div>
                         </div>
                     </div>
