@@ -2181,10 +2181,16 @@ export const dbGetPaymentsForReport = async (
                 orderStatus: (inv.estado as any) || 'PENDIENTE',
                 date: inv.fecha_recepcion || inv.fecha || new Date().toISOString(),
                 client: c ? {
-                    ...c,
-                    name: fixEncoding(c.nombres || 'CLIENTE VARIOS').toUpperCase(),
-                    phone: c.telefono || ''
-                } : null,
+                    id: c.id,
+                    sucursal_id: inv.sucursal_id,
+                    empresa_holding_id: inv.empresa_holding_id,
+                    name: fixEncoding(c.nombres || 'CLIENTE').toUpperCase(),
+                    phone: c.telefono || '',
+                    docNumber: c.dni || '00000000',
+                    docType: c.tipo_documento || 'DNI',
+                    address: c.direccion || '',
+                    points: Number(c.puntos) || 0
+                } : { id: 'temp', name: 'CLIENTE VARIOS', docNumber: '00000000', docType: '-', address: '-', points: 0, sucursal_id: inv.sucursal_id },
                 totals: {
                     total: Number(inv.total) || 0,
                     igv: Number(inv.total_igv) || 0,
