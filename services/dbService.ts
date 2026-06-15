@@ -2147,7 +2147,8 @@ export const dbGetPaymentsForReport = async (
                 metodos_pago(nombre),
                 ventas(
                     *,
-                    clientes(*)
+                    clientes(*),
+                    items_venta(*)
                 )
             `)
             .eq('sucursal_id', branchId)
@@ -2191,10 +2192,40 @@ export const dbGetPaymentsForReport = async (
                     address: c.direccion || '',
                     points: Number(c.puntos) || 0
                 } : { id: 'temp', name: 'CLIENTE VARIOS', docNumber: '00000000', docType: '-', address: '-', points: 0, sucursal_id: inv.sucursal_id },
+                items: (inv.items_venta || []).map((it: any) => ({
+                    ...it,
+                    id: it.id,
+                    producto_id: it.producto_id,
+                    name: fixEncoding(it.descripcion),
+                    category: it.categoria_nombre || (it as any).category || 'GENERAL',
+                    price: Number(it.precio_unitario),
+                    quantity: Number(it.cantidad),
+                    subtotal: Number(it.subtotal),
+                    status: it.estado,
+                    estado_id: it.estado_id,
+                    isAnulado: it.estado_id === 9 || it.estado === 'CANCELADO',
+                    details: it.observaciones,
+                    item_id_raw: it.id,
+                    es_ajuste: it.es_ajuste || false,
+                    itemDeliveryDate: it.fecha_entrega_item,
+                    audioNote: it.url_audio
+                })),
+                payments: [{
+                    id: p.id,
+                    metodo_pago_id: p.metodo_pago_id,
+                    metodo_pago_name: pMethod,
+                    monto: Number(p.monto),
+                    date: p.fecha_pago,
+                    usuario_id: p.usuario_id,
+                    registrado_por: p.registrado_por
+                }],
                 totals: {
                     total: Number(inv.total) || 0,
                     igv: Number(inv.total_igv) || 0,
-                    subtotal: Number(inv.total_gravada) || 0
+                    subtotal: Number(inv.total_gravada) || 0,
+                    gravada: Number(inv.total_gravada) || 0,
+                    exonerada: Number(inv.total_exonerada) || 0,
+                    inafecta: Number(inv.total_inafecta) || 0
                 }
             };
 
