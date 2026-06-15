@@ -2124,6 +2124,93 @@ export const dbGetInvoicesForReport = async (filter: 'TO_COLLECT' | 'TO_DELIVER'
     }
 };
 
+export const dbGetPaymentsForReport = async (
+    startDate: string,
+    endDate: string,
+    method: string = 'ALL'
+): Promise<any[]> => {
+    const branchId = getActiveBranchId();
+    if (!branchId) return [];
+    try {
+        const holdingId = await ensureHoldingId(branchId);
+        
+        let query = supabase
+            .from('pagos_venta')
+            .select(`
+                id,
+                venta_id,
+                monto,
+                metodo_pago_id,
+                usuario_id,
+                registrado_por,
+                fecha_pago,
+                metodos_pago(nombre),
+                ventas(
+                    *,
+                    clientes(*)
+                )
+            `)
+            .eq('sucursal_id', branchId)
+            .eq('empresa_holding_id', holdingId);
+
+        if (startDate) {
+            query = query.gte('fecha_pago', `${startDate}T00:00:00-05:00`);
+        }
+        if (endDate) {
+            query = query.lte('fecha_pago', `${endDate}T23:59:59-05:00`);
+        }
+
+        const { data: pagos, error } = await query;
+        if (error) throw error;
+
+        const list: any[] = [];
+        (pagos || []).forEach(p => {
+            const inv = p.ventas as any;
+            if (!inv) return;
+            if (inv.estado === 'CANCELADO') return;
+            if (inv.tipo_documento_codigo === '07') return;
+
+            const pMethod = (p.metodos_pago as any)?.nombre || 'EFECTIVO';
+            
+            if (method !== 'ALL' && pMethod.trim().toUpperCase() !== method.trim().toUpperCase()) return;
+
+            const c = normalizeRelation(inv.clientes);
+            const mappedInv = {
+                ...inv,
+                type: (inv.tipo_documento_codigo || '80') as any,
+                orderStatus: (inv.estado as any) || 'PENDIENTE',
+                date: inv.fecha_recepcion || inv.fecha || new Date().toISOString(),
+                client: c ? {
+                    ...c,
+                    name: fixEncoding(c.nombres || 'CLIENTE VARIOS').toUpperCase(),
+                    phone: c.telefono || ''
+                } : null,
+                totals: {
+                    total: Number(inv.total) || 0,
+                    igv: Number(inv.total_igv) || 0,
+                    subtotal: Number(inv.total_gravada) || 0
+                }
+            };
+
+            list.push({
+                ...p,
+                monto: Number(p.monto) || 0,
+                paymentDate: p.fecha_pago,
+                invoiceCode: mappedInv.codigo_orden || `${mappedInv.serie}-${mappedInv.correlativo}`,
+                clientName: mappedInv.client?.name || 'CLIENTE VARIOS',
+                invoiceId: mappedInv.id,
+                methodName: pMethod.trim().toUpperCase(),
+                invoice: mappedInv
+            });
+        });
+
+        return list.sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
+    } catch (error) {
+        console.error("Error in dbGetPaymentsForReport:", error);
+        return [];
+    }
+};
+
 export const dbGetInvoices = async (
     page: number = 1, 
     pageSize: number = 50, 

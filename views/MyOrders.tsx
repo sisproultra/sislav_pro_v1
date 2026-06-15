@@ -18,7 +18,7 @@ import DeliveryItemsModal from '../components/DeliveryItemsModal';
 import OrderAuditModal from '../components/OrderAuditModal';
 import LogisticsDispatchModal from '../components/LogisticsDispatchModal';
 import Tracking from './Tracking';
-import { dbUpdateInvoiceDiscount, dbGetInvoicesForReport } from '../services/dbService';
+import { dbUpdateInvoiceDiscount, dbGetInvoicesForReport, dbGetPaymentsForReport } from '../services/dbService';
 import { sendInvoiceViaWhatsApp, generateWhatsAppLink } from '../services/whatsappService';
 import { formatOrderNumber, formatDateSafe, formatTimeSafe, formatDateTimeSafe, getPeruDateTime, getPeruLocalDateString } from '../utils/calculations';
 
@@ -362,6 +362,9 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     const [cobradosStart, setCobradosStart] = useState<string>(getPeruDateTime().date);
     const [cobradosEnd, setCobradosEnd] = useState<string>(getPeruDateTime().date);
 
+    const [cobradosList, setCobradosList] = useState<any[]>([]);
+    const [isLoadingCobrados, setIsLoadingCobrados] = useState(false);
+
     useEffect(() => {
         if (isReportModalOpen) {
             const loadReportInvoices = async () => {
@@ -381,44 +384,25 @@ const MyOrders: React.FC<MyOrdersProps> = ({
         }
     }, [isReportModalOpen]);
 
-    const filteredPayments = useMemo(() => {
-        if (!reportInvoices || reportInvoices.length === 0) return [];
-        
-        const list: any[] = [];
-        reportInvoices.forEach(inv => {
-            if (!inv.payments || inv.payments.length === 0) return;
-            
-            inv.payments.forEach(paymentItem => {
-                const p = paymentItem as any;
-                const pMethod = (p.metodo_pago_name || p.metodos_pago?.nombre || 'EFECTIVO').trim().toUpperCase();
-                
-                // Filter by payment method
-                if (cobradosMethod !== 'ALL') {
-                    if (pMethod !== cobradosMethod.toUpperCase()) return;
+    // Query cobrados dynamically with database filtering
+    useEffect(() => {
+        if (isReportModalOpen && activeReportTab === 'cobrados') {
+            const loadCobrados = async () => {
+                setIsLoadingCobrados(true);
+                try {
+                    const data = await dbGetPaymentsForReport(cobradosStart, cobradosEnd, cobradosMethod);
+                    setCobradosList(data || []);
+                } catch (e) {
+                    console.error("Error loading payments report:", e);
+                } finally {
+                    setIsLoadingCobrados(false);
                 }
-                
-                // Filter by date range
-                const dateStr = p.fecha_pago || p.date || p.fecha || inv.date;
-                if (!dateStr) return;
-                
-                const pDateOnly = getPeruLocalDateString(dateStr);
-                if (cobradosStart && pDateOnly < cobradosStart) return;
-                if (cobradosEnd && pDateOnly > cobradosEnd) return;
-                
-                list.push({
-                    ...p,
-                    paymentDate: dateStr,
-                    invoiceCode: (inv as any).codigo_orden || `${inv.serie}-${inv.correlativo}`,
-                    clientName: inv.client?.name || 'CLIENTE VARIOS',
-                    invoiceId: inv.id,
-                    methodName: pMethod,
-                    invoice: inv
-                });
-            });
-        });
+            };
+            loadCobrados();
+        }
+    }, [isReportModalOpen, activeReportTab, cobradosStart, cobradosEnd, cobradosMethod]);
 
-        return list.sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
-    }, [reportInvoices, cobradosMethod, cobradosStart, cobradosEnd]);
+    const filteredPayments = cobradosList;
 
     const cobradosTotalSum = useMemo(() => {
         return filteredPayments.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
@@ -2237,7 +2221,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                         </div>
 
                                         {/* Resultados */}
-                                        {isLoadingReportInvoices ? (
+                                        {isLoadingCobrados ? (
                                             <div className="flex flex-col items-center justify-center py-12 gap-3">
                                                 <Loader2 className="animate-spin text-indigo-600" size={32} />
                                                 <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Cargando abonos...</span>
