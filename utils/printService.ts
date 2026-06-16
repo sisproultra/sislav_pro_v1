@@ -534,6 +534,12 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
           <div style="margin: 4px 0;">
             <div class="flex-between"><span>Op. Gravada:</span> <span>${invoice.totals.gravada.toFixed(2)}</span></div>
             <div class="flex-between"><span>IGV (${igvRate.toFixed(0)}%):</span> <span>${invoice.totals.igv.toFixed(2)}</span></div>
+            ${Number(invoice.descuento || invoice.discount || 0) > 0 ? `
+              <div class="flex-between" style="color: #b91c1c; font-weight: bold;">
+                <span>Descuento:</span>
+                <span>-S/ ${Number(invoice.descuento || invoice.discount || 0).toFixed(2)}</span>
+              </div>
+            ` : ''}
             <div class="flex-between bold" style="font-size: 11pt; margin-top: 6px;">
                 <span>TOTAL A PAGAR:</span> 
                 <span>S/ ${invoice.totals.total.toFixed(2)}</span>

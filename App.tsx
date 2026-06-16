@@ -1744,7 +1744,7 @@ export default function App() {
 
     const handleCheckout = async (t: InvoiceType, client: Client, paymentMethodStr: string, deliveryDate?: string, notes?: string, prePayment?: number, discount?: number, customerPhotos: string[] = [], paymentsList: { methodName: string, amount: number }[] = [], cartOverride?: CartItem[], pickupOverride?: string, issueDate?: string): Promise<void> => {
         const finalCart = cartOverride || cart;
-        const totals = calculateTotals(finalCart, activeSucursal.porcentajeIgv);
+        const totals = calculateTotals(finalCart, activeSucursal.porcentajeIgv, discount || 0);
         const now = new Date().toISOString();
         const serie = t === InvoiceType.FACTURA ? activeSucursal.serieFactura : t === InvoiceType.BOLETA ? activeSucursal.serieBoleta : activeSucursal.serieNotaVenta;
         

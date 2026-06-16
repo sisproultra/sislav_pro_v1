@@ -272,6 +272,7 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
 
     return { 
         ...v, id: v.id, sucursal_id: v.sucursal_id, empresa_holding_id: v.empresa_holding_id, ordenNumber: v.codigo_orden || '---', serie, correlativo, type: docType, 
+        descuento: Number(v.descuento) || 0, discount: Number(v.descuento) || 0,
         client: c ? { id: c.id, name: (c.nombres || '').toUpperCase(), docType: c.tipo_documento || 'DNI', docNumber: c.dni || '00000000', phone: c.telefono || '', address: c.direccion || '-', points: c.puntos || 0 } : { id: 'temp', name: 'CLIENTE VARIOS', docNumber: '00000000', docType: '-', address: '-', points: 0, sucursal_id: v.sucursal_id }, 
         items: (v.items_venta || []).map((it: any) => ({ ...it, id: it.id, name: it.descripcion, price: Number(it.precio_unitario), quantity: Number(it.cantidad), subtotal: Number(it.subtotal) || roundToOneDecimal(Number(it.precio_unitario) * Number(it.cantidad)), status: it.estado, estado_id: it.estado_id })), 
         payments: (v.pagos_venta || []).map((p: any) => ({ metodo_pago_id: p.metodo_pago_id, monto: Number(p.monto), date: p.fecha_pago })),

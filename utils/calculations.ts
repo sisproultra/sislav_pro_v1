@@ -10,42 +10,79 @@ export const roundToOneDecimal = (value: number): number => {
     return Math.floor(value * 10 + 0.0001) / 10;
 };
 
-export const calculateTotals = (items: CartItem[], igvPercentage: number = 18.00): InvoiceTotals => {
-  let gravada = 0, exonerada = 0, inafecta = 0, igv = 0;
+export const calculateTotals = (items: CartItem[], igvPercentage: number = 18.00, globalDiscount: number = 0): InvoiceTotals => {
   const igvFactor = 1 + (igvPercentage / 100);
 
+  // 1. Calcular totales brutos por tipo de IGV en el carrito
+  let rawGravadaConIgv = 0;
+  let rawExonerada = 0;
+  let rawInafecta = 0;
+
   items.forEach(item => {
-    // Calculamos el subtotal de la línea basándonos en el precio que ya incluye IGV y restando el descuento_unitario
     const discountedPrice = Math.max(0, item.price - (item.descuento_unitario || 0));
     const lineTotal = roundToOneDecimal(discountedPrice * item.quantity);
     
     if (item.igvType === IgvType.GRAVADO) {
-      // Valor Unitario (Sin IGV) con 4 decimales para SUNAT
+      rawGravadaConIgv += lineTotal;
       item.valor_unitario = Number((discountedPrice / igvFactor).toFixed(4));
-      // IGV del ítem con 4 decimales
       item.igv_item = Number((lineTotal - (lineTotal / igvFactor)).toFixed(4));
-      
-      // Base Imponible de la línea
-      const itemBase = Number((lineTotal / igvFactor).toFixed(4));
-      
-      gravada += itemBase;
-      igv += (lineTotal - itemBase);
     } else if (item.igvType === IgvType.EXONERADO) {
-      exonerada += lineTotal;
+      rawExonerada += lineTotal;
       item.valor_unitario = discountedPrice;
       item.igv_item = 0;
     } else if (item.igvType === IgvType.INAFECTO) {
-      inafecta += lineTotal;
+      rawInafecta += lineTotal;
       item.valor_unitario = discountedPrice;
       item.igv_item = 0;
     }
   });
 
+  const rawTotal = rawGravadaConIgv + rawExonerada + rawInafecta;
+
+  // 2. Distribución proporcional del descuento global si existe
+  let netGravadaConIgv = rawGravadaConIgv;
+  let netExonerada = rawExonerada;
+  let netInafecta = rawInafecta;
+
+  if (globalDiscount > 0 && rawTotal > 0) {
+    const propGravada = rawGravadaConIgv / rawTotal;
+    const propExonerada = rawExonerada / rawTotal;
+    const propInafecta = rawInafecta / rawTotal;
+
+    const discGravada = globalDiscount * propGravada;
+    const discExonerada = globalDiscount * propExonerada;
+    const discInafecta = globalDiscount * propInafecta;
+
+    netGravadaConIgv = Math.max(0, rawGravadaConIgv - discGravada);
+    netExonerada = Math.max(0, rawExonerada - discExonerada);
+    netInafecta = Math.max(0, rawInafecta - discInafecta);
+
+    // Ajustamos por redondeo de suma para que calce exacto al céntimo
+    const expectedNetTotal = Math.max(0, rawTotal - globalDiscount);
+    const actualSum = netGravadaConIgv + netExonerada + netInafecta;
+    const diff = expectedNetTotal - actualSum;
+    if (Math.abs(diff) < 1.0) {
+      if (netGravadaConIgv >= netExonerada && netGravadaConIgv >= netInafecta && netGravadaConIgv > 0) {
+        netGravadaConIgv += diff;
+      } else if (netExonerada >= netInafecta && netExonerada > 0) {
+        netExonerada += diff;
+      } else if (netInafecta > 0) {
+        netInafecta += diff;
+      }
+    }
+  }
+
+  // Volver a calcular bases e IGV a partir de los subtotales netos ponderados
+  const gravada = Number((netGravadaConIgv / igvFactor).toFixed(2));
+  const igv = Number((netGravadaConIgv - gravada).toFixed(2));
+  const exonerada = Number(netExonerada.toFixed(2));
+  const inafecta = Number(netInafecta.toFixed(2));
+
   return { 
-    gravada: Number(gravada.toFixed(2)), 
-    exonerada: Number(exonerada.toFixed(2)), 
-    inafecta: Number(inafecta.toFixed(2)), 
-    igv: Number(igv.toFixed(2)), 
+    gravada, 
+    exonerada, 
+    inafecta, 
+    igv, 
     total: Number((gravada + igv + exonerada + inafecta).toFixed(2))
   };
 };
