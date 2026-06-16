@@ -534,27 +534,11 @@ export const sendInvoiceViaWhatsApp = async (
   const fallbackUrl = `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
 
   if (!baseUrl || !apiKey || !instance) {
-    return { success: false, message: 'API no configurada. Redirigiendo...', fallbackUrl };
+    console.warn("⚠️ API de WhatsApp no configurada:", { baseUrl, apiKey, instance });
+    return { success: false, message: 'API no configurada en esta sucursal.', fallbackUrl };
   }
 
   try {
-      const downloadUrl = `${window.location.origin}/?t=${invoice.id}&v=receipt`;
-      const isNotaVenta = invoice.type === InvoiceType.NOTA_VENTA;
-      const docTypeName = isNotaVenta ? 'Nota de Venta' : (invoice.type === InvoiceType.FACTURA ? 'Factura' : 'Boleta');
-
-      let text = `*${company.razonSocial}*\n`;
-      text += `Estimado cliente, puede visualizar y descargar su *${docTypeName}* desde el siguiente enlace:\n\n`;
-      text += `🔗 ${downloadUrl}\n\n`;
-      text += `📄 *Número*: ${invoice.serie}-${invoice.correlativo}\n`;
-      text += `💰 *Importe*: S/ ${invoice.totals.total.toFixed(2)}\n\n`;
-      text += `¡Gracias por su preferencia!`;
-
-      const fallbackUrl = `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
-
-      if (!baseUrl || !apiKey || !instance) {
-        return { success: false, message: 'API no configurada. Redirigiendo...', fallbackUrl };
-      }
-
       console.log(`🚀 Solicitando envío de WA al servidor...`);
       
       const response = await fetch('/api/whatsapp/send', {
@@ -589,14 +573,12 @@ export const sendInvoiceViaWhatsApp = async (
       if (response.ok && result?.success) {
           return { success: true, message: 'Link enviado con éxito' };
       } else {
-          console.warn("⚠️ Fallo envío automático:", result.message || response.statusText);
-          return { success: false, message: `Reintentando por WhatsApp...`, fallbackUrl };
+          const apiErrorMsg = result?.message || result?.details || response.statusText || 'Error desconocido de Evolution';
+          console.warn("⚠️ Fallo envío automático:", apiErrorMsg);
+          return { success: false, message: `Fallo API WhatsApp: ${apiErrorMsg}`, fallbackUrl };
       }
   } catch (error: any) {
     console.error("Error en flujo de envío WA:", error);
-    const downloadUrl = `${window.location.origin}/?t=${invoice.id}&v=receipt`;
-    const text = `*${company.razonSocial}*\nLink: ${downloadUrl}`;
-    const fallbackUrl = `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
-    return { success: false, message: 'Fallo de conexión, intente manual', fallbackUrl };
+    return { success: false, message: `Error de conexión: ${error.message}`, fallbackUrl };
   }
 };

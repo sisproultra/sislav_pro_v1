@@ -798,14 +798,26 @@ async function startServer() {
 
       console.log(`🚀 [Server WA] Enviando mensaje a ${cleanNumber} via ${instance}`);
 
-      const response = await fetch(finalEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': apiKey
-        },
-        body: JSON.stringify(payload)
-      });
+      const originalRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+      let response;
+      try {
+        response = await fetch(finalEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': apiKey
+          },
+          body: JSON.stringify(payload)
+        });
+      } finally {
+        if (originalRejectUnauthorized !== undefined) {
+          process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
+        } else {
+          delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        }
+      }
 
       const responseText = await response.text();
       let responseData;
