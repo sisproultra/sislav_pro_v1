@@ -1163,6 +1163,12 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                 <td className="px-6 py-5">
                                                     <div className="flex flex-col gap-1.5 max-w-[150px] text-xs font-black uppercase tracking-tight">
                                                         <div className="flex justify-between border-b border-slate-100 pb-1"><span className="text-slate-400">Total:</span><span className="text-slate-900">S/ {inv.totals.total.toFixed(2)}</span></div>
+                                                         {Number(inv.descuento || 0) > 0 && (
+                                                             <div className="flex justify-between border-b border-slate-100 pb-1 text-rose-600 font-bold">
+                                                                 <span className="text-rose-500">Desc:</span>
+                                                                 <span>-S/ {Number(inv.descuento).toFixed(2)}</span>
+                                                             </div>
+                                                         )}
                                                         <div className="flex justify-between border-b border-slate-100 pb-1"><span className="text-slate-400">Pagado:</span><span className="text-blue-600">S/ {(inv.prePaymentAmount || 0).toFixed(2)}</span></div>
                                                         <div className="flex justify-between pt-1"><span className="text-slate-400">Saldo:</span><span className={balance > 0 ? 'text-rose-600 font-black' : 'text-emerald-600'}>S/ {balance.toFixed(2)}</span></div>
                                                     </div>

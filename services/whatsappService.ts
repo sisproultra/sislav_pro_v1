@@ -3,6 +3,7 @@ import { Invoice, Company, InvoiceType } from '../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from './supabaseClient';
+import { getSaasGlobalConfig } from './saasService';
 
 const numeroALetras = (num: number) => {
     const aLetras = (n: number): string => {
@@ -443,15 +444,30 @@ export const sendReadyNotification = async (
   company: Company,
   phoneNumber: string
 ): Promise<{ success: boolean; message: string; fallbackUrl?: string }> => {
-  const baseUrl = company.whatsapp_instance?.trim();
-  const apiKey = company.whatsapp_token?.trim();
-  const instance = company.whatsapp_instance_name?.trim();
+  let baseUrl = company.whatsapp_instance?.trim();
+  let apiKey = company.whatsapp_token?.trim();
+  let instance = company.whatsapp_instance_name?.trim();
 
   const clientName = (invoice.client.name || 'Cliente').toUpperCase();
   const orden = invoice.ordenNumber || 'S/N';
   const text = `*${company.razonSocial}*\n\nEstimado(a) *${clientName}*,\n\nLe informamos que su pedido con orden *#${orden}* ya se encuentra *LISTO* ✅.\n\nPuede pasar a recogerlo en nuestro local en: ${company.address.toUpperCase()}.\n\n¡Le esperamos! 🧺✨`;
   
   const fallbackUrl = `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+
+  // FALLBACK: Si no tiene configurada la instancia, cargamos la configuración global de la base de datos
+  if (!baseUrl || !apiKey || !instance) {
+    try {
+      const globalConfig = await getSaasGlobalConfig();
+      if (globalConfig) {
+        if (!baseUrl) baseUrl = globalConfig.url_bot?.trim();
+        if (!apiKey) apiKey = globalConfig.apikey_bot?.trim();
+        if (!instance) instance = globalConfig.instancia_bot?.trim();
+        console.log("ℹ️ sendReadyNotification: Usando configuración global de bot de WhatsApp como respaldo:", { baseUrl, instance });
+      }
+    } catch (err) {
+      console.warn("⚠️ No se pudo obtener la configuración global para la notificación de Listo:", err);
+    }
+  }
 
   if (!baseUrl || !apiKey || !instance) {
     return { success: false, message: 'Configuración incompleta.', fallbackUrl };
@@ -514,9 +530,9 @@ export const sendInvoiceViaWhatsApp = async (
   phoneNumber: string
 ): Promise<{ success: boolean; message: string; fallbackUrl?: string }> => {
   
-  const baseUrl = company.whatsapp_instance?.trim();
-  const apiKey = company.whatsapp_token?.trim();
-  const instance = company.whatsapp_instance_name?.trim();
+  let baseUrl = company.whatsapp_instance?.trim();
+  let apiKey = company.whatsapp_token?.trim();
+  let instance = company.whatsapp_instance_name?.trim();
 
   // Generamos el link de vista digital (Tracking + Receipt mode)
   const downloadUrl = `${window.location.origin}/?t=${invoice.id}&v=receipt`;
@@ -532,6 +548,21 @@ export const sendInvoiceViaWhatsApp = async (
   text += `¡Gracias por su preferencia!`;
 
   const fallbackUrl = `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+
+  // FALLBACK: Si no tiene configurada la instancia de WhatsApp de la sucursal, cargamos la configuración global de la base de datos
+  if (!baseUrl || !apiKey || !instance) {
+    try {
+      const globalConfig = await getSaasGlobalConfig();
+      if (globalConfig) {
+        if (!baseUrl) baseUrl = globalConfig.url_bot?.trim();
+        if (!apiKey) apiKey = globalConfig.apikey_bot?.trim();
+        if (!instance) instance = globalConfig.instancia_bot?.trim();
+        console.log("ℹ️ sendInvoiceViaWhatsApp: Usando configuración global de bot de WhatsApp como respaldo:", { baseUrl, instance });
+      }
+    } catch (err) {
+      console.warn("⚠️ No se pudo obtener la configuración global para el envío de WhatsApp:", err);
+    }
+  }
 
   if (!baseUrl || !apiKey || !instance) {
     console.warn("⚠️ API de WhatsApp no configurada:", { baseUrl, apiKey, instance });
