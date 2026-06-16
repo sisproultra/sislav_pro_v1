@@ -714,10 +714,16 @@ const MyOrders: React.FC<MyOrdersProps> = ({
             if (res.success) {
                 setSentSuccessIds(prev => new Set(prev).add(order.id));
             } else {
-                if (res.fallbackUrl) window.open(res.fallbackUrl, '_blank');
-                else alert("❌ Error: " + res.message);
+                console.warn("⚠️ Error en envío automático por Evolution API:", res.message);
+                // Informar al usuario y luego redirigir de forma segura para no interrumpir el flujo operacional
+                alert(`El envío automático falló (${res.message || "Error desconocido"}).\n\nPresiona Aceptar para continuar mediante el envío manual de WhatsApp (redirección).`);
+                if (res.fallbackUrl) {
+                    window.open(res.fallbackUrl, '_blank');
+                }
             }
-        } catch (e) {
+        } catch (e: any) {
+            console.error(e);
+            alert(`Ocurrió un error inesperado al intentar el envío automático: ${e.message || e}.\n\nSe abrirá el envío manual.`);
             const link = generateWhatsAppLink(order, company, order.client.phone);
             window.open(link, '_blank');
         } finally {

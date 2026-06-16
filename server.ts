@@ -8,6 +8,9 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
+// Bypass self-signed SSL/TLS certification validation issues for Evolution API instances
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -793,31 +796,38 @@ async function startServer() {
       };
 
       let finalBaseUrl = baseUrl.trim();
-      if (!finalBaseUrl.startsWith('http')) finalBaseUrl = `https://${finalBaseUrl}`;
-      const finalEndpoint = `${finalBaseUrl}/message/sendText/${instance}`;
+      // Clean up base URL to ensure no duplicate or redundant path segments, matching EvolutionService
+      if (finalBaseUrl.includes("/message/")) {
+        finalBaseUrl = finalBaseUrl.split("/message/")[0];
+      }
+      if (finalBaseUrl.includes("/instance/")) {
+        finalBaseUrl = finalBaseUrl.split("/instance/")[0];
+      }
+      if (!finalBaseUrl.startsWith('http')) {
+        finalBaseUrl = `https://${finalBaseUrl}`;
+      }
+      while (finalBaseUrl.endsWith('/')) {
+        finalBaseUrl = finalBaseUrl.slice(0, -1);
+      }
 
-      console.log(`🚀 [Server WA] Enviando mensaje a ${cleanNumber} via ${instance}`);
+      let finalInstance = instance.trim();
+      while (finalInstance.startsWith('/')) {
+        finalInstance = finalInstance.slice(1);
+      }
 
-      const originalRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+      const finalEndpoint = `${finalBaseUrl}/message/sendText/${finalInstance}`;
+
+      console.log(`🚀 [Server WA] Enviando mensaje a ${cleanNumber} via ${finalInstance} (Endpoint: ${finalEndpoint})`);
 
       let response;
-      try {
-        response = await fetch(finalEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': apiKey
-          },
-          body: JSON.stringify(payload)
-        });
-      } finally {
-        if (originalRejectUnauthorized !== undefined) {
-          process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
-        } else {
-          delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-        }
-      }
+      response = await fetch(finalEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey
+        },
+        body: JSON.stringify(payload)
+      });
 
       const responseText = await response.text();
       let responseData;
