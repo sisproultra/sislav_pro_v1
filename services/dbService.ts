@@ -1814,7 +1814,12 @@ export const dbCreateInvoice = async (invoice: any, items: CartItem[], company: 
             documento_referencia_id: invoice.relatedDocument || null,
             notes: invoice.notes || null, // Persistir las notas (razón de la NC si aplica)
             fecha_emision: invoice.fecha_emision || null,
-            descuento: invoice.discount || 0
+            descuento: invoice.discount || 0,
+            total: invoice.totals.total,
+            total_igv: invoice.totals.igv,
+            total_gravada: invoice.totals.gravada,
+            total_exonerada: invoice.totals.exonerada,
+            total_inafecta: invoice.totals.inafecta
         }).eq('id', result.id);
 
         if (activeSession?.id) {

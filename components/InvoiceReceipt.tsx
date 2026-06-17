@@ -305,14 +305,15 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
           <div class="divider-thick"></div>
 
           <section style="font-size: 10pt;">
-            <div class="flex-between"><span>Op. Gravada:</span> <span>${invoice.totals.gravada.toFixed(2)}</span></div>
-            <div class="flex-between"><span>IGV (${igvRate.toFixed(0)}%):</span> <span>${invoice.totals.igv.toFixed(2)}</span></div>
-            ${Number(invoice.descuento || invoice.discount || 0) > 0 ? `
+            ${Number(invoice.descuento || (invoice as any).discount || 0) > 0 ? `
+              <div class="flex-between"><span>Subtotal:</span> <span>S/ ${(invoice.totals.total + Number(invoice.descuento || (invoice as any).discount || 0)).toFixed(2)}</span></div>
               <div class="flex-between" style="color: #b91c1c; font-weight: bold;">
                 <span>Descuento:</span>
-                <span>-S/ ${Number(invoice.descuento || invoice.discount || 0).toFixed(2)}</span>
+                <span>-S/ ${Number(invoice.descuento || (invoice as any).discount || 0).toFixed(2)}</span>
               </div>
             ` : ''}
+            <div class="flex-between"><span>Op. Gravada:</span> <span>${invoice.totals.gravada.toFixed(2)}</span></div>
+            <div class="flex-between"><span>IGV (${igvRate.toFixed(0)}%):</span> <span>${invoice.totals.igv.toFixed(2)}</span></div>
             <div class="flex-between black" style="font-size: 12pt; margin-top: 6px;">
                 <span>TOTAL A PAGAR:</span> 
                 <span>S/ ${invoice.totals.total.toFixed(2)}</span>
@@ -654,6 +655,18 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                             
                             {/* BEGIN: Totals */}
                             <section className="space-y-1 py-1">
+                                {Number(invoice.descuento || (invoice as any).discount || 0) > 0 && (
+                                    <>
+                                        <div className="flex justify-between">
+                                            <span>Subtotal:</span>
+                                            <span>S/ {(invoice.totals.total + Number(invoice.descuento || (invoice as any).discount || 0)).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-rose-600 font-bold">
+                                            <span>Descuento:</span>
+                                            <span>-S/ {Number(invoice.descuento || (invoice as any).discount || 0).toFixed(2)}</span>
+                                        </div>
+                                    </>
+                                )}
                                 <div className="flex justify-between">
                                     <span>Op. Gravada:</span>
                                     <span>{invoice.totals.gravada.toFixed(2)}</span>
@@ -662,12 +675,6 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                                     <span>IGV ({igvRate.toFixed(0)}%):</span>
                                     <span>{invoice.totals.igv.toFixed(2)}</span>
                                 </div>
-                                {Number(invoice.descuento || invoice.discount || 0) > 0 && (
-                                    <div className="flex justify-between text-rose-600 font-bold">
-                                        <span>Descuento:</span>
-                                        <span>-S/ {Number(invoice.descuento || invoice.discount || 0).toFixed(2)}</span>
-                                    </div>
-                                )}
                                 <div className="flex justify-between items-end mt-2">
                                     <span className="font-extrabold text-[14px]">TOTAL A PAGAR:</span>
                                     <span className="font-extrabold text-[14px]">S/ {invoice.totals.total.toFixed(2)}</span>
@@ -884,6 +891,18 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                             
                             {/* BEGIN: Totals */}
                             <section className="space-y-1 py-1">
+                                {Number(invoice.descuento || (invoice as any).discount || 0) > 0 && (
+                                    <>
+                                        <div className="flex justify-between">
+                                            <span>Subtotal:</span>
+                                            <span>S/ {(invoice.totals.total + Number(invoice.descuento || (invoice as any).discount || 0)).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-rose-600 font-bold">
+                                            <span>Descuento:</span>
+                                            <span>-S/ {Number(invoice.descuento || (invoice as any).discount || 0).toFixed(2)}</span>
+                                        </div>
+                                    </>
+                                )}
                                 <div className="flex justify-between">
                                     <span>Op. Gravada:</span>
                                     <span>{invoice.totals.gravada.toFixed(2)}</span>
@@ -892,12 +911,6 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                                     <span>IGV ({igvRate.toFixed(0)}%):</span>
                                     <span>{invoice.totals.igv.toFixed(2)}</span>
                                 </div>
-                                {Number(invoice.descuento || invoice.discount || 0) > 0 && (
-                                    <div className="flex justify-between text-rose-600 font-bold">
-                                        <span>Descuento:</span>
-                                        <span>-S/ {Number(invoice.descuento || invoice.discount || 0).toFixed(2)}</span>
-                                    </div>
-                                )}
                                 <div className="flex justify-between items-end mt-2">
                                     <span className="font-extrabold text-[14px]">TOTAL A PAGAR:</span>
                                     <span className="font-extrabold text-[14px]">S/ {invoice.totals.total.toFixed(2)}</span>
