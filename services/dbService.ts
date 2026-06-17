@@ -2165,7 +2165,10 @@ export const dbGetInvoicesForReport = async (filter: 'TO_COLLECT' | 'TO_DELIVER'
                 totals: {
                     total: total,
                     igv: Number(v.total_igv) || 0,
-                    subtotal: Number(v.total_gravada) || 0
+                    subtotal: Number(v.total_gravada) || 0,
+                    gravada: Number(v.total_gravada) || 0,
+                    exonerada: Number(v.total_exonerada) || 0,
+                    inafecta: Number(v.total_inafecta) || 0
                 }
             } as any;
         });

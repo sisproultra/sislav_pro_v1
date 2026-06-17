@@ -335,6 +335,9 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices: initialInvoices, 
                     <th className="px-2 py-1.5 font-bold uppercase text-gray-500">Fecha</th>
                     <th className="px-2 py-1.5 font-bold uppercase text-gray-500">Comprobante</th>
                     <th className="px-2 py-1.5 font-bold uppercase text-gray-500">Cliente</th>
+                    <th className="px-2 py-1.5 font-bold uppercase text-gray-500 text-right">Subtotal</th>
+                    <th className="px-2 py-1.5 font-bold uppercase text-gray-500 text-right">Descuento</th>
+                    <th className="px-2 py-1.5 font-bold uppercase text-gray-500 text-right">Op. Gravada</th>
                     <th className="px-2 py-1.5 font-bold uppercase text-gray-500 text-right">Total</th>
                     <th className="px-2 py-1.5 font-bold uppercase text-gray-500 text-center w-32">Estado SUNAT</th>
                     <th className="px-2 py-1.5 font-bold uppercase text-gray-500 text-right pr-4">Acciones</th>
@@ -464,6 +467,15 @@ const SalesHistory: React.FC<SalesHistoryProps> = ({ invoices: initialInvoices, 
                               </div>
                             )}
                           </div>
+                        </td>
+                        <td className="px-2 py-1.5 text-right whitespace-nowrap align-top font-medium text-gray-600">
+                          S/ {(inv.totals.total + Number(inv.descuento || 0)).toFixed(2)}
+                        </td>
+                        <td className="px-2 py-1.5 text-right whitespace-nowrap align-top font-medium text-rose-600">
+                          {Number(inv.descuento || 0) > 0 ? `-S/ ${Number(inv.descuento).toFixed(2)}` : 'S/ 0.00'}
+                        </td>
+                        <td className="px-2 py-1.5 text-right whitespace-nowrap align-top font-medium text-gray-700">
+                          S/ {(inv.totals.gravada || (inv.totals.total / 1.18)).toFixed(2)}
                         </td>
                         <td className="px-2 py-1.5 text-right whitespace-nowrap align-top">
                           <span className={`font-bold text-xs ${isNC ? 'text-red-600' : (isVoided ? 'line-through text-gray-400' : 'text-gray-900')}`}>

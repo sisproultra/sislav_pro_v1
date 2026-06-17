@@ -285,6 +285,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     const [isSearching, setIsSearching] = useState(false);
     const [filterStatus, setFilterStatus] = useState<OrderStatus | 'ALL'>('ALL');
     const [selectedOrderDetails, setSelectedOrderDetails] = useState<Invoice | null>(null);
+    const [selectedFinanceDetails, setSelectedFinanceDetails] = useState<Invoice | null>(null);
     const [selectedOrderToPrint, setSelectedOrderToPrint] = useState<Invoice | null>(null);
     const [invoiceToConvert, setInvoiceToConvert] = useState<Invoice | null>(null);
     const [selectedOrderToDeliver, setSelectedOrderToDeliver] = useState<Invoice | null>(null);
@@ -1161,16 +1162,30 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                     {inv.client?.phone && <div className="text-sm text-slate-600 font-medium flex items-center gap-2 mb-1"><Phone size={14} className="text-brand-primary" /> {inv.client.phone}</div>}
                                                 </td>
                                                 <td className="px-6 py-5">
-                                                    <div className="flex flex-col gap-1.5 max-w-[150px] text-xs font-black uppercase tracking-tight">
-                                                        <div className="flex justify-between border-b border-slate-100 pb-1"><span className="text-slate-400">Total:</span><span className="text-slate-900">S/ {inv.totals.total.toFixed(2)}</span></div>
-                                                         {Number(inv.descuento || 0) > 0 && (
-                                                             <div className="flex justify-between border-b border-slate-100 pb-1 text-rose-600 font-bold">
-                                                                 <span className="text-rose-500">Desc:</span>
-                                                                 <span>-S/ {Number(inv.descuento).toFixed(2)}</span>
-                                                             </div>
-                                                         )}
-                                                        <div className="flex justify-between border-b border-slate-100 pb-1"><span className="text-slate-400">Pagado:</span><span className="text-blue-600">S/ {(inv.prePaymentAmount || 0).toFixed(2)}</span></div>
-                                                        <div className="flex justify-between pt-1"><span className="text-slate-400">Saldo:</span><span className={balance > 0 ? 'text-rose-600 font-black' : 'text-emerald-600'}>S/ {balance.toFixed(2)}</span></div>
+                                                    <div className="flex flex-col gap-1 max-w-[150px] text-xs font-bold uppercase tracking-tight">
+                                                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                                                            <span className="text-slate-400">Venta:</span>
+                                                            <span className="text-slate-900 font-extrabold">S/ {inv.totals.total.toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                                                            <span className="text-slate-400">Pago:</span>
+                                                            <span className="text-blue-600 font-extrabold">S/ {(inv.prePaymentAmount || 0).toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center pt-1">
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-slate-400">Saldo:</span>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); setSelectedFinanceDetails(inv); }}
+                                                                    className="p-1 rounded bg-slate-50 hover:bg-slate-100 text-blue-500 hover:text-blue-700 hover:border-slate-300 border border-slate-200 transition-all cursor-pointer active:scale-95"
+                                                                    title="Ver desglose de finanzas"
+                                                                >
+                                                                    <Info size={12} className="stroke-[2.5]" />
+                                                                </button>
+                                                            </div>
+                                                            <span className={balance > 0 ? 'text-rose-600 font-black' : 'text-emerald-600 font-black'}>
+                                                                S/ {balance.toFixed(2)}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5 text-center">
@@ -1803,6 +1818,97 @@ const MyOrders: React.FC<MyOrdersProps> = ({
             )}
 
             {selectedOrderDetails && <OrderItemsDetailModal isOpen={true} onClose={() => setSelectedOrderDetails(null)} invoice={selectedOrderDetails} paymentMethods={paymentMethods} globalColors={globalColors} currency={currency} />}
+
+            {/* DETALLE ECONÓMICO MODAL COMPACTO */}
+            <AnimatePresence>
+                {selectedFinanceDetails && (
+                    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4" id="finance-modal-container">
+                        {/* Backdrop */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setSelectedFinanceDetails(null)}
+                            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                        />
+                        {/* Modal Container */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                            transition={{ type: 'spring', duration: 0.3 }}
+                            className="relative w-full max-w-sm bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden z-20"
+                        >
+                            {/* Header */}
+                            <div className="p-5 pb-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                <div>
+                                    <h3 id="finance-detail-title" className="text-sm font-black text-slate-800 tracking-tight uppercase">
+                                        Detalle Económico
+                                    </h3>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
+                                        Orden {selectedFinanceDetails.serie}-{String(selectedFinanceDetails.correlativo).padStart(8, '0')}
+                                    </p>
+                                </div>
+                                <button
+                                    id="btn-close-finance-modal"
+                                    onClick={() => setSelectedFinanceDetails(null)}
+                                    className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all active:scale-95 border border-slate-100 bg-white"
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="p-6 space-y-4">
+                                <div className="space-y-3 font-sans text-sm">
+                                    {(() => {
+                                        const discountVal = Number(selectedFinanceDetails.descuento || 0);
+                                        const totalVal = selectedFinanceDetails.totals?.total ?? 0;
+                                        const subtotalVal = totalVal + discountVal;
+                                        const gravadaVal = selectedFinanceDetails.totals?.gravada ?? (totalVal / 1.18);
+                                        const igvVal = selectedFinanceDetails.totals?.igv ?? (totalVal - gravadaVal);
+
+                                        return (
+                                            <>
+                                                <div className="flex justify-between items-center py-2 border-b border-dashed border-slate-100" id="row-subtotal">
+                                                    <span className="text-slate-500 font-semibold font-sans">Subtotal:</span>
+                                                    <span className="font-mono text-slate-800 font-bold text-sm" id="val-subtotal">
+                                                        S/ {subtotalVal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center py-2 border-b border-dashed border-slate-100" id="row-descuento">
+                                                    <span className="text-rose-600 font-semibold font-sans">Descuento:</span>
+                                                    <span className="font-mono text-rose-600 font-bold text-sm" id="val-descuento">
+                                                        -S/ {discountVal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center py-2 border-b border-dashed border-slate-100" id="row-gravada">
+                                                    <span className="text-slate-600 font-semibold font-sans">Op. Gravada:</span>
+                                                    <span className="font-mono text-slate-900 font-extrabold text-sm" id="val-gravada">
+                                                        S/ {gravadaVal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center py-2 border-b border-dashed border-slate-100" id="row-igv">
+                                                    <span className="text-slate-500 font-semibold font-sans">I.G.V. (18%):</span>
+                                                    <span className="font-mono text-slate-800 font-bold text-sm" id="val-igv">
+                                                        S/ {igvVal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center pt-4" id="row-total">
+                                                    <span className="text-slate-800 font-black text-sm uppercase font-sans tracking-tight">TOTAL:</span>
+                                                    <span className="font-mono text-emerald-600 font-black text-base" id="val-total">
+                                                        S/ {totalVal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
             <OrderPrintModal 
                 isOpen={!!selectedOrderToPrint} 
                 onClose={() => setSelectedOrderToPrint(null)} 

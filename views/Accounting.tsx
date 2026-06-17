@@ -498,7 +498,10 @@ const Accounting: React.FC<AccountingProps> = ({ invoices, paymentMethods, compa
                                     <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Documento</th>
                                     <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Cliente</th>
                                     <th className="p-4 text-[10px] font-bold uppercase tracking-widest">Tipo de Pago</th>
-                                    <th className="p-4 pr-6 text-[10px] font-bold uppercase tracking-widest text-right font-sans">Monto</th>
+                                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-right">Subtotal</th>
+                                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-right">Descuento</th>
+                                    <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-right">Op. Gravada</th>
+                                    <th className="p-4 pr-6 text-[10px] font-bold uppercase tracking-widest text-right font-sans">Monto Total</th>
                                 </>
                             ) : (
                                 <>
@@ -593,6 +596,21 @@ const Accounting: React.FC<AccountingProps> = ({ invoices, paymentMethods, compa
                                             </div>
                                         </td>
 
+                                        {/* SUBTOTAL */}
+                                        <td className="p-4 text-right whitespace-nowrap text-slate-700 font-medium font-sans">
+                                            {currency} {(inv.totals?.total + Number((inv as any).descuento || (inv as any).discount || 0)).toFixed(2)}
+                                        </td>
+
+                                        {/* DESCUENTO */}
+                                        <td className="p-4 text-right whitespace-nowrap text-rose-600 font-medium font-sans">
+                                            {Number((inv as any).descuento || (inv as any).discount || 0) > 0 ? `-${currency} ${Number((inv as any).descuento || (inv as any).discount || 0).toFixed(2)}` : `${currency} 0.00`}
+                                        </td>
+
+                                        {/* OP. GRAVADA */}
+                                        <td className="p-4 text-right whitespace-nowrap text-slate-800 font-bold font-sans">
+                                            {currency} {(inv.totals?.gravada || (inv.totals?.total / 1.18)).toFixed(2)}
+                                        </td>
+
                                         {/* MONTO */}
                                         <td className="p-4 pr-6 text-right whitespace-nowrap">
                                             <div className="flex flex-col items-end justify-center">
@@ -600,7 +618,7 @@ const Accounting: React.FC<AccountingProps> = ({ invoices, paymentMethods, compa
                                                     {currency} {inv.totals?.total?.toFixed(2)}
                                                 </span>
                                                 <span className="text-[9px] text-slate-400 font-medium">
-                                                    Base: {inv.totals?.gravada?.toFixed(1)} | IGV: {inv.totals?.igv?.toFixed(1)}
+                                                    IGV: {currency} {(inv.totals?.igv || (inv.totals?.total - (inv.totals?.total / 1.18))).toFixed(2)}
                                                 </span>
                                                 <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full border mt-1 select-none tracking-wider ${
                                                     isInvoiceFullyPaid 

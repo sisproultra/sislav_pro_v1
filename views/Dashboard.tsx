@@ -29,30 +29,104 @@ interface DashboardProps {
   onNavigateToPos: () => void;
 }
 
+const getPeruWallClockDate = (dateVal: any): Date => {
+  if (!dateVal) return new Date();
+  let dateObj = dateVal instanceof Date ? dateVal : new Date(dateVal);
+  if (isNaN(dateObj.getTime())) {
+    dateObj = new Date();
+  }
+  
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hour12: false
+    });
+    
+    const parts = formatter.formatToParts(dateObj);
+    const m = {} as any;
+    parts.forEach(p => m[p.type] = p.value);
+    
+    return new Date(
+      parseInt(m.year, 10),
+      parseInt(m.month, 10) - 1,
+      parseInt(m.day, 10),
+      parseInt(m.hour, 10),
+      parseInt(m.minute, 10),
+      parseInt(m.second, 10)
+    );
+  } catch (e) {
+    return dateObj;
+  }
+};
+
 const parseSafeDate = (dateVal: any): Date => {
   if (dateVal instanceof Date) return dateVal;
   if (!dateVal) return new Date();
   
   if (typeof dateVal === 'string') {
     const cleaned = dateVal.trim();
-    // 1. Si comienza con YYYY-MM-DD (e.g. "2026-05-30" o "2026-05-30T00:00:00Z")
-    const isoMatch = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (isoMatch) {
-      const year = parseInt(isoMatch[1], 10);
-      const month = parseInt(isoMatch[2], 10);
-      const day = parseInt(isoMatch[3], 10);
-      return new Date(year, month - 1, day, 12, 0, 0); // Mediodía local para evitar saltos de zona horaria
-    }
-    // 2. Si comienza con DD/MM/YYYY o DD-MM-YYYY
-    const dmyMatch = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-    if (dmyMatch) {
-      const day = parseInt(dmyMatch[1], 10);
-      const month = parseInt(dmyMatch[2], 10);
-      const year = parseInt(dmyMatch[3], 10);
-      return new Date(year, month - 1, day, 12, 0, 0);
+    const hasTime = cleaned.includes('T') || cleaned.includes(':');
+    
+    if (!hasTime) {
+      // 1. Si comienza con YYYY-MM-DD (e.g. "2026-05-30")
+      const isoMatch = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) {
+        const year = parseInt(isoMatch[1], 10);
+        const month = parseInt(isoMatch[2], 10);
+        const day = parseInt(isoMatch[3], 10);
+        return new Date(year, month - 1, day, 12, 0, 0); // Mediodía local para evitar saltos de zona horaria
+      }
+      // 2. Si comienza con DD/MM/YYYY o DD-MM-YYYY
+      const dmyMatch = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if (dmyMatch) {
+        const day = parseInt(dmyMatch[1], 10);
+        const month = parseInt(dmyMatch[2], 10);
+        const year = parseInt(dmyMatch[3], 10);
+        return new Date(year, month - 1, day, 12, 0, 0);
+      }
     }
   }
-  return new Date(dateVal);
+  return getPeruWallClockDate(dateVal);
+};
+
+const formatPeruDateTime = (dateVal: any) => {
+  if (!dateVal) return '-';
+  let dateObj: Date;
+  if (dateVal instanceof Date) {
+    dateObj = dateVal;
+  } else if (typeof dateVal === 'string') {
+    if ((dateVal.includes('T') || dateVal.includes(':')) && dateVal.length > 10) {
+      dateObj = new Date(dateVal);
+    } else {
+      dateObj = parseSafeDate(dateVal);
+    }
+  } else {
+    dateObj = new Date(dateVal);
+  }
+
+  if (isNaN(dateObj.getTime())) {
+    return dateVal;
+  }
+
+  try {
+    return new Intl.DateTimeFormat('es-PE', {
+      timeZone: 'America/Lima',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(dateObj);
+  } catch (e) {
+    return dateObj.toLocaleString();
+  }
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ 
@@ -95,12 +169,14 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   // Modal de detalles por día
   const [showDayDetails, setShowDayDetails] = useState(false);
+  const [drillDownType, setDrillDownType] = useState<'NONE' | 'SALES' | 'COLLECTED'>('NONE');
   const [dayDetails, setDayDetails] = useState<{
     date: string,
     salesCount: number,
     totalSales: number,
     totalCollected: number,
-    payments: any[]
+    payments: any[],
+    invoices?: Invoice[]
   } | null>(null);
 
   const fetchDashboardData = async () => {
@@ -322,13 +398,16 @@ const Dashboard: React.FC<DashboardProps> = ({
     const payments = financialMetrics.dayPaymentsMap[dayLabel] || [];
     const salesTotal = financialMetrics.dayData.find(d => d.name === dayLabel)?.total || 0;
     const collectedTotal = financialMetrics.collectionData.find(d => d.name === dayLabel)?.total || 0;
+    const matchingInvoices = currentInvoices.filter(inv => getDayLabel(parseSafeDate(inv.date)) === dayLabel);
     
+    setDrillDownType('NONE');
     setDayDetails({
       date: dayLabel,
-      salesCount: currentInvoices.filter(inv => getDayLabel(parseSafeDate(inv.date)) === dayLabel).length,
+      salesCount: matchingInvoices.length,
       totalSales: salesTotal,
       totalCollected: collectedTotal,
-      payments: payments
+      payments: payments,
+      invoices: matchingInvoices
     });
     setShowDayDetails(true);
   };
@@ -870,55 +949,165 @@ const Dashboard: React.FC<DashboardProps> = ({
               
               <div className="p-6 space-y-6">
                 <div className="grid grid-cols-2 gap-4">
-                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Ventas Totales</p>
+                   <div 
+                      onClick={() => setDrillDownType(drillDownType === 'SALES' ? 'NONE' : 'SALES')}
+                      className={`p-4 rounded-2xl border transition-all cursor-pointer select-none relative overflow-hidden group ${
+                        drillDownType === 'SALES' 
+                          ? 'bg-blue-50/60 border-blue-200 ring-2 ring-blue-100 shadow-sm' 
+                          : 'bg-slate-50 border-slate-100 hover:bg-slate-100/80 hover:border-slate-200'
+                      }`}
+                   >
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center justify-between">
+                        <span>Ventas Totales</span>
+                        <span className="text-[9px] font-bold text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">Ver lista</span>
+                      </p>
                       <h4 className="text-xl font-black text-blue-600">S/ {dayDetails.totalSales.toFixed(2)}</h4>
                       <p className="text-[9px] font-bold text-slate-500 uppercase">{dayDetails.salesCount} Órdenes</p>
                    </div>
-                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Total Recaudado</p>
+                   <div 
+                      onClick={() => setDrillDownType(drillDownType === 'COLLECTED' ? 'NONE' : 'COLLECTED')}
+                      className={`p-4 rounded-2xl border transition-all cursor-pointer select-none relative overflow-hidden group ${
+                        drillDownType === 'COLLECTED' 
+                          ? 'bg-amber-50/60 border-amber-200 ring-2 ring-amber-100 shadow-sm' 
+                          : 'bg-slate-50 border-slate-100 hover:bg-slate-100/80 hover:border-slate-200'
+                      }`}
+                   >
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center justify-between">
+                        <span>Total Recaudado</span>
+                        <span className="text-[9px] font-bold text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity">Ver lista</span>
+                      </p>
                       <h4 className="text-xl font-black text-amber-600">S/ {dayDetails.totalCollected.toFixed(2)}</h4>
                       <p className="text-[9px] font-bold text-slate-500 uppercase">{dayDetails.payments.length} Pagos</p>
                    </div>
                 </div>
 
-                <div>
-                   <h5 className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                     <DollarSign size={14} className="text-indigo-600" />
-                     Desglose por Métodos de Pago
-                   </h5>
-                   <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                      {Object.entries(
-                        dayDetails.payments.reduce((acc: any, p: any) => {
-                          const mName = p.metodo_pago_name || 'Otros';
-                          if (!acc[mName]) acc[mName] = { total: 0, count: 0 };
-                          acc[mName].total += p.monto;
-                          acc[mName].count += 1;
-                          return acc;
-                        }, {})
-                      ).map(([mName, stats]: [string, any], i) => (
-                        <div key={i} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl hover:shadow-sm transition-shadow">
-                           <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-                                 <Wallet size={16} className="text-indigo-600" />
+                                 {drillDownType === 'NONE' && (
+                   <div>
+                      <h5 className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <DollarSign size={14} className="text-indigo-600" />
+                        Desglose por Métodos de Pago
+                      </h5>
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                         {Object.entries(
+                           dayDetails.payments.reduce((acc: any, p: any) => {
+                             const mName = p.metodo_pago_name || 'Otros';
+                             if (!acc[mName]) acc[mName] = { total: 0, count: 0 };
+                             acc[mName].total += p.monto;
+                             acc[mName].count += 1;
+                             return acc;
+                           }, {})
+                         ).map(([mName, stats]: [string, any], i) => (
+                           <div key={i} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl hover:shadow-sm transition-shadow">
+                              <div className="flex items-center gap-3">
+                                 <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                                    <Wallet size={16} className="text-indigo-600" />
+                                 </div>
+                                 <span className="text-xs font-bold text-slate-700">{mName}</span>
                               </div>
-                              <span className="text-xs font-bold text-slate-700">{mName}</span>
+                              <div className="text-right">
+                                 <p className="text-sm font-black text-slate-900">S/ {stats.total.toFixed(2)}</p>
+                                 <p className="text-[9px] font-medium text-slate-400 uppercase">{stats.count} Movimientos</p>
+                              </div>
                            </div>
-                           <div className="text-right">
-                              <p className="text-sm font-black text-slate-900">S/ {stats.total.toFixed(2)}</p>
-                              <p className="text-[9px] font-medium text-slate-400 uppercase">{stats.count} Movimientos</p>
-                           </div>
-                        </div>
-                      ))}
+                         ))}
 
-                      {dayDetails.payments.length === 0 && (
-                        <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                           <DollarSign size={24} className="mx-auto text-slate-300 mb-2" />
-                           <p className="text-xs font-medium text-slate-400">No se registraron recaudos este día</p>
-                        </div>
-                      )}
+                         {dayDetails.payments.length === 0 && (
+                           <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                              <DollarSign size={24} className="mx-auto text-slate-300 mb-2" />
+                              <p className="text-xs font-medium text-slate-400">No se registraron recaudos este día</p>
+                           </div>
+                         )}
+                      </div>
                    </div>
-                </div>
+                 )}
+
+                 {drillDownType === 'SALES' && (
+                   <div>
+                      <div className="flex items-center justify-between mb-4">
+                         <h5 className="text-[10px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                           <ShoppingCart size={14} className="text-blue-600" />
+                           Detalle de Ventas ({dayDetails.invoices?.length || 0})
+                         </h5>
+                         <button 
+                           onClick={() => setDrillDownType('NONE')}
+                           className="text-[9px] font-bold text-indigo-600 hover:underline uppercase tracking-wider animate-pulse"
+                         >
+                           Volver al desglose
+                         </button>
+                      </div>
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                         {(dayDetails.invoices || []).map((inv, idx) => (
+                           <div key={idx} className="p-3 bg-white border border-slate-100 rounded-xl hover:shadow-xs transition-shadow">
+                             <div className="flex justify-between items-start gap-2 mb-1.5">
+                               <div>
+                                 <span className="text-xs font-black text-slate-950 block">{inv.ticketNumber || inv.ordenNumber || (inv.serie && inv.correlativo ? `${inv.serie}-${String(inv.correlativo).padStart(8, '0')}` : 'S/N')}</span>
+                                 <span className="text-[10px] text-slate-400 font-bold uppercase">{formatPeruDateTime(inv.date)}</span>
+                               </div>
+                               <span className="text-sm font-black text-blue-600">
+                                 S/ {Number(inv.totals?.total || 0).toFixed(2)}
+                               </span>
+                             </div>
+                             <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium bg-slate-50/50 p-1.5 rounded-lg border border-slate-100/50">
+                               <span className="text-slate-400">Clie:</span>
+                               <span className="text-slate-700 font-bold truncate max-w-[280px]">{inv.client?.name || 'Cliente Genérico'}</span>
+                             </div>
+                           </div>
+                         ))}
+                         {(dayDetails.invoices || []).length === 0 && (
+                           <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                              <p className="text-xs font-medium text-slate-400">No se registraron ventas este día</p>
+                           </div>
+                         )}
+                      </div>
+                   </div>
+                 )}
+
+                 {drillDownType === 'COLLECTED' && (
+                   <div>
+                      <div className="flex items-center justify-between mb-4">
+                         <h5 className="text-[10px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                           <Wallet size={14} className="text-amber-600" />
+                           Detalle de Recaudos ({dayDetails.payments.length})
+                         </h5>
+                         <button 
+                           onClick={() => setDrillDownType('NONE')}
+                           className="text-[9px] font-bold text-indigo-600 hover:underline uppercase tracking-wider animate-pulse"
+                         >
+                           Volver al desglose
+                         </button>
+                      </div>
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                         {dayDetails.payments.map((p, idx) => (
+                           <div key={idx} className="p-3 bg-white border border-slate-100 rounded-xl hover:shadow-xs transition-shadow">
+                             <div className="flex justify-between items-start gap-2 mb-1.5">
+                               <div>
+                                 <span className="text-xs font-black text-slate-950 block">{p.venta_codigo || p.ventas?.codigo_orden || 'S/N'}</span>
+                                 <span className="text-[10px] text-slate-400 font-bold uppercase">{formatPeruDateTime(p.fecha_pago)}</span>
+                               </div>
+                               <div className="text-right">
+                                 <span className="text-sm font-black text-amber-600 block">
+                                   S/ {Number(p.monto).toFixed(2)}
+                                 </span>
+                                 <span className="text-[9px] font-black uppercase text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                                   {p.metodo_pago_name || 'Otros'}
+                                 </span>
+                               </div>
+                             </div>
+                             <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium bg-slate-50/50 p-1.5 rounded-lg border border-slate-100/50">
+                               <span className="text-slate-400">Cliente:</span>
+                               <span className="text-slate-700 font-bold truncate max-w-[280px]">{p.cliente_nombre || 'Cliente Genérico'}</span>
+                             </div>
+                           </div>
+                         ))}
+                         {dayDetails.payments.length === 0 && (
+                           <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                              <p className="text-xs font-medium text-slate-400">No se registraron recaudos este día</p>
+                           </div>
+                         )}
+                      </div>
+                   </div>
+                 )}
+
               </div>
               
               <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
