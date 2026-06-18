@@ -45,6 +45,54 @@ const numeroALetras = (num: number) => {
     return `SON: ${letrasEntero} CON ${centimos}/100 SOLES`;
 };
 
+const formatPolicies = (policiesText: string) => {
+    if (!policiesText) return null;
+    
+    // Clean-up and normalize double dashes or weird characters
+    const normalizedInput = policiesText.replace(/–/g, '-').trim();
+    
+    // Split by dashes that separate list items (using lookahead for safety)
+    const parts = normalizedInput.split(/(?=\s-)|(?=\n-)|^-/g).map(p => {
+        let clean = p.trim();
+        if (clean.startsWith('-')) {
+            clean = clean.substring(1).trim();
+        }
+        return clean;
+    }).filter(Boolean);
+    
+    if (parts.length > 0) {
+        return (
+            <div className="text-[10px] text-justify leading-relaxed font-bold uppercase space-y-2 mt-4 border-t border-dashed border-gray-300 pt-3 text-slate-900">
+                <ul className="list-none pl-0 space-y-2 text-justify">
+                    {parts.map((p, i) => {
+                        // If it contains "CONDICIONES" and is short, we can center it
+                        const isHeader = p.toLowerCase().includes('condiciones') && p.length < 35;
+                        if (isHeader) {
+                            return (
+                                <div key={i} className="text-center font-extrabold text-[11px] tracking-wide mb-1 text-slate-950">
+                                    {p.replace(/:$/, '')}
+                                </div>
+                            );
+                        }
+                        return (
+                            <li key={i} className="flex gap-2 text-justify items-start leading-tight">
+                                <span className="text-slate-950 font-extrabold shrink-0 select-none">•</span>
+                                <span className="flex-1 text-justify break-words">{p}</span>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="text-[10px] text-justify leading-relaxed font-bold uppercase whitespace-pre-line mt-4 border-t border-dashed border-gray-300 pt-3 text-slate-900">
+            {policiesText}
+        </div>
+    );
+};
+
 const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClose, hideInternalOrder = false, downloadOnly = false, isTrackingView = false }) => {
     const [ticketConfig, setTicketConfig] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -729,9 +777,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                                     <div className="text-sm font-black text-slate-900">{fullDeliveryInfo}</div>
                                 </div>
 
-                                <div className="text-[10px] text-center leading-tight italic font-bold">
-                                    {ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.'}
-                                </div>
+                                {formatPolicies(ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.')}
 
                                 {barcodeUrl && (
                                     <div className="mt-4 flex flex-col items-center">
@@ -965,9 +1011,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                                     <div className="text-sm font-black text-slate-900">{fullDeliveryInfo}</div>
                                 </div>
 
-                                <div className="text-[10px] text-center leading-tight italic font-bold">
-                                    {ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.'}
-                                </div>
+                                {formatPolicies(ticketConfig?.politicas || company.ticketPolicies || 'Gracias por su preferencia.')}
 
                                 {barcodeUrl && (
                                     <div className="mt-4 flex flex-col items-center">

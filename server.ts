@@ -194,6 +194,8 @@ async function startServer() {
           id: v.id,
           sucursal_id: v.sucursal_id,
           cliente_id: v.cliente_id,
+          descuento: Number(v.descuento || 0),
+          discount: Number(v.descuento || 0),
           client: clientRaw ? {
             id: clientRaw.id,
             docType: clientRaw.tipo_documento_codigo || 'DNI',
@@ -248,7 +250,7 @@ async function startServer() {
           orderStatus: (v.estado) || 'PENDIENTE',
           sunatStatus: v.sunat_status || (v.tipo_documento_codigo === '80' ? 'INTERNAL' : 'PENDING'),
           prePaymentAmount: totalPagado,
-          qrCodeData: v.qr_code_data || null,
+          qrCodeData: v.qr_code_data || `${mappedCompany?.ruc || '00000000000'}|${v.tipo_documento_codigo}|${v.serie}|${v.correlativo}|${Number(v.total_igv || 0).toFixed(2)}|${Number(v.total || 0).toFixed(2)}|${(v.fecha_recepcion || v.created_at || '').split('T')[0]}|${clientRaw?.tipo_documento === 'DNI' ? '1' : clientRaw?.tipo_documento === 'RUC' ? '6' : '0'}|${clientRaw?.dni || '00000000'}|`,
           sunatResponse: {
             success: v.sunat_status === 'ACCEPTED',
             description: v.sunat_description,

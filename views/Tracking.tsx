@@ -270,13 +270,35 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
     const correlativo = v.correlativo || 0;
     const totals = { total: Number(v.total) || 0, igv: Number(v.total_igv) || 0, gravada: Number(v.total_gravada) || 0, exonerada: Number(v.total_exonerada) || 0, inafecta: Number(v.total_inafecta) || 0 };
 
+    const rawItems = v.items || v.items_venta || [];
+    const mappedItems = rawItems.map((it: any) => ({
+        ...it,
+        id: it.id,
+        name: (it.descripcion || it.name || 'SERVICIO').toUpperCase(),
+        price: Number(it.precio_unitario !== undefined ? it.precio_unitario : it.price),
+        quantity: Number(it.cantidad !== undefined ? it.cantidad : it.quantity),
+        subtotal: Number(it.subtotal) || roundToOneDecimal(Number(it.precio_unitario !== undefined ? it.precio_unitario : it.price) * Number(it.cantidad !== undefined ? it.cantidad : it.quantity)),
+        status: it.status || it.estado,
+        estado_id: it.estado_id
+    }));
+
+    const sunatResponse = v.sunatResponse || {
+        success: v.sunat_status === 'ACCEPTED',
+        description: v.sunat_description,
+        hash: v.sunat_hash,
+        pdfUrl: v.sunat_pdf_url,
+        xmlUrl: v.sunat_xml_url,
+        cdrUrl: v.sunat_cdr_url
+    };
+
     return { 
         ...v, id: v.id, sucursal_id: v.sucursal_id, empresa_holding_id: v.empresa_holding_id, ordenNumber: v.codigo_orden || '---', serie, correlativo, type: docType, 
         descuento: Number(v.descuento) || 0, discount: Number(v.descuento) || 0,
         client: c ? { id: c.id, name: (c.nombres || '').toUpperCase(), docType: c.tipo_documento || 'DNI', docNumber: c.dni || '00000000', phone: c.telefono || '', address: c.direccion || '-', points: c.puntos || 0 } : { id: 'temp', name: 'CLIENTE VARIOS', docNumber: '00000000', docType: '-', address: '-', points: 0, sucursal_id: v.sucursal_id }, 
-        items: (v.items_venta || []).map((it: any) => ({ ...it, id: it.id, name: it.descripcion, price: Number(it.precio_unitario), quantity: Number(it.cantidad), subtotal: Number(it.subtotal) || roundToOneDecimal(Number(it.precio_unitario) * Number(it.cantidad)), status: it.estado, estado_id: it.estado_id })), 
+        items: mappedItems, 
         payments: (v.pagos_venta || []).map((p: any) => ({ metodo_pago_id: p.metodo_pago_id, monto: Number(p.monto), date: p.fecha_pago })),
-        totals, date: v.fecha_recepcion || v.fecha_registro || v.created_at || new Date().toISOString(), orderStatus: (v.estado as OrderStatus) || 'PENDIENTE', sunatStatus: v.sunat_status || (docType === '80' ? 'INTERNAL' : 'PENDING'), qrCodeData: `${data.company?.ruc}|${docType}|${serie}|${correlativo}|${totals.igv.toFixed(2)}|${totals.total.toFixed(2)}|${(v.fecha_recepcion || v.created_at || '').split('T')[0]}|${c?.tipo_documento === 'DNI' ? '1' : c?.tipo_documento === 'RUC' ? '6' : '0'}|${c?.dni || '00000000'}|`
+        totals, date: v.fecha_recepcion || v.fecha_registro || v.created_at || new Date().toISOString(), orderStatus: (v.estado as OrderStatus) || 'PENDIENTE', sunatStatus: v.sunat_status || (docType === '80' ? 'INTERNAL' : 'PENDING'), qrCodeData: v.qrCodeData || v.qr_code_data || `${data.company?.ruc || '00000000000'}|${docType}|${serie}|${correlativo}|${totals.igv.toFixed(2)}|${totals.total.toFixed(2)}|${(v.fecha_recepcion || v.created_at || '').split('T')[0]}|${c?.tipo_documento === 'DNI' ? '1' : c?.tipo_documento === 'RUC' ? '6' : '0'}|${c?.dni || '00000000'}|`,
+        sunatResponse
     } as Invoice;
   }, [data]);
 
