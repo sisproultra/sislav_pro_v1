@@ -98,7 +98,13 @@ const ClientModal: React.FC<ClientModalProps> = ({
         setRuc(initialData.ruc || '');
         setRazonSocial(initialData.razon_social || '');
         const rawPhone = initialData.phone || '';
-        const countryMatch = LATAM_COUNTRIES.find(c => rawPhone.startsWith(c.phone));
+        let countryMatch = null;
+        if (initialData.cod_pais) {
+            countryMatch = LATAM_COUNTRIES.find(c => c.phone.replace('+', '') === initialData.cod_pais);
+        }
+        if (!countryMatch) {
+            countryMatch = LATAM_COUNTRIES.find(c => rawPhone.startsWith(c.phone));
+        }
         if (countryMatch) {
             setSelectedCountry(countryMatch);
             setPhone(rawPhone.replace(countryMatch.phone, ''));
@@ -264,7 +270,13 @@ const ClientModal: React.FC<ClientModalProps> = ({
     setRazonSocial(client.razon_social || '');
     
     const rawPhone = client.phone || '';
-    const countryMatch = LATAM_COUNTRIES.find(c => rawPhone.startsWith(c.phone));
+    let countryMatch = null;
+    if (client.cod_pais) {
+        countryMatch = LATAM_COUNTRIES.find(c => c.phone.replace('+', '') === client.cod_pais);
+    }
+    if (!countryMatch) {
+        countryMatch = LATAM_COUNTRIES.find(c => rawPhone.startsWith(c.phone));
+    }
     if (countryMatch) {
         setSelectedCountry(countryMatch);
         setPhone(rawPhone.replace(countryMatch.phone, ''));
@@ -354,6 +366,7 @@ const ClientModal: React.FC<ClientModalProps> = ({
     }
 
     const fullPhone = phone ? `${selectedCountry.phone}${phone}` : '';
+    const codPais = selectedCountry.phone.replace('+', '');
     
     onSave({
       docType,
@@ -364,6 +377,7 @@ const ClientModal: React.FC<ClientModalProps> = ({
       latitude,
       longitude,
       phone: fullPhone,
+      cod_pais: codPais,
       email,
       ruc,
       razon_social: razonSocial,

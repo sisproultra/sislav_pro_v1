@@ -128,6 +128,7 @@ export interface Client extends BaseEntity {
     ruc?: string;
     razon_social?: string;
     phone?: string;
+    cod_pais?: string;
     email?: string;
     address: string;
     ubigeo?: string;

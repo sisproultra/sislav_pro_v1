@@ -1175,6 +1175,7 @@ export const dbCreateClient = async (client: any): Promise<Client> => {
         razon_social: client.razon_social,
         tipo_documento: client.docType || (client.docNumber.length === 11 ? 'RUC' : 'DNI'), 
         telefono: client.phone, 
+        cod_pais: client.cod_pais || '51',
         email: client.email, 
         direccion: client.address?.toUpperCase() || '-', 
         google_maps_url: client.googleMapsUrl !== undefined ? client.googleMapsUrl : client.google_maps_url, 
@@ -1215,6 +1216,7 @@ export const dbCreateClient = async (client: any): Promise<Client> => {
         ruc: data.ruc,
         razon_social: data.razon_social,
         phone: data.telefono || '',
+        cod_pais: data.cod_pais || '51',
         email: data.email || '',
         address: data.direccion || '-',
         points: data.puntos || 0,
@@ -1272,7 +1274,7 @@ export const dbGetClients = async (page: number = 1, pageSize: number = 100, sea
 
         let query = supabase
             .from('clientes')
-            .select('id, sucursal_id, empresa_holding_id, nombres, apellidos, telefono, email, dni, activo, fecha_registro, tipo_documento, cumpleanos, genero, direccion, google_maps_url, puntos, mensaje_alerta, color_alerta, latitud, longitud, registrado_por, ruc, razon_social, suscrito', { count: 'exact' })
+            .select('id, sucursal_id, empresa_holding_id, nombres, apellidos, telefono, cod_pais, email, dni, activo, fecha_registro, tipo_documento, cumpleanos, genero, direccion, google_maps_url, puntos, mensaje_alerta, color_alerta, latitud, longitud, registrado_por, ruc, razon_social, suscrito', { count: 'exact' })
             .eq('sucursal_id', branchId)
             .eq('empresa_holding_id', holdingId)
             .eq('activo', true);
@@ -1303,6 +1305,7 @@ export const dbGetClients = async (page: number = 1, pageSize: number = 100, sea
             ruc: c.ruc,
             razon_social: c.razon_social,
             phone: c.telefono || '', 
+            cod_pais: c.cod_pais || '51',
             email: c.email || '', 
             address: fixEncoding(c.direccion || '-'), 
             points: c.puntos || 0, 

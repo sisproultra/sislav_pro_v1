@@ -97,7 +97,7 @@ async function startServer() {
       if (pickup) {
         console.log("✅ Recojo encontrado via backend:", pickup.id);
         const { data: company } = await supabaseAdmin.from('sucursales').select('*').eq('id', pickup.sucursal_id).maybeSingle();
-        const { data: client } = await supabaseAdmin.from('clientes').select('id, nombres, puntos, sucursal_id, telefono, direccion, google_maps_url, tipo_documento, dni, latitud, longitud').eq('id', pickup.cliente_id).maybeSingle();
+        const { data: client } = await supabaseAdmin.from('clientes').select('id, nombres, puntos, sucursal_id, telefono, cod_pais, direccion, google_maps_url, tipo_documento, dni, latitud, longitud').eq('id', pickup.cliente_id).maybeSingle();
         const { data: invoice } = await supabaseAdmin.from('ventas').select('*, items_venta(*)').eq('pickup_id', id).maybeSingle();
         
         let pagos: any[] = [];
