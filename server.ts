@@ -75,7 +75,8 @@ async function startServer() {
 
   // --- API DE SEGUIMIENTO (TRACKING) PÚBLICO CON BYPASS DE RLS ---
   app.get('/api/tracking/:id', async (req, res) => {
-    const { id } = req.params;
+    const rawId = req.params.id || '';
+    const id = rawId ? rawId.split('&')[0].trim() : '';
     try {
       if (!supabaseAdmin) {
         throw new Error('Supabase Admin no está inicializado en el servidor.');

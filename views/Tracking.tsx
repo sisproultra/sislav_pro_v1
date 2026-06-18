@@ -74,8 +74,13 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
     
     // Auto-open receipt if requested via URL (?v=receipt)
     const params = new URLSearchParams(window.location.search);
-    if (params.get('v') === 'receipt' && res?.invoice) {
-        setShowReceipt(true);
+    if (params.get('v') === 'receipt') {
+        if (res?.invoice) {
+            setShowReceipt(true);
+        } else {
+            // invoice aún no disponible, se abrirá cuando llegue via useEffect
+            sessionStorage.setItem('pending_open_receipt', '1');
+        }
     }
     
     if (res && !localStorage.getItem('sislav_auth_session')) {
@@ -204,6 +209,13 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
     }, 4000);
     return () => clearInterval(timer);
   }, [banners.length]);
+
+  useEffect(() => {
+    if (sessionStorage.getItem('pending_open_receipt') === '1' && data?.invoice) {
+        setShowReceipt(true);
+        sessionStorage.removeItem('pending_open_receipt');
+    }
+  }, [data]);
 
   const handlePromoClick = (bannerName: string) => {
     const businessPhone = company?.contactPhone || "51900000000";
