@@ -788,7 +788,28 @@ async function startServer() {
     }
 
     try {
-      const cleanNumber = phoneNumber.replace(/\D/g, '');
+      let cleanNumber = phoneNumber.replace(/\D/g, '');
+      
+      // Intentar obtener el prefijo de país configurado globalmente
+      let countryCode = '51';
+      try {
+        const { data: globalConfig } = await supabaseAdmin
+          .from('saas_configuracion_global')
+          .select('whatsapp_cod_pais')
+          .maybeSingle();
+        if (globalConfig?.whatsapp_cod_pais) {
+          countryCode = globalConfig.whatsapp_cod_pais.replace(/\D/g, '') || '51';
+        }
+      } catch (dbErr) {
+        console.warn("⚠️ No se pudo obtener el prefijo de WhatsApp de la BD, usando 51 por defecto:", dbErr);
+      }
+
+      if (cleanNumber.length === 9) {
+        cleanNumber = `${countryCode}${cleanNumber}`;
+      } else if (!phoneNumber.startsWith('+') && !cleanNumber.startsWith(countryCode) && cleanNumber.length === 9) {
+        cleanNumber = `${countryCode}${cleanNumber}`;
+      }
+
       const payload = {
         "number": cleanNumber,
         "text": text,

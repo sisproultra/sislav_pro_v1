@@ -4,6 +4,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from './supabaseClient';
 import { getSaasGlobalConfig } from './saasService';
+import { EvolutionService } from './evolutionService';
 
 const numeroALetras = (num: number) => {
     const aLetras = (n: number): string => {
@@ -433,7 +434,12 @@ export const generateWhatsAppLink = (invoice: Invoice, company: Company, phoneNu
     text += `\n*TOTAL: S/ ${invoice.totals.total.toFixed(2)}*\n`;
     text += `\n¡Gracias por su preferencia!`;
     
-    return `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+    let cleanPhone = phoneNumber.replace(/\D/g, '');
+    if (cleanPhone.length === 9) {
+        cleanPhone = `51${cleanPhone}`;
+    }
+    
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
 };
 
 /**
@@ -452,7 +458,23 @@ export const sendReadyNotification = async (
   const orden = invoice.ordenNumber || 'S/N';
   const text = `*${company.razonSocial}*\n\nEstimado(a) *${clientName}*,\n\nLe informamos que su pedido con orden *#${orden}* ya se encuentra *LISTO* ✅.\n\nPuede pasar a recogerlo en nuestro local en: ${company.address.toUpperCase()}.\n\n¡Le esperamos! 🧺✨`;
   
-  const fallbackUrl = `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+  // Obtener prefijo de país configurado globalmente para el número
+  let cleanNumber = phoneNumber.replace(/\D/g, '');
+  let countryPrefix = '51';
+  try {
+    const globalConfig = await getSaasGlobalConfig();
+    if (globalConfig?.whatsapp_cod_pais) {
+      countryPrefix = globalConfig.whatsapp_cod_pais.replace(/\D/g, '') || '51';
+    }
+  } catch (err) {
+    console.warn("⚠️ No se pudo obtener la configuración global para el prefijo de WhatsApp:", err);
+  }
+
+  if (cleanNumber.length === 9) {
+    cleanNumber = `${countryPrefix}${cleanNumber}`;
+  }
+  
+  const fallbackUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(text)}`;
 
   // FALLBACK: Si no tiene configurada la instancia, cargamos la configuración global de la base de datos
   if (!baseUrl || !apiKey || !instance) {
@@ -474,28 +496,47 @@ export const sendReadyNotification = async (
   }
 
   try {
-    const cleanNumber = phoneNumber.replace(/\D/g, '');
-    const payload = {
-      "number": cleanNumber,
-      "text": text,
-      "delay": 1200
-    };
-
-    let finalBaseUrl = baseUrl;
-    if (!finalBaseUrl.startsWith('http')) finalBaseUrl = `https://${finalBaseUrl}`;
-    const finalEndpoint = `${finalBaseUrl}/message/sendText/${instance}`;
-    const proxiedUrl = `${PROXY_URL}${encodeURIComponent(finalEndpoint)}`;
-
-    const response = await fetch(proxiedUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
-      body: JSON.stringify(payload)
+    console.log("🚀 [Client Ready] Intentando envío directo usando EvolutionService (idéntico al check-in)...");
+    const botService = new EvolutionService({
+        baseUrl,
+        apiKey,
+        instanceName: instance
     });
 
-    if (response.ok) return { success: true, message: 'Notificación enviada' };
-    return { success: false, message: 'Error en API', fallbackUrl };
-  } catch (e: any) {
-    return { success: false, message: e.message, fallbackUrl };
+    const directRes = await botService.sendText(cleanNumber, text);
+    console.log("✅ [Client Ready] Envío directo exitoso:", directRes);
+    return { success: true, message: 'Notificación enviada' };
+  } catch (directError: any) {
+    console.warn("⚠️ [Client Ready] Falló envío directo: ", directError.message || directError);
+    console.log("🔄 [Proxy Ready] Reintentando despacho mediante CORS proxy...");
+    
+    try {
+      const payload = {
+        "number": cleanNumber,
+        "text": text,
+        "delay": 1200
+      };
+
+      let finalBaseUrl = baseUrl;
+      if (!finalBaseUrl.startsWith('http')) finalBaseUrl = `https://${finalBaseUrl}`;
+      const finalEndpoint = `${finalBaseUrl}/message/sendText/${instance}`;
+      const proxiedUrl = `${PROXY_URL}${encodeURIComponent(finalEndpoint)}`;
+
+      const response = await fetch(proxiedUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        console.log("✅ [Proxy Ready] Despacho de listo exitoso.");
+        return { success: true, message: 'Notificación enviada' };
+      }
+      return { success: false, message: 'Error en API Proxy', fallbackUrl };
+    } catch (proxyError: any) {
+      console.error("❌ [Proxy Ready] Error en envío Listo por proxy:", proxyError);
+      return { success: false, message: proxyError.message, fallbackUrl };
+    }
   }
 };
 
@@ -547,7 +588,23 @@ export const sendInvoiceViaWhatsApp = async (
   text += `💰 *Importe*: S/ ${invoice.totals.total.toFixed(2)}\n\n`;
   text += `¡Gracias por su preferencia!`;
 
-  const fallbackUrl = `https://wa.me/${phoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+  // Obtener prefijo de país configurado globalmente para el número
+  let cleanNumber = phoneNumber.replace(/\D/g, '');
+  let countryPrefix = '51';
+  try {
+    const globalConfig = await getSaasGlobalConfig();
+    if (globalConfig?.whatsapp_cod_pais) {
+      countryPrefix = globalConfig.whatsapp_cod_pais.replace(/\D/g, '') || '51';
+    }
+  } catch (err) {
+    console.warn("⚠️ No se pudo obtener la configuración global para el prefijo de WhatsApp:", err);
+  }
+
+  if (cleanNumber.length === 9) {
+    cleanNumber = `${countryPrefix}${cleanNumber}`;
+  }
+
+  const fallbackUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(text)}`;
 
   // FALLBACK: Si no tiene configurada la instancia de WhatsApp de la sucursal, cargamos la configuración global de la base de datos
   if (!baseUrl || !apiKey || !instance) {
@@ -570,46 +627,61 @@ export const sendInvoiceViaWhatsApp = async (
   }
 
   try {
-      console.log(`🚀 Solicitando envío de WA al servidor...`);
-      
-      const response = await fetch('/api/whatsapp/send', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            baseUrl,
-            apiKey,
-            instance,
-            phoneNumber,
-            text
-          })
+      console.log("🚀 [Client Invoice] Intentando envío directo usando EvolutionService (idéntico al check-in)...");
+      const botService = new EvolutionService({
+          baseUrl,
+          apiKey,
+          instanceName: instance
       });
 
-      let result;
-      const responseText = await response.text();
+      const directRes = await botService.sendText(cleanNumber, text);
+      console.log("✅ [Client Invoice] Envío directo exitoso:", directRes);
+      return { success: true, message: 'Link enviado con éxito' };
+  } catch (directError: any) {
+      console.warn("⚠️ [Client Invoice] Falló envío directo de Evolution: ", directError.message || directError);
+      console.log("🔄 [Proxy Invoice] Reintentando despacho mediante proxy del servidor (/api/whatsapp/send)...");
       
-      if (!responseText) {
-        console.warn("⚠️ Servidor retornó respuesta vacía");
-        result = { success: false, message: "Respuesta vacía del servidor" };
-      } else {
-        try {
-          result = JSON.parse(responseText);
-        } catch (e) {
-          console.error("Fallo al parsear respuesta JSON:", responseText);
-          result = { success: false, message: "Error en formato de respuesta del servidor" };
-        }
-      }
+      try {
+          const response = await fetch('/api/whatsapp/send', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                baseUrl,
+                apiKey,
+                instance,
+                phoneNumber: cleanNumber,
+                text
+              })
+          });
 
-      if (response.ok && result?.success) {
-          return { success: true, message: 'Link enviado con éxito' };
-      } else {
-          const apiErrorMsg = result?.message || result?.details || response.statusText || 'Error desconocido de Evolution';
-          console.warn("⚠️ Fallo envío automático:", apiErrorMsg);
-          return { success: false, message: `Fallo API WhatsApp: ${apiErrorMsg}`, fallbackUrl };
+          let result;
+          const responseText = await response.text();
+          
+          if (!responseText) {
+            console.warn("⚠️ Servidor proxy retornó respuesta vacía");
+            result = { success: false, message: "Respuesta vacía del servidor" };
+          } else {
+            try {
+              result = JSON.parse(responseText);
+            } catch (e) {
+              console.error("Fallo al parsear respuesta JSON del proxy:", responseText);
+              result = { success: false, message: "Error en formato de respuesta del servidor" };
+            }
+          }
+
+          if (response.ok && result?.success) {
+              console.log("✅ [Proxy Invoice] Despacho de comprobante de Evolution exitoso.");
+              return { success: true, message: 'Link enviado con éxito' };
+          } else {
+              const apiErrorMsg = result?.message || result?.details || response.statusText || 'Error desconocido de Evolution';
+              console.warn("⚠️ [Proxy Invoice] Falló envío por proxy:", apiErrorMsg);
+              return { success: false, message: `Fallo API WhatsApp: ${apiErrorMsg}`, fallbackUrl };
+          }
+      } catch (proxyError: any) {
+          console.error("❌ [Proxy Invoice] Error en flujo de envío por proxy:", proxyError);
+          return { success: false, message: `Error de conexión proxy: ${proxyError.message}`, fallbackUrl };
       }
-  } catch (error: any) {
-    console.error("Error en flujo de envío WA:", error);
-    return { success: false, message: `Error de conexión: ${error.message}`, fallbackUrl };
   }
 };

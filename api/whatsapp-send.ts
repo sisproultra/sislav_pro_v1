@@ -12,7 +12,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const cleanNumber = phoneNumber.replace(/\D/g, '');
+        let cleanNumber = phoneNumber.replace(/\D/g, '');
+        if (cleanNumber.length === 9) {
+            cleanNumber = `51${cleanNumber}`;
+        }
         const payload = {
             "number": cleanNumber,
             "text": text,

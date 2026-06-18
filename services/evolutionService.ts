@@ -22,7 +22,10 @@ export class EvolutionService {
     }
 
     public static getPayload(type: 'text' | 'image', phone: string, content: string, mediaData?: string) {
-        const cleanPhone = phone.replace(/\D/g, '');
+        let cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.length === 9) {
+            cleanPhone = `51${cleanPhone}`;
+        }
 
         if (type === 'image' && mediaData) {
             let mimetype = 'image/png';
