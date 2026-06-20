@@ -190,13 +190,15 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
 
   useEffect(() => {
     if (isSelfScheduleOpen && data) {
-        const clientInfo = data.invoice?.clientes || data.pickup?.clientes;
+        const clientInfo = data.invoice?.client || data.invoice?.clientes || data.pickup?.clientes;
         if (clientInfo) {
-            setSsPhone(clientInfo.telefono || '');
-            setSsAddress(clientInfo.direccion || '');
+            setSsPhone(clientInfo.phone || clientInfo.telefono || '');
+            setSsAddress(clientInfo.address || clientInfo.direccion || '');
             setSsMapsUrl(clientInfo.google_maps_url || '');
-            if (clientInfo.latitud && clientInfo.longitud) {
-                setSsCoords({ lat: Number(clientInfo.latitud), lng: Number(clientInfo.longitud) });
+            const lat = clientInfo.latitud !== undefined ? clientInfo.latitud : clientInfo.latitude;
+            const lng = clientInfo.longitud !== undefined ? clientInfo.longitud : clientInfo.longitude;
+            if (lat && lng) {
+                setSsCoords({ lat: Number(lat), lng: Number(lng) });
             }
         }
     }
@@ -276,23 +278,40 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
   const normalizedInvoice = useMemo(() => {
     if (!data?.invoice) return null;
     const v = data.invoice;
-    const c = v.clientes;
-    const docType = (v.tipo_documento_codigo || '80') as InvoiceType;
+    const c = v.client || v.clientes;
+    const docType = (v.type || v.tipo_documento_codigo || '80') as InvoiceType;
     const serie = v.serie || 'NV01';
     const correlativo = v.correlativo || 0;
-    const totals = { total: Number(v.total) || 0, igv: Number(v.total_igv) || 0, gravada: Number(v.total_gravada) || 0, exonerada: Number(v.total_exonerada) || 0, inafecta: Number(v.total_inafecta) || 0 };
+    
+    const totals = v.totals ? {
+        total: Number(v.totals.total) || 0,
+        igv: Number(v.totals.igv) || 0,
+        gravada: Number(v.totals.gravada) || 0,
+        exonerada: Number(v.totals.exonerada) || 0,
+        inafecta: Number(v.totals.inafecta) || 0
+    } : {
+        total: Number(v.total) || 0,
+        igv: Number(v.total_igv) || 0,
+        gravada: Number(v.total_gravada) || 0,
+        exonerada: Number(v.total_exonerada) || 0,
+        inafecta: Number(v.total_inafecta) || 0
+    };
 
     const rawItems = v.items || v.items_venta || [];
-    const mappedItems = rawItems.map((it: any) => ({
-        ...it,
-        id: it.id,
-        name: (it.descripcion || it.name || 'SERVICIO').toUpperCase(),
-        price: Number(it.precio_unitario !== undefined ? it.precio_unitario : it.price),
-        quantity: Number(it.cantidad !== undefined ? it.cantidad : it.quantity),
-        subtotal: Number(it.subtotal) || roundToOneDecimal(Number(it.precio_unitario !== undefined ? it.precio_unitario : it.price) * Number(it.cantidad !== undefined ? it.cantidad : it.quantity)),
-        status: it.status || it.estado,
-        estado_id: it.estado_id
-    }));
+    const mappedItems = rawItems.map((it: any) => {
+        const itemPrice = Number(it.price !== undefined ? it.price : (it.precio_unitario !== undefined ? it.precio_unitario : 0));
+        const itemQty = Number(it.quantity !== undefined ? it.quantity : (it.cantidad !== undefined ? it.cantidad : 0));
+        return {
+            ...it,
+            id: it.id,
+            name: (it.name || it.descripcion || 'SERVICIO').toUpperCase(),
+            price: itemPrice,
+            quantity: itemQty,
+            subtotal: Number(it.subtotal !== undefined ? it.subtotal : (itemPrice * itemQty)) || (itemPrice * itemQty),
+            status: it.status || it.estado,
+            estado_id: it.estado_id
+        };
+    });
 
     const sunatResponse = v.sunatResponse || {
         success: v.sunat_status === 'ACCEPTED',
@@ -303,13 +322,48 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
         cdrUrl: v.sunat_cdr_url
     };
 
+    let clientObj = { id: 'temp', name: 'CLIENTE VARIOS', docNumber: '00000000', docType: '-', address: '-', phone: '', points: 0, sucursal_id: v.sucursal_id };
+    if (c) {
+        clientObj = {
+            id: c.id || 'temp',
+            name: (c.name || c.nombres || 'CLIENTE VARIOS').toUpperCase(),
+            docNumber: c.docNumber || c.dni || '00000000',
+            docType: c.docType || c.tipo_documento_codigo || c.tipo_documento || '-',
+            address: c.address || c.direccion || '-',
+            phone: c.phone || c.telefono || '',
+            points: c.points !== undefined ? c.points : (c.puntos || 0),
+            sucursal_id: c.sucursal_id || v.sucursal_id
+        };
+    }
+
+    const prePay = v.prePaymentAmount !== undefined ? Number(v.prePaymentAmount) : (v.pre_payment_amount !== undefined ? Number(v.pre_payment_amount) : 0);
+
     return { 
-        ...v, id: v.id, sucursal_id: v.sucursal_id, empresa_holding_id: v.empresa_holding_id, ordenNumber: v.codigo_orden || '---', serie, correlativo, type: docType, 
-        descuento: Number(v.descuento) || 0, discount: Number(v.descuento) || 0,
-        client: c ? { id: c.id, name: (c.nombres || '').toUpperCase(), docType: c.tipo_documento || 'DNI', docNumber: c.dni || '00000000', phone: c.telefono || '', address: c.direccion || '-', points: c.puntos || 0 } : { id: 'temp', name: 'CLIENTE VARIOS', docNumber: '00000000', docType: '-', address: '-', points: 0, sucursal_id: v.sucursal_id }, 
+        ...v, 
+        id: v.id, 
+        sucursal_id: v.sucursal_id, 
+        empresa_holding_id: v.empresa_holding_id, 
+        ordenNumber: v.ordenNumber || v.codigo_orden || '---', 
+        serie, 
+        correlativo, 
+        type: docType, 
+        descuento: Number(v.descuento !== undefined ? v.descuento : (v.discount || 0)) || 0, 
+        discount: Number(v.discount !== undefined ? v.discount : (v.descuento || 0)) || 0,
+        client: clientObj, 
         items: mappedItems, 
-        payments: (v.pagos_venta || []).map((p: any) => ({ metodo_pago_id: p.metodo_pago_id, monto: Number(p.monto), date: p.fecha_pago })),
-        totals, date: v.fecha_recepcion || v.fecha_registro || v.created_at || new Date().toISOString(), orderStatus: (v.estado as OrderStatus) || 'PENDIENTE', sunatStatus: v.sunat_status || (docType === '80' ? 'INTERNAL' : 'PENDING'), qrCodeData: v.qrCodeData || v.qr_code_data || `${data.company?.ruc || '00000000000'}|${docType}|${serie}|${correlativo}|${totals.igv.toFixed(2)}|${totals.total.toFixed(2)}|${(v.fecha_recepcion || v.created_at || '').split('T')[0]}|${c?.tipo_documento === 'DNI' ? '1' : c?.tipo_documento === 'RUC' ? '6' : '0'}|${c?.dni || '00000000'}|`,
+        payments: (v.payments || v.pagos_venta || []).map((p: any) => ({
+            id: p.id,
+            metodo_pago_id: p.metodo_pago_id,
+            metodo_pago_name: p.metodo_pago_name || p.metodos_pago?.nombre || 'EFECTIVO',
+            monto: Number(p.monto || p.amount || 0),
+            date: p.date || p.fecha_pago
+        })),
+        totals, 
+        date: v.date || v.fecha_recepcion || v.fecha_registro || v.created_at || new Date().toISOString(), 
+        orderStatus: (v.orderStatus || v.estado as OrderStatus) || 'PENDIENTE', 
+        sunatStatus: v.sunatStatus || v.sunat_status || (docType === '80' ? 'INTERNAL' : 'PENDING'), 
+        prePaymentAmount: prePay,
+        qrCodeData: v.qrCodeData || v.qr_code_data || `${data.company?.ruc || '00000000000'}|${docType}|${serie}|${correlativo}|${totals.igv.toFixed(2)}|${totals.total.toFixed(2)}|${(v.date || v.fecha_recepcion || v.created_at || '').split('T')[0]}|${clientObj.docType === 'DNI' ? '1' : clientObj.docType === 'RUC' ? '6' : '0'}|${clientObj.docNumber}|`,
         sunatResponse
     } as Invoice;
   }, [data]);
@@ -317,8 +371,8 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
   const handleSelfSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ssPhone || !ssAddress) return;
-    const clientData = data?.invoice?.clientes || data?.pickup?.clientes;
-    const clientName = clientData?.nombres || 'Cliente';
+    const clientData = data?.invoice?.client || data?.invoice?.clientes || data?.pickup?.clientes;
+    const clientName = clientData?.name || clientData?.nombres || 'Cliente';
     const clientId = clientData?.id;
     setIsSaving(true);
     try {
@@ -329,7 +383,7 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
   };
 
   const handleSendTrackingLink = async () => {
-    const clientPhone = data?.invoice?.clientes?.telefono || data?.pickup?.clientes?.telefono;
+    const clientPhone = data?.invoice?.client?.phone || data?.invoice?.clientes?.telefono || data?.pickup?.clientes?.telefono;
     if (!clientPhone) { showToast("El cliente no tiene teléfono registrado.", 'error'); return; }
     const slug = data?.company?.slug || JSON.parse(localStorage.getItem('sislav_active_sucursal') || '{}')?.slug || '';
     const trackingUrl = `${window.location.origin}${window.location.pathname}?t=${id}${slug ? `&s=${slug}` : ''}`;
@@ -382,9 +436,9 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
   );
 
   const { pickup, invoice, company } = data;
-  const clientData = invoice?.clientes || pickup?.clientes;
-  const clientNameShow = clientData?.nombres || 'Cliente';
-  const points = clientData?.puntos || 0;
+  const clientData = normalizedInvoice?.client || invoice?.client || invoice?.clientes || pickup?.clientes;
+  const clientNameShow = clientData?.name || clientData?.nombres || 'Cliente';
+  const points = clientData?.points !== undefined ? clientData?.points : (clientData?.puntos || 0);
 
   return (
     <div className="h-screen bg-[#f8fafc] font-sans flex flex-col items-center overflow-hidden relative">
@@ -414,7 +468,7 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
       <div className="flex-1 w-full overflow-y-auto custom-scrollbar flex flex-col items-center pb-32">
         <div className="w-[96%] lg:w-[96%] max-w-5xl bg-white -mt-4 md:-mt-12 rounded-[2rem] md:rounded-[3.5rem] shadow-2xl p-4 md:p-12 border border-slate-50 flex flex-col gap-6 md:gap-10 relative z-10">
           <div className="flex justify-between items-center px-1">
-              <div className="flex flex-col gap-0.5"><h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ESTADO DEL PEDIDO</h3>{invoice && <p className="text-[10px] font-bold text-slate-900 uppercase">Orden: #{invoice.codigo_orden}</p>}</div>
+              <div className="flex flex-col gap-0.5"><h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ESTADO DEL PEDIDO</h3>{normalizedInvoice && <p className="text-[10px] font-bold text-slate-900 uppercase">Orden: #{normalizedInvoice.ordenNumber}</p>}</div>
               <div className="bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-emerald-100 animate-pulse shadow-sm"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]"></div><span className="text-[10px] font-bold uppercase tracking-widest">EN VIVO</span></div>
           </div>
 
@@ -449,23 +503,23 @@ const Tracking: React.FC<TrackingProps> = ({ id }) => {
               </div>
           </div>
 
-          {invoice?.items && (
+          {normalizedInvoice?.items && (
               <div className="animate-in fade-in duration-700">
                   <div className="flex items-center gap-2 mb-3"><List size={14} className="text-slate-400" /><h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">DETALLE DEL SERVICIO</h3></div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">{[...invoice.items].sort((a: any, b: any) => {
-                      const isACanceled = a.estado_id === 9 || a.estado === 'ANULADO' || a.estado === 'CANCELADO';
-                      const isBCanceled = b.estado_id === 9 || b.estado === 'ANULADO' || b.estado === 'CANCELADO';
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">{[...normalizedInvoice.items].sort((a: any, b: any) => {
+                      const isACanceled = a.estado_id === 9 || a.estado === 'ANULADO' || a.status === 'CANCELADO' || a.estado === 'CANCELADO';
+                      const isBCanceled = b.estado_id === 9 || b.estado === 'ANULADO' || b.status === 'CANCELADO' || b.estado === 'CANCELADO';
                       return (isACanceled ? 1 : 0) - (isBCanceled ? 1 : 0);
                   }).map((item: any, idx: number) => {
-                      const isCanceled = item.estado_id === 9 || item.estado === 'ANULADO' || item.estado === 'CANCELADO';
+                      const isCanceled = item.estado_id === 9 || item.estado === 'ANULADO' || item.status === 'CANCELADO' || item.estado === 'CANCELADO';
                       return (
                       <div key={idx} className={`${isCanceled ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200 hover:bg-white'} border rounded-xl p-3 flex items-center justify-between group hover:shadow-md transition-all`}>
                           <div className="flex items-center gap-2.5"><div className={`${isCanceled ? 'bg-red-100 text-red-500' : 'bg-white text-slate-400 group-hover:text-indigo-500'} w-8 h-8 rounded-lg flex items-center justify-center border border-slate-100 shadow-sm transition-colors`}><Shirt size={16} /></div><div className="min-w-0"><p className={`font-bold text-[10px] uppercase truncate leading-tight ${isCanceled ? 'text-red-700 strike-through' : 'text-slate-800'}`}>{item.quantity} x {item.name}</p></div></div>
                           <div className="flex items-center gap-1.5">
                               {isCanceled ? <div className="flex items-center gap-1 bg-red-600 text-white px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase border border-red-700 shadow-sm"><X size={8} /> CANCELADO</div> :
-                               ['EN_LAVADO', 'EN_SECADO', 'RECIBIDO', 'PENDIENTE'].includes(item.estado || '') ? <div className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase border border-blue-200 animate-pulse"><Waves size={8} /> LAVANDERÍA</div> :
-                               item.estado === 'LISTO' ? <div className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase border border-emerald-200"><CheckCircle2 size={8} /> LISTO</div> :
-                               item.estado === 'ENTREGADO' ? <div className="flex items-center gap-1 bg-green-600 text-white px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase border border-green-700 shadow-sm"><Package size={8} /> ENTREGADO</div> :
+                               ['EN_LAVADO', 'EN_SECADO', 'RECIBIDO', 'PENDIENTE'].includes(item.estado || item.status || '') ? <div className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase border border-blue-200 animate-pulse"><Waves size={8} /> LAVANDERÍA</div> :
+                               (item.estado === 'LISTO' || item.status === 'LISTO') ? <div className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase border border-emerald-250"><CheckCircle2 size={8} /> LISTO</div> :
+                               (item.estado === 'ENTREGADO' || item.status === 'ENTREGADO') ? <div className="flex items-center gap-1 bg-green-600 text-white px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase border border-green-700 shadow-sm"><Package size={8} /> ENTREGADO</div> :
                                <div className="flex items-center gap-1 bg-slate-200 text-slate-500 px-2 py-0.5 rounded-lg text-[7px] font-bold uppercase border border-slate-300"><Clock size={8} /> RESERVA</div>}
                           </div>
                       </div>
