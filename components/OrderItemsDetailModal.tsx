@@ -139,7 +139,7 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
   };
 
   const getPayStatus = (inv: Invoice) => {
-    const total = inv.totals.total - (inv.descuento || 0);
+    const total = inv.totals.total;
     const paid = inv.prePaymentAmount || 0;
     const isPaid = paid >= total - 0.01;
     return {
@@ -189,7 +189,7 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
               <div className="grid grid-cols-3 gap-2 md:gap-4">
                 <div className="bg-white border-b-4 border-emerald-500 p-2 md:p-4 rounded-2xl md:rounded-[1.5rem] shadow-md flex flex-col items-center text-center">
                   <span className="text-[7px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Total</span>
-                  <p className="text-sm md:text-2xl font-black text-slate-800 tracking-tighter">{currency} {(invoice.totals.total - (invoice.descuento || 0)).toFixed(2)}</p>
+                  <p className="text-sm md:text-2xl font-black text-slate-800 tracking-tighter">{currency} {invoice.totals.total.toFixed(2)}</p>
                 </div>
                 <div className="bg-white border-b-4 border-indigo-500 p-2 md:p-4 rounded-2xl md:rounded-[1.5rem] shadow-md flex flex-col items-center text-center">
                   <span className="text-[7px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Abonado</span>

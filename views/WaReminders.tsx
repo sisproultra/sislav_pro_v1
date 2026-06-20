@@ -478,7 +478,7 @@ const WaReminders: React.FC<WaRemindersProps> = ({
                   </tr>
                 ) : (
                   paginatedOrders.map(order => {
-                    const debt = (order.totals.total - (order.descuento || 0)) - (order.prePaymentAmount || 0);
+                    const debt = order.totals.total - (order.prePaymentAmount || 0);
                     const processPct = calculateProcessPercentage(order);
                     const isSentRecently = !canSendReminder(order);
 
@@ -575,7 +575,7 @@ const WaReminders: React.FC<WaRemindersProps> = ({
               </div>
             ) : (
               paginatedOrders.map(order => {
-                const debt = (order.totals.total - (order.descuento || 0)) - (order.prePaymentAmount || 0);
+                const debt = order.totals.total - (order.prePaymentAmount || 0);
                 const processPct = calculateProcessPercentage(order);
                 const isSentRecently = !canSendReminder(order);
 

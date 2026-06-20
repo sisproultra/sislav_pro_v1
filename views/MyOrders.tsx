@@ -460,8 +460,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
             const isDelivered = inv.orderStatus === 'ENTREGADO';
             const total = inv.totals?.total || 0;
             const paid = inv.prePaymentAmount || 0;
-            const disc = inv.descuento || 0;
-            const balance = total - disc - paid;
+            const balance = total - paid;
             
             if (balance > 0) acc.toCollect += balance;
             if (!isDelivered) acc.toDeliver += 1;
@@ -531,10 +530,10 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                 'CLIENTE': inv.client?.name || 'Varios',
                 'TELÉFONO': inv.client?.phone || '-',
                 'FECHA ATENCIÓN': inv.date ? (new Date(inv.date).toISOString().slice(0, 10)) : 'N/A',
-                'DEUDA': (inv.totals.total - (inv.descuento || 0) - (inv.prePaymentAmount || 0)).toFixed(2)
+                'DEUDA': (inv.totals.total - (inv.prePaymentAmount || 0)).toFixed(2)
             }));
 
-            const totalDeuda = allData.reduce((sum, inv) => sum + (inv.totals.total - (inv.descuento || 0) - (inv.prePaymentAmount || 0)), 0);
+            const totalDeuda = allData.reduce((sum, inv) => sum + (inv.totals.total - (inv.prePaymentAmount || 0)), 0);
             const ws = utils.json_to_sheet(data);
             utils.sheet_add_aoa(ws, [
                 [],
@@ -593,7 +592,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
             const printWindow = window.open('', '_blank');
             if (!printWindow) return;
 
-            const totalDeuda = allData.reduce((sum, inv) => sum + (inv.totals.total - (inv.descuento || 0) - (inv.prePaymentAmount || 0)), 0);
+            const totalDeuda = allData.reduce((sum, inv) => sum + (inv.totals.total - (inv.prePaymentAmount || 0)), 0);
 
             const content = `
                 <html>
@@ -647,7 +646,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                             <div style="font-weight: bold;">${(inv.client?.name || 'VARIOS').toUpperCase()}</div>
                                             <span class="sub-info">📞 ${inv.client?.phone || '-'}</span>
                                         </td>
-                                        <td class="debt-col">S/ ${(inv.totals.total - (inv.descuento || 0) - (inv.prePaymentAmount || 0)).toFixed(2)}</td>
+                                        <td class="debt-col">S/ ${(inv.totals.total - (inv.prePaymentAmount || 0)).toFixed(2)}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -1077,7 +1076,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                         const canSendToRoute = inv.orderStatus === 'LISTO';
                                         const isInRoute = inv.orderStatus === 'EN_RUTA';
                                         const isFullyDelivered = deliveredPercent === 100;
-                                        const balance = inv.totals.total - (inv.descuento || 0) - (inv.prePaymentAmount || 0);
+                                        const balance = inv.totals.total - (inv.prePaymentAmount || 0);
 
                                         const isVoided = inv.status === 'anulado' || inv.orderStatus === 'CANCELADO' || !!inv.relatedNcId;
                                         const rowClass = isVoided ? 'bg-red-50/30 grayscale-[0.3]' : 'hover:bg-gray-50/80';
@@ -1297,7 +1296,7 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                 const displayOrderNumber = (inv.ordenNumber && inv.ordenNumber !== '---') 
                                     ? inv.ordenNumber 
                                     : (inv.orderCorrelativoRaw ? formatOrderNumber(inv.orderCorrelativoRaw, company) : '---');
-                                const balance = inv.totals.total - (inv.descuento || 0) - (inv.prePaymentAmount || 0);
+                                const balance = inv.totals.total - (inv.prePaymentAmount || 0);
                                 const genDate = new Date(inv.date);
                                 const dateStr = genDate.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' });
                                 const timeStr = genDate.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
