@@ -104,6 +104,17 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
     const [barcodeUrl, setBarcodeUrl] = useState<string>('');
     const brandPrimary = document.documentElement.style.getPropertyValue('--brand-primary').trim() || '#0054A6';
 
+    const uniquePaymentMethods = invoice.payments && invoice.payments.length > 0 
+      ? Array.from(new Set(invoice.payments.map((p: any) => (p.metodo_pago_name || p.metodos_pago?.nombre || 'EFECTIVO').trim().toUpperCase()).filter(Boolean))) 
+      : [];
+    const paymentMethodText = ((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined' && String((invoice as any).paymentMethod).trim() !== '') 
+      ? (invoice as any).paymentMethod 
+      : (uniquePaymentMethods.length === 1 ? uniquePaymentMethods[0] : (uniquePaymentMethods.length > 1 ? 'MÚLTIPLE' : 'CONTADO'));
+
+    const paymentMethodTextEfectivo = ((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined' && String((invoice as any).paymentMethod).trim() !== '') 
+      ? (invoice as any).paymentMethod 
+      : (uniquePaymentMethods.length === 1 ? uniquePaymentMethods[0] : (uniquePaymentMethods.length > 1 ? 'MÚLTIPLE' : 'EFECTIVO'));
+
     const generateBarcodeDataUrl = (text: string) => {
         if (!text || text === '---') return '';
         try {
@@ -383,7 +394,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
           <footer class="text-center">
             <div class="flex-between bold" style="font-size: 9pt;">
               <span>FORMA DE PAGO:</span> 
-              <span>${((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'CONTADO')}</span>
+              <span>${paymentMethodText}</span>
             </div>
 
             ${invoice.prePaymentAmount ? `
@@ -476,7 +487,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 9pt; margin-top: 2px; color: #444; font-style: italic;">
                     <span>MÉTODO DE PAGO:</span>
-                    <span>${((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'EFECTIVO')}</span>
+                    <span>${paymentMethodTextEfectivo}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 11pt; font-weight: 900; margin-top: 4px; border-top: 1px solid #000; padding-top: 4px;">
                     <span>SALDO PENDIENTE:</span>
@@ -745,7 +756,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                             <footer className="text-center mt-2 space-y-3">
                                 <div className="flex justify-between uppercase font-bold text-[10px]">
                                     <span>FORMA DE PAGO:</span>
-                                    <span className="uppercase">{((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'CONTADO')}</span>
+                                    <span className="uppercase">{paymentMethodText}</span>
                                 </div>
 
                                 {invoice.prePaymentAmount ? (
@@ -985,7 +996,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                             <footer className="text-center mt-2 space-y-3">
                                 <div className="flex justify-between uppercase font-bold text-[10px]">
                                     <span>FORMA DE PAGO:</span>
-                                    <span className="uppercase">{((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'CONTADO')}</span>
+                                    <span className="uppercase">{paymentMethodText}</span>
                                 </div>
 
                                 {invoice.prePaymentAmount ? (

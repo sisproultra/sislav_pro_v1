@@ -338,6 +338,17 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
     const montoLetras = numeroALetras(invoice.totals.total);
     const igvRate = company.porcentajeIgv || 18.00;
 
+    const uniquePaymentMethods = invoice.payments && invoice.payments.length > 0 
+      ? Array.from(new Set(invoice.payments.map((p: any) => (p.metodo_pago_name || p.metodos_pago?.nombre || 'EFECTIVO').trim().toUpperCase()).filter(Boolean))) 
+      : [];
+    const paymentMethodText = ((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined' && String((invoice as any).paymentMethod).trim() !== '') 
+      ? (invoice as any).paymentMethod 
+      : (uniquePaymentMethods.length === 1 ? uniquePaymentMethods[0] : (uniquePaymentMethods.length > 1 ? 'MÚLTIPLE' : 'CONTADO'));
+
+    const paymentMethodTextEfectivo = ((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined' && String((invoice as any).paymentMethod).trim() !== '') 
+      ? (invoice as any).paymentMethod 
+      : (uniquePaymentMethods.length === 1 ? uniquePaymentMethods[0] : (uniquePaymentMethods.length > 1 ? 'MÚLTIPLE' : 'EFECTIVO'));
+
     // Assets dinámicos
     const logoUrl = config?.url_logo_ticket || company.logoUrl;
     const logoSize = config?.logo_ticket_size || 100;
@@ -553,7 +564,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
 
           <div class="divider"></div>
           <div style="font-size: 8.5pt;">
-            <div class="flex-between"><span>FORMA DE PAGO:</span> <span class="bold">${((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'CONTADO')}</span></div>
+            <div class="flex-between"><span>FORMA DE PAGO:</span> <span class="bold">${paymentMethodText}</span></div>
             ${invoice.prePaymentAmount ? `
             <div class="flex-between bold"><span>PAGADO (ADELANTO):</span> <span>S/ ${invoice.prePaymentAmount.toFixed(2)}</span></div>
             <div class="flex-between bold"><span>SALDO PENDIENTE:</span> <span>S/ ${(invoice.totals.total - invoice.prePaymentAmount).toFixed(2)}</span></div>
@@ -657,7 +668,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 9pt; margin-top: 2px; color: #444; font-style: italic;">
                     <span>MÉTODO DE PAGO:</span>
-                    <span>${((invoice as any).paymentMethod && (invoice as any).paymentMethod !== 'undefined') ? (invoice as any).paymentMethod : (invoice.payments && invoice.payments.length > 0 ? 'MÚLTIPLE' : 'EFECTIVO')}</span>
+                    <span>${paymentMethodTextEfectivo}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 12pt; font-weight: 900; margin-top: 4px; border-top: 2px solid #000; padding-top: 4px;">
                     <span>SALDO PENDIENTE:</span>
