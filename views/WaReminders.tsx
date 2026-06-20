@@ -446,14 +446,7 @@ const WaReminders: React.FC<WaRemindersProps> = ({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 dark:bg-bg3 border-b border-slate-100 dark:border-border">
-                  <th className="p-4 w-10">
-                    <input 
-                      type="checkbox"
-                      checked={selectedOrders.length === filteredOrders.length && filteredOrders.length > 0}
-                      onChange={handleSelectAll}
-                      className="rounded border-slate-300 text-brand-primary focus:ring-brand-primary"
-                    />
-                  </th>
+                  <th className="p-4 w-10"></th>
                   <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Nexo Orden</th>
                   <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Recepción</th>
                   <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Cliente</th>
