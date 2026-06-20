@@ -37,6 +37,117 @@ const numeroALetras = (num: number) => {
 };
 
 /**
+ * Distribuye proporcionalmente y con precisión matemática al centavo los totales de la cabecera
+ * (ya rebajados por el descuento global) entre cada uno de los ítems de acuerdo a su tipo de IGV,
+ * evitando discrepancias de redondeo y cuadrando al 100% el XML para SUNAT.
+ */
+const getDistributedItems = (items: any[], totals: any, igvPercentage: number = 18.00) => {
+  const igvFactor = 1 + (igvPercentage / 100);
+
+  // 1. Calcular el total bruto de cada línea para usarse como ponderación
+  const itemsWithRaw = items.map((item, idx) => {
+    const qty = Number(item.quantity) || 0;
+    const price = Number(item.price) || 0;
+    const itemDisc = Number(item.descuento_unitario) || 0;
+    const netPrice = Math.max(0, price - itemDisc);
+    // Total bruto por ítem redondeado a 1 decimal como en calculations.ts
+    const rawLineTotal = Math.floor((netPrice * qty) * 10 + 0.0001) / 10;
+    return {
+      originalItem: item,
+      index: idx,
+      qty,
+      price,
+      itemDisc,
+      netPrice,
+      rawLineTotal,
+      igvType: item.igvType || '10'
+    };
+  });
+
+  // Dividir ítems según tipo IGV para calzar con los totales individuales de cabecera
+  const gravados = itemsWithRaw.filter(x => x.igvType === '10');
+  const exonerados = itemsWithRaw.filter(x => x.igvType === '20');
+  const inafectos = itemsWithRaw.filter(x => x.igvType === '30');
+
+  const results: { [key: number]: { subtotal: number; igv: number; total: number; valorUnitario: number } } = {};
+
+  const distributeGroup = (
+    group: typeof itemsWithRaw,
+    targetSubtotal: number,
+    targetIgv: number
+  ) => {
+    if (group.length === 0) return;
+
+    const sumRaw = group.reduce((sum, x) => sum + x.rawLineTotal, 0);
+
+    let accumSubtotal = 0;
+    let accumIgv = 0;
+    let accumTotal = 0;
+
+    group.forEach((item, idx) => {
+      const isLast = idx === group.length - 1;
+      let subtotal = 0;
+      let igv = 0;
+      let total = 0;
+
+      if (sumRaw > 0) {
+        const ratio = item.rawLineTotal / sumRaw;
+        if (isLast) {
+          subtotal = Number((targetSubtotal - accumSubtotal).toFixed(2));
+          igv = Number((targetIgv - accumIgv).toFixed(2));
+          total = Number((targetSubtotal + targetIgv - accumTotal).toFixed(2));
+        } else {
+          subtotal = Number((targetSubtotal * ratio).toFixed(2));
+          igv = Number((targetIgv * ratio).toFixed(2));
+          total = Number((subtotal + igv).toFixed(2));
+
+          accumSubtotal += subtotal;
+          accumIgv += igv;
+          accumTotal += total;
+        }
+      } else {
+        if (isLast) {
+          subtotal = targetSubtotal;
+          igv = targetIgv;
+          total = targetSubtotal + targetIgv;
+        }
+      }
+
+      // Evita división entre cero
+      const valorUnitario = item.qty > 0 ? Number((subtotal / item.qty).toFixed(10)) : 0;
+
+      results[item.index] = {
+        subtotal,
+        igv,
+        total,
+        valorUnitario
+      };
+    });
+  };
+
+  distributeGroup(gravados, Number(totals.gravada) || 0, Number(totals.igv) || 0);
+  distributeGroup(exonerados, Number(totals.exonerada) || 0, 0);
+  distributeGroup(inafectos, Number(totals.inafecta) || 0, 0);
+
+  // Fallback si por alguna razón no se clasificó (por ejemplo, tipos raros de IGV)
+  itemsWithRaw.forEach(item => {
+    if (!results[item.index]) {
+      const isGravado = item.igvType === '10';
+      const subtotal = isGravado ? Number((item.rawLineTotal / igvFactor).toFixed(2)) : item.rawLineTotal;
+      const igv = isGravado ? Number((item.rawLineTotal - subtotal).toFixed(2)) : 0;
+      results[item.index] = {
+        subtotal,
+        igv,
+        total: item.rawLineTotal,
+        valorUnitario: item.qty > 0 ? subtotal / item.qty : 0
+      };
+    }
+  });
+
+  return results;
+};
+
+/**
  * Servicio de integración alterno e independiente con la API de Visioner7 para Boletas, Facturas y Notas de Crédito.
  */
 export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): Promise<SunatResponse> => {
@@ -107,6 +218,7 @@ export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): P
   }
 
   const igvRate = company.porcentajeIgv || 18.00;
+  const distributedItems = getDistributedItems(invoice.items, invoice.totals, igvRate);
   const igvFactor = 1 + (igvRate / 100);
   const isTestMode = company.sunatEnvironment === 'BETA' || company.sunatEnvironment === 'INTERNAL';
 
@@ -226,36 +338,22 @@ export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): P
         const itemIgvType = item.igvType || '10';
         const cantidadOriginal = Number(item.quantity) || 0;
         const precioOriginal = Number(item.price) || 0;
-        const descuentoUnitario = Number(item.descuento_unitario) || 0;
-        const precioConDescuento = Math.max(0, precioOriginal - descuentoUnitario);
         
-        const totalLine = Math.floor((precioConDescuento * cantidadOriginal) * 10 + 0.0001) / 10;
+        const dist = distributedItems[idx];
+        const subtotal = dist.subtotal;
+        const igv = dist.igv;
+        const valorUnitario = dist.valorUnitario;
+        const totalLine = dist.total;
         
-        let valorUnitario;
-        let subtotal;
-        let igv;
-        let precioBase;
-        let descuentoPrecioBase;
-
-        if (itemIgvType === '10') {
-            subtotal = Number((totalLine / igvFactor).toFixed(2));
-            igv = Number((totalLine - subtotal).toFixed(2));
-            valorUnitario = cantidadOriginal > 0 ? subtotal / cantidadOriginal : (precioConDescuento / igvFactor);
-            precioBase = precioOriginal / igvFactor;
-            descuentoPrecioBase = descuentoUnitario / igvFactor;
-        } else {
-            subtotal = totalLine;
-            igv = 0;
-            valorUnitario = precioConDescuento;
-            precioBase = precioOriginal;
-            descuentoPrecioBase = descuentoUnitario;
-        }
+        // Ajustamos txtPRECIO_DET (precio unitario con tributo incluido de transacción)
+        // para que guarde relación exacta con el total de línea ajustado
+        const precioUnitarioTransaccion = cantidadOriginal > 0 ? (totalLine / cantidadOriginal) : precioOriginal;
         
         return {
           "txtITEM": String(idx + 1),
           "txtUNIDAD_MEDIDA_DET": item.unitCode || 'NIU',
           "txtCANTIDAD_DET": cantidadOriginal.toFixed(2),
-          "txtPRECIO_DET": precioOriginal.toFixed(2),
+          "txtPRECIO_DET": precioUnitarioTransaccion.toFixed(2),
           "txtIMPORTE_DET": subtotal.toFixed(2),
           "txtPRECIO_TIPO_CODIGO": "01",
           "txtIGV": igv.toFixed(2),
@@ -435,6 +533,7 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
   }
 
   const igvRate = company.porcentajeIgv || 18.00;
+  const distributedItems = getDistributedItems(invoice.items, invoice.totals, igvRate);
   const igvFactor = 1 + (igvRate / 100);
 
   const isTestMode = company.sunatEnvironment === 'BETA' || company.sunatEnvironment === 'INTERNAL';
@@ -523,42 +622,25 @@ export const sendBillToSunat = async (invoice: Invoice, company: Company): Promi
         const itemIgvType = item.igvType || '10';
         const cantidadOriginal = Number(item.quantity) || 0;
         const precioOriginal = Number(item.price) || 0;
-        const descuentoUnitario = Number(item.descuento_unitario) || 0;
         
-        const precioConDescuento = Math.max(0, precioOriginal - descuentoUnitario);
+        const dist = distributedItems[idx];
+        const subtotal = dist.subtotal;
+        const igv = dist.igv;
+        const valorUnitario = dist.valorUnitario;
+        const totalLine = dist.total;
         
-        // IMPORTANTE: El total de línea debe redondearse igual que en calculateTotals (roundToOneDecimal)
-        // para que la suma de ítems coincida con el total de venta en la cabecera.
-        const totalLine = Math.floor((precioConDescuento * cantidadOriginal) * 10 + 0.0001) / 10;
-        
-        let valorUnitario;
-        let subtotal;
-        let igv;
-        let precioBase;
-        let descuentoPrecioBase;
+        const precioBase = itemIgvType === '10' ? (precioOriginal / igvFactor) : precioOriginal;
+        // descuento unitario total (tanto el individual como el prorrateado global) expresado sin IGV
+        const descuentoPrecioBase = Math.max(0, precioBase - valorUnitario);
 
-        if (itemIgvType === '10') {
-            // Gravado: Desglosamos el IGV del total de la línea (ya redondeado a 1 decimal)
-            subtotal = Number((totalLine / igvFactor).toFixed(2));
-            igv = Number((totalLine - subtotal).toFixed(2));
-            // Recalculamos el valor unitario para que cuadre exactamente con el subtotal
-            valorUnitario = cantidadOriginal > 0 ? subtotal / cantidadOriginal : (precioConDescuento / igvFactor);
-            precioBase = precioOriginal / igvFactor;
-            descuentoPrecioBase = descuentoUnitario / igvFactor;
-        } else {
-            // Exonerado / Inafecto
-            subtotal = totalLine;
-            igv = 0;
-            valorUnitario = precioConDescuento;
-            precioBase = precioOriginal;
-            descuentoPrecioBase = descuentoUnitario;
-        }
-        
+        // El precio unitario de transacción (incluyendo IGV)
+        const precioUnitarioTransaccion = cantidadOriginal > 0 ? (totalLine / cantidadOriginal) : precioOriginal;
+
         return {
             "producto": cleanText(item.name || "PRODUCTO"),
             "cantidad": cantidadOriginal.toFixed(6),
             "valor_unitario": valorUnitario.toFixed(10),
-            "precio_unitario": precioOriginal.toFixed(6),
+            "precio_unitario": precioUnitarioTransaccion.toFixed(6),
             "precio_base": precioBase.toFixed(10), 
             "descuento_precio_base": descuentoPrecioBase.toFixed(10),
             "codigo_sunat": "",
