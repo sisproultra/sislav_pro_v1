@@ -17,10 +17,6 @@
   ],
   "rewrites": [
     {
-      "source": "/api/tracking/:id",
-      "destination": "/api/tracking.ts?id=:id"
-    },
-    {
       "source": "/api/correlativos/obtener-siguiente",
       "destination": "/api/correlativos-obtener-siguiente.ts"
     },
