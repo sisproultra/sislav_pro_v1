@@ -48,47 +48,51 @@ const numeroALetras = (num: number) => {
 const formatPolicies = (policiesText: string) => {
     if (!policiesText) return null;
     
-    // Clean-up and normalize double dashes or weird characters
-    const normalizedInput = policiesText.replace(/–/g, '-').trim();
-    
-    // Split by dashes that separate list items (using lookahead for safety)
-    const parts = normalizedInput.split(/(?=\s-)|(?=\n-)|^-/g).map(p => {
-        let clean = p.trim();
-        if (clean.startsWith('-')) {
-            clean = clean.substring(1).trim();
-        }
-        return clean;
-    }).filter(Boolean);
-    
-    if (parts.length > 0) {
-        return (
-            <div className="text-[10px] text-justify leading-relaxed font-bold uppercase space-y-2 mt-4 border-t border-dashed border-gray-300 pt-3 text-slate-900">
-                <ul className="list-none pl-0 space-y-2 text-justify">
-                    {parts.map((p, i) => {
-                        // If it contains "CONDICIONES" and is short, we can center it
-                        const isHeader = p.toLowerCase().includes('condiciones') && p.length < 35;
-                        if (isHeader) {
-                            return (
-                                <div key={i} className="text-center font-extrabold text-[11px] tracking-wide mb-1 text-slate-950">
-                                    {p.replace(/:$/, '')}
-                                </div>
-                            );
-                        }
-                        return (
-                            <li key={i} className="flex gap-2 text-justify items-start leading-tight">
-                                <span className="text-slate-950 font-extrabold shrink-0 select-none">•</span>
-                                <span className="flex-1 text-justify break-words">{p}</span>
-                            </li>
-                        );
-                    })}
-                </ul>
-            </div>
-        );
-    }
+    // Normalize and clean up text
+    const lines = policiesText
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+        
+    if (lines.length === 0) return null;
     
     return (
-        <div className="text-[10px] text-justify leading-relaxed font-bold uppercase whitespace-pre-line mt-4 border-t border-dashed border-gray-300 pt-3 text-slate-900">
-            {policiesText}
+        <div className="text-[10px] text-justify leading-relaxed font-bold uppercase space-y-2.5 mt-5 border-t border-dashed border-gray-350 pt-4 text-slate-900 w-full">
+            {lines.map((line, idx) => {
+                // If it looks like a title/header (ends with ":" or includes "CONDICIONES" or "POLITICAS")
+                const isHeader = (line.endsWith(':') || line.toLowerCase().includes('condiciones') || line.toLowerCase().includes('políticas')) && line.length < 50;
+                
+                // Check if it starts with a list bullet/number (e.g. "1.", "-", "*", "•")
+                const listPrefixMatch = line.match(/^(\d+\.|\-|\*|•)\s*(.*)$/);
+                
+                if (isHeader) {
+                    return (
+                        <div key={idx} className="text-center font-extrabold text-[11px] tracking-wide mb-2 text-slate-950 border-b border-gray-150 pb-1 mt-3">
+                            {line}
+                        </div>
+                    );
+                }
+                
+                if (listPrefixMatch) {
+                    const prefix = listPrefixMatch[1];
+                    const content = listPrefixMatch[2];
+                    return (
+                        <div key={idx} className="flex gap-2 text-justify items-start leading-snug w-full">
+                            <span className="text-slate-950 font-extrabold shrink-0 select-none">
+                                {prefix === '-' || prefix === '*' || prefix === '•' ? '•' : prefix}
+                            </span>
+                            <span className="flex-1 text-justify break-words">{content}</span>
+                        </div>
+                    );
+                }
+                
+                // Regular line
+                return (
+                    <p key={idx} className="text-justify break-words leading-snug w-full">
+                        {line}
+                    </p>
+                );
+            })}
         </div>
     );
 };
@@ -151,9 +155,15 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
         loadConfigAndPrint();
     }, [downloadOnly]);
 
-    const isElectronic = [InvoiceType.BOLETA, InvoiceType.FACTURA].includes(invoice.type);
+    const isElectronic = [InvoiceType.BOLETA, InvoiceType.FACTURA].includes(invoice.type) || 
+                         invoice.type === '01' || 
+                         invoice.type === '03' || 
+                         String(invoice.type || '').toUpperCase() === 'BOLETA' || 
+                         String(invoice.type || '').toUpperCase() === 'FACTURA';
 
-    const formatItemDetails = (item: any, hidePrefix = false, displayMeta: 'none' | 'icons' | 'all' = 'all') => {
+    const formatItemDetails = (item: any, hidePrefix = false, displayMetaInput: 'none' | 'icons' | 'all' = 'all') => {
+        // Safe override: always promote 'none' to 'all' to ensure maximum service details are rendered for customers
+        const displayMeta = displayMetaInput === 'none' ? 'all' : displayMetaInput;
         if (!item) return '';
         const details = typeof item === 'string' ? item : (item.details || item.observaciones || '');
         
@@ -162,7 +172,6 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
             if (Array.isArray(parsed)) {
                 if (parsed.length === 0) return '';
                 const getItemMeta = (unit: any) => {
-                    if (displayMeta === 'none') return '';
                     const hasImages = (unit.unit_images && unit.unit_images.length > 0) || (unit.images && unit.images.length > 0) || (unit.url_foto_1) || (unit.url_foto_2) || (unit.url_foto_3);
                     const hasAudio = !!(unit.unit_audio || unit.audioNote || unit.url_audio);
                     let meta = '';
@@ -199,12 +208,10 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
             const obs = details ? ` - Obs: ${details}` : '';
             
             let multimedia = '';
-            if (displayMeta !== 'none') {
-                const hasImages = (item.images && item.images.length > 0) || (item.url_foto_1) || (item.url_foto_2) || (item.url_foto_3);
-                const hasAudio = !!(item.audioNote || item.url_audio);
-                if (hasImages) multimedia += displayMeta === 'all' ? ' 📷 [FOTO]' : ' 📷';
-                if (hasAudio) multimedia += displayMeta === 'all' ? ' 🎤 [AUDIO]' : ' 🎤';
-            }
+            const hasImages = (item.images && item.images.length > 0) || (item.url_foto_1) || (item.url_foto_2) || (item.url_foto_3);
+            const hasAudio = !!(item.audioNote || item.url_audio);
+            if (hasImages) multimedia += displayMeta === 'all' ? ' 📷 [FOTO]' : ' 📷';
+            if (hasAudio) multimedia += displayMeta === 'all' ? ' 🎤 [AUDIO]' : ' 🎤';
             
             let result = `${color}${def}${obs}${multimedia}`.trim();
             if (result.startsWith(' - ')) result = result.substring(3);
@@ -748,6 +755,12 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                                     </div>
                                 ) : null}
 
+                                {Number(invoice.descuento || (invoice as any).discount || 0) > 0 && (
+                                    <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl px-3 py-2.5 text-center text-[10.5px] font-extrabold uppercase tracking-wide my-2 shadow-sm">
+                                        🎉 ¡Ahorraste S/ {Number(invoice.descuento || (invoice as any).discount || 0).toFixed(2)} gracias a nuestros descuentos!
+                                    </div>
+                                )}
+
                                 {/* QR Code Section */}
                                 {isElectronic && invoice.qrCodeData && (
                                     <div className="py-2">
@@ -759,7 +772,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                                                 referrerPolicy="no-referrer"
                                             />
                                         </div>
-                                        <p className="text-[8px] mt-1 text-gray-500 uppercase font-mono">HASH: {invoice.sunatResponse?.hash || '---'}</p>
+                                        <p className="text-[8px] mt-1 text-gray-500 uppercase font-mono">HASH: {invoice.sunatResponse?.hash || (invoice as any).sunat_hash || '---'}</p>
                                     </div>
                                 )}
                                 
@@ -982,6 +995,12 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                                     </div>
                                 ) : null}
 
+                                {Number(invoice.descuento || (invoice as any).discount || 0) > 0 && (
+                                    <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl px-3 py-2.5 text-center text-[10.5px] font-extrabold uppercase tracking-wide my-2 shadow-sm">
+                                        🎉 ¡Ahorraste S/ {Number(invoice.descuento || (invoice as any).discount || 0).toFixed(2)} gracias a nuestros descuentos!
+                                    </div>
+                                )}
+
                                 {/* QR Code Section */}
                                 {isElectronic && invoice.qrCodeData && (
                                     <div className="py-2">
@@ -993,7 +1012,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                                                 referrerPolicy="no-referrer"
                                             />
                                         </div>
-                                        <p className="text-[8px] mt-1 text-gray-500 uppercase font-mono">HASH: {invoice.sunatResponse?.hash || '---'}</p>
+                                        <p className="text-[8px] mt-1 text-gray-500 uppercase font-mono">HASH: {invoice.sunatResponse?.hash || (invoice as any).sunat_hash || '---'}</p>
                                     </div>
                                 )}
                                 

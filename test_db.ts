@@ -33,19 +33,20 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function testQuery() {
-    console.log(`🚀 Buscando en recojos_delivery para inspeccionar columnas...`);
-    const { data, error } = await supabase
-        .from("recojos_delivery")
-        .select("*")
-        .limit(1);
+    const ids = ['23a1c09a-9436-48aa-ae5c-434e031b6112', 'e7ccfb95-8f41-4fa7-bff4-35797b9de7f9'];
+    for (const targetId of ids) {
+        console.log(`🚀 Buscando ID ${targetId} en ventas...`);
+        const { data: v, error: vErr } = await supabase
+            .from('ventas')
+            .select('id, codigo_orden, serie, correlativo, total')
+            .eq('id', targetId)
+            .maybeSingle();
 
-    if (error) {
-        console.error('❌ Error:', error);
-    } else if (!data || data.length === 0) {
-        console.warn('⚠️ No se encontraron registros en recojos_delivery');
-    } else {
-        console.log('✅ Registro encontrado. Columnas:', Object.keys(data[0]));
-        console.log('✅ Ejemplo de registro:', data[0]);
+        if (vErr) {
+            console.error(`❌ Error en ID ${targetId}:`, vErr);
+        } else {
+            console.log(`✅ ID ${targetId}:`, v ? `ENCONTRADO (Orden: ${v.codigo_orden}, Doc: ${v.serie}-${v.correlativo}, Total: ${v.total})` : 'NO ENCONTRADO');
+        }
     }
 }
 
