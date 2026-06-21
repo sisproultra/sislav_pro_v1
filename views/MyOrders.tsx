@@ -338,6 +338,19 @@ const MyOrders: React.FC<MyOrdersProps> = ({
 
     const [sendingWaId, setSendingWaId] = useState<string | null>(null);
     const [sentSuccessIds, setSentSuccessIds] = useState<Set<string>>(new Set());
+    const [waCooldowns, setWaCooldowns] = useState<Record<string, number>>({});
+
+    // Ticker para actualizar los cooldowns visualmente segundo a segundo
+    useEffect(() => {
+        const activeIds = Object.keys(waCooldowns).filter(id => waCooldowns[id] > Date.now());
+        if (activeIds.length === 0) return;
+
+        const interval = setInterval(() => {
+            setWaCooldowns(prev => ({ ...prev }));
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [waCooldowns]);
 
     const [selectedReportDate, setSelectedReportDate] = useState<string | null>(null);
     const [reportEndDate, setReportEndDate] = useState<string | null>(null);
@@ -708,6 +721,20 @@ const MyOrders: React.FC<MyOrdersProps> = ({
             alert("El cliente no tiene un número de teléfono registrado.");
             return;
         }
+
+        // Evitar múltiples clics si ya está enviando o en cooldown
+        const now = Date.now();
+        const cooldownUntil = waCooldowns[order.id] || 0;
+        if (now < cooldownUntil) {
+            const secondsLeft = Math.ceil((cooldownUntil - now) / 1000);
+            alert(`Por favor, espera ${secondsLeft} segundos antes de enviar nuevamente.`);
+            return;
+        }
+
+        if (sendingWaId === order.id) {
+            return;
+        }
+
         setSendingWaId(order.id);
         try {
             const res = await sendInvoiceViaWhatsApp(order, company, order.client.phone);
@@ -728,6 +755,11 @@ const MyOrders: React.FC<MyOrdersProps> = ({
             window.open(link, '_blank');
         } finally {
             setSendingWaId(null);
+            // Bloquear el botón durante 10 segundos para evitar abusos
+            setWaCooldowns(prev => ({
+                ...prev,
+                [order.id]: Date.now() + 10000
+            }));
         }
     };
 
@@ -1211,24 +1243,40 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <div className="flex justify-center items-center gap-3">
-                                                        <button 
-                                                            onClick={() => handleSendWA(inv)} 
-                                                            className={`w-10 h-10 rounded-full transition-all flex items-center justify-center relative shadow-sm border ${sendingWaId === inv.id ? 'bg-slate-100 border-slate-200' : 'bg-white hover:bg-emerald-50 border-slate-200 hover:border-emerald-300 active:scale-95'}`}
-                                                            title="Enviar WhatsApp"
-                                                        >
-                                                            {sendingWaId === inv.id ? (
-                                                                <Loader2 size={20} className="animate-spin text-emerald-600" />
-                                                            ) : (
-                                                                <>
-                                                                    <img src="https://iili.io/fXXft0Q.png" className="w-5 h-5 object-contain" alt="WA" />
-                                                                    {sentSuccessIds.has(inv.id) && (
-                                                                        <div className="absolute -top-1 -right-1 bg-emerald-500 rounded-full shadow-lg border-2 border-white p-0.5">
-                                                                            <Check size={8} className="text-white" strokeWidth={5} />
-                                                                        </div>
+                                                        {(() => {
+                                                            const waUntil = waCooldowns[inv.id] || 0;
+                                                            const waSecondsLeft = Math.max(0, Math.ceil((waUntil - Date.now()) / 1000));
+                                                            const isWaCooldown = waSecondsLeft > 0;
+                                                            const isWaSending = sendingWaId === inv.id;
+                                                            const isWaDisabled = isWaSending || isWaCooldown;
+                                                            return (
+                                                                <button 
+                                                                    disabled={isWaDisabled}
+                                                                    onClick={() => handleSendWA(inv)} 
+                                                                    className={`w-10 h-10 rounded-full transition-all flex items-center justify-center relative shadow-sm border ${
+                                                                        isWaDisabled 
+                                                                            ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-400' 
+                                                                            : 'bg-white hover:bg-emerald-50 border-slate-200 hover:border-emerald-300 active:scale-95'
+                                                                    }`}
+                                                                    title={isWaCooldown ? `Espera ${waSecondsLeft}s` : "Enviar WhatsApp"}
+                                                                >
+                                                                    {isWaSending ? (
+                                                                        <Loader2 size={20} className="animate-spin text-emerald-600" />
+                                                                    ) : isWaCooldown ? (
+                                                                        <span className="text-[12px] font-black text-rose-500 animate-pulse">{waSecondsLeft}s</span>
+                                                                    ) : (
+                                                                        <>
+                                                                            <img src="https://iili.io/fXXft0Q.png" className="w-5 h-5 object-contain" alt="WA" />
+                                                                            {sentSuccessIds.has(inv.id) && (
+                                                                                <div className="absolute -top-1 -right-1 bg-emerald-500 rounded-full shadow-lg border-2 border-white p-0.5">
+                                                                                    <Check size={8} className="text-white" strokeWidth={5} />
+                                                                                </div>
+                                                                            )}
+                                                                        </>
                                                                     )}
-                                                                </>
-                                                            )}
-                                                        </button>
+                                                                </button>
+                                                            );
+                                                        })()}
 
                                                     <div className="flex flex-col items-center gap-1.5">
                                                         <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${balance > 0.01 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -1369,12 +1417,33 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                         </div>
 
                                         <div className="flex items-center gap-2 pt-1">
-                                            <button 
-                                                onClick={() => handleSendWA(inv)}
-                                                className="h-10 w-10 flex items-center justify-center bg-white border border-slate-200 rounded-full shadow-sm text-emerald-600 active:scale-95 transition-all"
-                                            >
-                                                <img src="https://iili.io/fXXft0Q.png" className="w-5 h-5 object-contain" alt="WA" />
-                                            </button>
+                                            {(() => {
+                                                const waUntil = waCooldowns[inv.id] || 0;
+                                                const waSecondsLeft = Math.max(0, Math.ceil((waUntil - Date.now()) / 1000));
+                                                const isWaCooldown = waSecondsLeft > 0;
+                                                const isWaSending = sendingWaId === inv.id;
+                                                const isWaDisabled = isWaSending || isWaCooldown;
+                                                return (
+                                                    <button 
+                                                        disabled={isWaDisabled}
+                                                        onClick={() => handleSendWA(inv)}
+                                                        className={`h-10 w-10 flex items-center justify-center border rounded-full shadow-sm transition-all ${
+                                                            isWaDisabled 
+                                                                ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' 
+                                                                : 'bg-white border-slate-200 text-emerald-600 hover:bg-emerald-50 active:scale-95'
+                                                        }`}
+                                                        title={isWaCooldown ? `Espera ${waSecondsLeft}s` : "WhatsApp"}
+                                                    >
+                                                        {isWaSending ? (
+                                                            <Loader2 size={16} className="animate-spin text-emerald-600" />
+                                                        ) : isWaCooldown ? (
+                                                            <span className="text-[11px] font-black text-rose-500 animate-pulse">{waSecondsLeft}s</span>
+                                                        ) : (
+                                                            <img src="https://iili.io/fXXft0Q.png" className="w-5 h-5 object-contain" alt="WA" />
+                                                        )}
+                                                    </button>
+                                                );
+                                            })()}
 
                                             <div className="flex-1 flex flex-col items-center gap-1">
                                                 <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${balance > 0.01 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -2435,23 +2504,39 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                                                         <span className="text-[10px] font-black uppercase text-emerald-600">Convertir CPE</span>
                                                                                     </button>
                                                                                 )}
-                                                                                <button 
-                                                                                    onClick={(e) => { e.stopPropagation(); if (inv) handleSendWA(inv); }} 
-                                                                                    className={`relative p-2 rounded-xl border transition-all active:scale-95 flex items-center justify-center gap-1.5 bg-white text-xs font-bold cursor-pointer shadow-sm ${sendingWaId === p.invoiceId ? 'bg-slate-100 border-slate-200 text-slate-500' : 'hover:bg-emerald-50 text-emerald-700 border-slate-250 hover:border-emerald-350'}`}
-                                                                                    title="Enviar por WhatsApp"
-                                                                                >
-                                                                                    {sendingWaId === p.invoiceId ? (
-                                                                                        <Loader2 size={14} className="animate-spin text-emerald-600" />
-                                                                                    ) : (
-                                                                                        <>
-                                                                                            <img src="https://iili.io/fXXft0Q.png" className="w-3.5 h-3.5 object-contain" alt="WA" />
-                                                                                            <span className="text-[10px] font-black uppercase text-slate-700">WhatsApp</span>
-                                                                                            {sentSuccessIds.has(p.invoiceId) && (
-                                                                                                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white animate-bounce" />
+                                                                                {(() => {
+                                                                                    const waUntil = inv ? (waCooldowns[inv.id] || 0) : 0;
+                                                                                    const waSecondsLeft = Math.max(0, Math.ceil((waUntil - Date.now()) / 1000));
+                                                                                    const isWaCooldown = waSecondsLeft > 0;
+                                                                                    const isWaSending = sendingWaId === p.invoiceId;
+                                                                                    const isWaDisabled = isWaSending || isWaCooldown;
+                                                                                    return (
+                                                                                        <button 
+                                                                                            disabled={isWaDisabled}
+                                                                                            onClick={(e) => { e.stopPropagation(); if (inv) handleSendWA(inv); }} 
+                                                                                            className={`relative p-2 rounded-xl border transition-all flex items-center justify-center gap-1.5 text-xs font-bold shadow-sm ${
+                                                                                                isWaDisabled 
+                                                                                                    ? 'bg-slate-100 border-slate-200 text-slate-450 cursor-not-allowed' 
+                                                                                                    : 'bg-white border-slate-250 hover:bg-emerald-50 hover:border-emerald-350 cursor-pointer active:scale-95'
+                                                                                            }`}
+                                                                                            title={isWaCooldown ? `Espera ${waSecondsLeft}s` : "Enviar por WhatsApp"}
+                                                                                        >
+                                                                                            {isWaSending ? (
+                                                                                                <Loader2 size={14} className="animate-spin text-emerald-600" />
+                                                                                            ) : isWaCooldown ? (
+                                                                                                <span className="text-[10px] font-black text-rose-500 animate-pulse">{waSecondsLeft}s</span>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    <img src="https://iili.io/fXXft0Q.png" className="w-3.5 h-3.5 object-contain" alt="WA" />
+                                                                                                    <span className="text-[10px] font-black uppercase text-slate-700">WhatsApp</span>
+                                                                                                    {sentSuccessIds.has(p.invoiceId) && (
+                                                                                                        <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white animate-bounce" />
+                                                                                                    )}
+                                                                                                </>
                                                                                             )}
-                                                                                        </>
-                                                                                    )}
-                                                                                </button>
+                                                                                        </button>
+                                                                                    );
+                                                                                })()}
                                                                             </div>
                                                                         );
                                                                     })()}

@@ -34,9 +34,20 @@ const WaReminders: React.FC<WaRemindersProps> = ({
   const queryClient = useQueryClient();
   const primaryColor = company?.primaryColor || '#4f46e5';
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterDeliveryDate, setFilterDeliveryDate] = useState<string>('');
   const [completeModalData, setCompleteModalData] = useState<{ sent: number; failed: number } | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [currentSendingId, setCurrentSendingId] = useState<string | null>(null);
+  const [selectedDateDetails, setSelectedDateDetails] = useState<{
+    orderNumber: string;
+    clientName: string;
+    dateStr: string;
+    items: {
+      name: string;
+      quantity: number;
+      status: string;
+    }[];
+  } | null>(null);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -101,12 +112,25 @@ const WaReminders: React.FC<WaRemindersProps> = ({
   }, []);
 
   const filteredOrders = useMemo(() => {
-    return orders.filter(o => 
-      o.ordenNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.client.phone?.includes(searchTerm)
-    );
-  }, [orders, searchTerm]);
+    return orders.filter(o => {
+      const matchesSearch = 
+        o.ordenNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        o.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        o.client.phone?.includes(searchTerm);
+
+      if (!matchesSearch) return false;
+
+      if (filterDeliveryDate) {
+        const hasMatchingDate = o.items?.some(it => {
+          const d = it.itemDeliveryDate || o.deliveryDate;
+          return d && d.split('T')[0] === filterDeliveryDate;
+        });
+        if (!hasMatchingDate) return false;
+      }
+
+      return true;
+    });
+  }, [orders, searchTerm, filterDeliveryDate]);
 
   // Paginated Orders Logic
   const totalPages = Math.ceil(filteredOrders.length / pageSize);
@@ -115,10 +139,10 @@ const WaReminders: React.FC<WaRemindersProps> = ({
     return filteredOrders.slice(start, start + pageSize);
   }, [filteredOrders, currentPage, pageSize]);
 
-  // Reset page when search changes
+  // Reset page when search or date filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, filterDeliveryDate]);
 
   const stats = useMemo(() => {
     const totalOrders = orders.length;
@@ -132,6 +156,79 @@ const WaReminders: React.FC<WaRemindersProps> = ({
       ['LISTO', 'ENTREGADO', 'ENTREGA_PARCIAL'].includes(it.status || '')
     ).length;
     return Math.round((completedItems / order.items.length) * 100);
+  };
+
+  const renderItemDeliveryDates = (order: Invoice) => {
+    if (!order.items || order.items.length === 0) {
+      return <span className="text-xs text-slate-400 dark:text-text3">-</span>;
+    }
+    
+    const groups: Record<string, string[]> = {};
+    order.items.forEach(it => {
+      const d = it.itemDeliveryDate || order.deliveryDate;
+      const dateStr = d ? d.split('T')[0] : 'Sin fecha';
+      if (!groups[dateStr]) {
+        groups[dateStr] = [];
+      }
+      groups[dateStr].push(it.name);
+    });
+    
+    return (
+      <div className="flex flex-col gap-1 max-w-[200px]">
+        {Object.keys(groups).map((dateKey, index) => {
+          let formattedDate = dateKey;
+          if (dateKey !== 'Sin fecha') {
+            try {
+              const [y, m, d] = dateKey.split('-');
+              formattedDate = `${d}/${m}/${y}`;
+            } catch (e) {}
+          }
+          
+          const isSelectedDate = filterDeliveryDate && dateKey === filterDeliveryDate;
+          
+          return (
+            <button 
+              key={index} 
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const matchedItems = order.items.filter(it => {
+                  const d = it.itemDeliveryDate || order.deliveryDate;
+                  const itemD = d ? d.split('T')[0] : 'Sin fecha';
+                  return itemD === dateKey;
+                });
+                setSelectedDateDetails({
+                  orderNumber: order.ordenNumber || 'Sin código',
+                  clientName: order.client.name,
+                  dateStr: formattedDate,
+                  items: matchedItems.map(it => ({
+                    name: it.name,
+                    quantity: it.quantity || 1,
+                    status: it.status || 'RECIBIDO'
+                  }))
+                });
+              }}
+              className={`flex flex-col p-1.5 px-2.5 rounded-lg text-xs leading-tight border text-left cursor-pointer transition-all hover:scale-[1.02] active:scale-95 hover:shadow-sm ${
+                isSelectedDate 
+                  ? 'bg-amber-100 border-amber-300 dark:bg-amber-500/20 dark:border-amber-500/40 text-amber-900 dark:text-amber-200 font-extrabold shadow-sm'
+                  : 'bg-slate-50 hover:bg-slate-100 dark:bg-bg3 dark:hover:bg-surface border-slate-150 dark:border-border text-slate-600 dark:text-text2'
+              }`}
+            >
+              <div className="flex items-center gap-1">
+                <Clock size={10} className={isSelectedDate ? "text-amber-600 animate-pulse" : "text-slate-400"} />
+                <span className="font-bold">{formattedDate}</span>
+              </div>
+              <div className="flex items-center justify-between w-full mt-0.5 text-[9px] text-slate-400 dark:text-text3">
+                <span className="font-semibold">
+                  {groups[dateKey].length} {groups[dateKey].length === 1 ? 'prenda' : 'prendas'}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-slate-400 dark:text-text4 ml-2 hover:text-brand-primary">Ver detalle</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    );
   };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -372,8 +469,8 @@ const WaReminders: React.FC<WaRemindersProps> = ({
       {/* Main Content */}
       <div className="bg-white dark:bg-bg2 rounded-2xl shadow-sm border border-slate-100 dark:border-border flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="p-4 border-b border-slate-100 dark:border-border flex flex-col sm:flex-row gap-4 items-center justify-between shrink-0">
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-64">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-64 min-w-[180px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input 
                 type="text"
@@ -383,10 +480,32 @@ const WaReminders: React.FC<WaRemindersProps> = ({
                 className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-bg3 border border-slate-100 dark:border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
               />
             </div>
+
+            {/* Filtro Fecha de Entrega */}
+            <div className="flex items-center gap-2 border border-slate-100 dark:border-border bg-slate-50 dark:bg-bg3 rounded-xl px-3 py-2 min-h-[38px] shrink-0">
+              <Filter size={14} className="text-slate-400" />
+              <span className="text-xs font-bold text-slate-500 dark:text-text3 uppercase whitespace-nowrap">Entrega:</span>
+              <input 
+                type="date"
+                value={filterDeliveryDate}
+                onChange={(e) => setFilterDeliveryDate(e.target.value)}
+                className="bg-transparent text-sm font-semibold text-slate-700 dark:text-white border-none focus:outline-none cursor-pointer focus:ring-0 p-0 h-5"
+              />
+              {filterDeliveryDate && (
+                <button 
+                  onClick={() => setFilterDeliveryDate('')}
+                  className="p-0.5 hover:bg-slate-200 dark:hover:bg-surface rounded text-slate-400 hover:text-slate-600 transition-colors"
+                  title="Limpiar fecha"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
             <button 
               onClick={() => refetch()}
               disabled={isLoading}
-              className="p-2 bg-slate-50 dark:bg-bg3 border border-slate-100 dark:border-border rounded-xl text-slate-600 dark:text-text hover:bg-slate-100 dark:hover:bg-surface transition-all disabled:opacity-50"
+              className="p-2 bg-slate-50 dark:bg-bg3 border border-slate-100 dark:border-border rounded-xl text-slate-600 dark:text-text hover:bg-slate-100 dark:hover:bg-surface transition-all disabled:opacity-50 h-[38px] w-[38px] flex items-center justify-center shrink-0"
             >
               <RotateCw size={18} className={isLoading ? 'animate-spin' : ''} />
             </button>
@@ -450,6 +569,7 @@ const WaReminders: React.FC<WaRemindersProps> = ({
                   <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Nexo Orden</th>
                   <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Recepción</th>
                   <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Cliente</th>
+                  <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Fecha Entrega</th>
                   <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest text-right">Saldo Deudor</th>
                   <th className="p-4 text-[11px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest">Estado Lavado</th>
                   <th className="p-4 text-[10px] font-black text-slate-500 dark:text-text3 uppercase tracking-widest text-center">Acción</th>
@@ -505,6 +625,9 @@ const WaReminders: React.FC<WaRemindersProps> = ({
                               {order.client.phone || 'S/T'}
                             </div>
                           </div>
+                        </td>
+                        <td className="p-4">
+                          {renderItemDeliveryDates(order)}
                         </td>
                         <td className="p-4 text-right">
                           <span className={`text-sm font-black px-3 py-1 rounded-full ${debt > 0.01 ? 'bg-rose-500/10 text-rose-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
@@ -635,6 +758,15 @@ const WaReminders: React.FC<WaRemindersProps> = ({
                       </div>
                     </div>
 
+                    {/* Mobile Delivery Dates */}
+                    <div className="bg-slate-50 dark:bg-bg3 p-2.5 rounded-xl border border-slate-100 dark:border-border">
+                      <p className="text-[8px] font-black text-slate-400 dark:text-text3 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                        <Clock size={10} />
+                        Fecha de Entrega de Prendas
+                      </p>
+                      {renderItemDeliveryDates(order)}
+                    </div>
+
                     <div className="pt-1">
                       <div>
                         <div className="flex justify-between items-center mb-1">
@@ -745,6 +877,117 @@ const WaReminders: React.FC<WaRemindersProps> = ({
                   }}
                 >
                   Entendido
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {selectedDateDetails && (
+          <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: 'spring', duration: 0.4 }}
+              className="bg-white dark:bg-bg2 rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden flex flex-col border border-slate-100 dark:border-border text-slate-800 dark:text-white"
+            >
+              {/* Header with theme color */}
+              <div 
+                className="p-5 text-white flex justify-between items-center transition-colors"
+                style={{ backgroundColor: primaryColor }}
+              >
+                <div>
+                  <span className="text-[10px] font-black tracking-widest text-white/70 uppercase">Fecha de Entrega</span>
+                  <h3 className="font-bold text-base uppercase tracking-wider flex items-center gap-1.5 mt-0.5">
+                    <Clock size={16} /> {selectedDateDetails.dateStr}
+                  </h3>
+                </div>
+                <button 
+                  onClick={() => setSelectedDateDetails(null)}
+                  className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors text-white"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 flex flex-col gap-5">
+                {/* Order / Client Info */}
+                <div className="flex flex-col gap-1 bg-slate-50 dark:bg-bg3 p-4 rounded-2xl border border-slate-100 dark:border-border">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-400 dark:text-text3 uppercase tracking-widest">Nexo Orden</span>
+                    <span className="text-xs font-black text-slate-700 dark:text-white uppercase tabular-nums bg-slate-200 dark:bg-surface px-2.5 py-0.5 rounded-full">
+                      {selectedDateDetails.orderNumber}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black text-slate-400 dark:text-text3 uppercase tracking-widest block mt-2">Cliente</span>
+                    <span className="text-sm font-bold text-slate-800 dark:text-white uppercase block">
+                      {selectedDateDetails.clientName}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Garments List */}
+                <div className="flex flex-col gap-2.5">
+                  <h4 className="text-[10px] font-black text-slate-400 dark:text-text3 uppercase tracking-widest">
+                    Prendas Requeridas para esta Fecha:
+                  </h4>
+                  <div className="max-h-[220px] overflow-y-auto pr-1 flex flex-col gap-2">
+                    {selectedDateDetails.items.map((item, idx) => {
+                      const statusStyles = (st: string) => {
+                        switch (st) {
+                          case 'RECIBIDO':
+                            return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+                          case 'EN_PROCESO':
+                            return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+                          case 'LISTO':
+                            return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400';
+                          case 'ENTREGADO':
+                            return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400';
+                          default:
+                            return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-400';
+                        }
+                      };
+
+                      return (
+                        <div 
+                          key={idx}
+                          className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-bg3 border border-slate-100 dark:border-border transition-all hover:bg-slate-100/50"
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* Quantity label */}
+                            <span 
+                              className="text-white text-xs font-black h-6 w-6 rounded-full flex items-center justify-center shrink-0 shadow-sm"
+                              style={{ backgroundColor: primaryColor }}
+                            >
+                              {item.quantity}
+                            </span>
+                            <span className="text-xs font-black text-slate-700 dark:text-white uppercase leading-tight">
+                              {item.name}
+                            </span>
+                          </div>
+                          
+                          {/* Status badge */}
+                          <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${statusStyles(item.status)}`}>
+                            {item.status}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Bottom Close Button */}
+                <button 
+                  onClick={() => setSelectedDateDetails(null)}
+                  className="w-full text-white py-3.5 rounded-xl font-black uppercase text-xs shadow-xl transition-all active:scale-95 flex items-center justify-center hover:opacity-90 leading-none mt-1"
+                  style={{ 
+                    backgroundColor: primaryColor,
+                    boxShadow: `0 8px 16px -4px ${primaryColor}40`
+                  }}
+                >
+                  Cerrar Detalle
                 </button>
               </div>
             </motion.div>

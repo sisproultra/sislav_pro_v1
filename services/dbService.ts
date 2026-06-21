@@ -5364,6 +5364,7 @@ export const dbGetUndeliveredOrdersForReminders = async (): Promise<Invoice[]> =
                     total: Number(v.total || v.total_venta) || 0
                 },
                 date: v.fecha_recepcion,
+                deliveryDate: v.fecha_entrega,
                 items: (v.items_venta || []).map((it: any) => ({
                     id: it.id,
                     name: fixEncoding(it.descripcion),
@@ -5371,7 +5372,8 @@ export const dbGetUndeliveredOrdersForReminders = async (): Promise<Invoice[]> =
                     price: Number(it.precio_unitario),
                     subtotal: Number(it.subtotal),
                     status: it.estado as OrderStatus,
-                    estado_id: it.estado_id
+                    estado_id: it.estado_id,
+                    itemDeliveryDate: it.fecha_entrega_item || v.fecha_entrega
                 })),
                 notes: v.notes,
                 descuento: Number(v.descuento) || 0,
