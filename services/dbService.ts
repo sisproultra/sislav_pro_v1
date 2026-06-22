@@ -4441,6 +4441,19 @@ export const dbOpenCashClosing = async (openingBalance: number, turno: string, c
 
     const userName = localStorage.getItem('sislav_current_user_name') || 'SISTEMA';
 
+    // Cerrar preventivamente cualquier otra sesión abierta en esta sucursal
+    try {
+        await supabase.from('cierres_caja')
+            .update({ 
+                estado: 'CERRADO', 
+                fecha_cierre: new Date().toISOString() 
+            })
+            .eq('sucursal_id', branchId)
+            .eq('estado', 'ABIERTO');
+    } catch (e) {
+        console.warn("Error preventivo auto-cerrando cajas:", e);
+    }
+
     const { data, error } = await supabase.from('cierres_caja').insert({ 
         sucursal_id: branchId, 
         empresa_holding_id: holdingId, 
@@ -4501,6 +4514,8 @@ export const dbUpdateCashClosing = async (id: string, c: CashClosing) => {
             ventas_efectivo: c.cashSales, 
             gastos: c.expenses, 
             real: c.actualCash, 
+            esperado: c.expectedCash,
+            diferencia: c.difference,
             monto_liquidacion: c.liquidation || 0,
             estado: 'CERRADO',
             otras_ventas_json: Object.entries(c.otherSales).map(([methodName, amount]) => ({ methodName, amount })),
@@ -4511,22 +4526,15 @@ export const dbUpdateCashClosing = async (id: string, c: CashClosing) => {
     if (error) throw error;
 };
 
-export const dbGetLastAccumulatedBalance = async (branchId: string, userId: string): Promise<number> => {
-    const holdingId = getActiveHoldingId();
-    
-    let query = supabase
+export const dbGetLastAccumulatedBalance = async (branchId: string, userId?: string): Promise<number> => {
+    // Buscamos el último cierre de caja cerrado para esta sucursal (aislado de holdingId para máxima concordancia con el historial)
+    const { data, error } = await supabase
         .from('cierres_caja')
         .select('real, monto_liquidacion')
         .eq('sucursal_id', branchId)
-        .eq('usuario_id', userId)
-        .eq('estado', 'CERRADO');
-    
-    if (holdingId) {
-        query = query.eq('empresa_holding_id', holdingId);
-    }
-
-    const { data, error } = await query
-        .order('fecha_cierre', { ascending: false })
+        .eq('estado', 'CERRADO')
+        .order('fecha_cierre', { ascending: false, nullsFirst: false })
+        .order('fecha_apertura', { ascending: false })
         .limit(1)
         .maybeSingle();
 
@@ -5315,7 +5323,8 @@ export const dbGetUndeliveredOrdersForReminders = async (): Promise<Invoice[]> =
                 items_venta (*)
             `)
             .eq('sucursal_id', branchId)
-            .not('estado', 'in', '("ENTREGADO","CANCELADO")')
+            .not('estado', 'in', '("ENTREGADO","CANCELADO","ANULADO")')
+            .not('estado_id', 'eq', 9)
             .order('fecha_recepcion', { ascending: false });
 
         if (error) {

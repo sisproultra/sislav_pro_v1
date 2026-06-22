@@ -448,15 +448,49 @@ export const generateWhatsAppLink = (invoice: Invoice, company: Company, phoneNu
 export const sendReadyNotification = async (
   invoice: Invoice,
   company: Company,
-  phoneNumber: string
+  phoneNumber: string,
+  customText?: string
 ): Promise<{ success: boolean; message: string; fallbackUrl?: string }> => {
   let baseUrl = company.whatsapp_instance?.trim();
   let apiKey = company.whatsapp_token?.trim();
   let instance = company.whatsapp_instance_name?.trim();
 
-  const clientName = (invoice.client.name || 'Cliente').toUpperCase();
-  const orden = invoice.ordenNumber || 'S/N';
-  const text = `*${company.razonSocial}*\n\nEstimado(a) *${clientName}*,\n\nLe informamos que su pedido con orden *#${orden}* ya se encuentra *LISTO* ✅.\n\nPuede pasar a recogerlo en nuestro local en: ${company.address.toUpperCase()}.\n\n¡Le esperamos! 🧺✨`;
+  let text = '';
+  if (customText) {
+    text = customText;
+  } else {
+    // Try to get active templates for RECOJO dynamically
+    try {
+      const activeBranchId = localStorage.getItem('sislav_active_branch_id');
+      let query = supabase.from('wa_templates').select('*').eq('category', 'RECOJO').eq('is_active', true);
+      if (activeBranchId) {
+        query = query.or(`sucursal_id.eq.${activeBranchId},sucursal_id.is.null`);
+      }
+      const { data: templates } = await query;
+      if (templates && templates.length > 0) {
+        // Choose a random active RECOJO template
+        const template = templates[Math.floor(Math.random() * templates.length)];
+        text = template.content
+          .replace(/{cliente}/g, invoice.client.name)
+          .replace(/{orden}/g, invoice.ordenNumber || '')
+          .replace(/{deuda}/g, (invoice.totals.total - (invoice.prePaymentAmount || 0)).toFixed(2))
+          .replace(/{sucursal}/g, company.razonSocial)
+          .replace(/{total}/g, invoice.totals.total.toFixed(2))
+          .replace(/{direccion}/g, company.address || '')
+          .replace(/{tel_sucursal}/g, '')
+          .replace(/{nombre_lavanderia}/g, company.razonSocial)
+          .replace(/{nombre_empresa}/g, company.razonSocial);
+      }
+    } catch (e) {
+      console.warn("⚠️ Error recuperando o formateando plantilla de RECOJO:", e);
+    }
+
+    if (!text) {
+      const clientName = (invoice.client.name || 'Cliente').toUpperCase();
+      const orden = invoice.ordenNumber || 'S/N';
+      text = `*${company.razonSocial}*\n\nEstimado(a) *${clientName}*,\n\nLe informamos que su pedido con orden *#${orden}* ya se encuentra *LISTO* ✅.\n\nPuede pasar a recogerlo en nuestro local en: ${company.address.toUpperCase()}.\n\n¡Le esperamos! 🧺✨`;
+    }
+  }
   
   // Obtener prefijo de país configurado globalmente para el número
   let cleanNumber = phoneNumber.replace(/\D/g, '');

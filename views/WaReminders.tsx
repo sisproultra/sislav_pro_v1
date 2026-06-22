@@ -113,6 +113,17 @@ const WaReminders: React.FC<WaRemindersProps> = ({
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
+      const isCanceledOrAnnulled = 
+        (o.orderStatus as string) === 'CANCELADO' || 
+        (o.orderStatus as string) === 'ANULADO' || 
+        (o as any).estado_id === 9 || 
+        o.status === 'CANCELADO' || 
+        o.status === 'ANULADO' || 
+        (o as any).estado === 'ANULADO' || 
+        (o as any).estado === 'CANCELADO';
+
+      if (isCanceledOrAnnulled) return false;
+
       const matchesSearch = 
         o.ordenNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         o.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -145,8 +156,19 @@ const WaReminders: React.FC<WaRemindersProps> = ({
   }, [searchTerm, filterDeliveryDate]);
 
   const stats = useMemo(() => {
-    const totalOrders = orders.length;
-    const totalToCollect = orders.reduce((sum, o) => sum + (o.totals.total - (o.prePaymentAmount || 0)), 0);
+    const activeOrders = orders.filter(o => {
+      const isCanceledOrAnnulled = 
+        (o.orderStatus as string) === 'CANCELADO' || 
+        (o.orderStatus as string) === 'ANULADO' || 
+        (o as any).estado_id === 9 || 
+        o.status === 'CANCELADO' || 
+        o.status === 'ANULADO' || 
+        (o as any).estado === 'ANULADO' || 
+        (o as any).estado === 'CANCELADO';
+      return !isCanceledOrAnnulled;
+    });
+    const totalOrders = activeOrders.length;
+    const totalToCollect = activeOrders.reduce((sum, o) => sum + (o.totals.total - (o.prePaymentAmount || 0)), 0);
     return { totalOrders, totalToCollect };
   }, [orders]);
 

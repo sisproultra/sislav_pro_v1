@@ -214,7 +214,11 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   // --- MÉTRICAS OPERATIVAS ---
   const operationalMetrics = useMemo(() => {
-    const activeInvoices = currentInvoices.filter(inv => inv.orderStatus !== 'CANCELADO');
+    const activeInvoices = currentInvoices.filter(inv => {
+      const isSalesDoc = inv.type === '01' || inv.type === '03' || inv.type === '80'; // FACTURA, BOLETA, NOTA_VENTA
+      const isCancelled = inv.orderStatus === 'CANCELADO' || (inv as any).status === 'anulado' || inv.status === 'anulado';
+      return isSalesDoc && !isCancelled;
+    });
     const pendingToWash = activeInvoices.filter(inv => inv.orderStatus === 'PENDIENTE' || inv.orderStatus === 'RECIBIDO' || inv.orderStatus === 'EN_LAVADO' || inv.orderStatus === 'EN_SECADO');
     const toDeliver = activeInvoices.filter(inv => inv.orderStatus === 'LISTO' || inv.orderStatus === 'EN_RUTA');
     
@@ -269,6 +273,13 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   // --- MÉTRICAS FINANCIERAS ---
   const financialMetrics = useMemo(() => {
+    // Solo boletas, facturas, notas de venta que NO estén anulados
+    const validSalesInvoices = currentInvoices.filter(inv => {
+      const isSalesDoc = inv.type === '01' || inv.type === '03' || inv.type === '80'; // FACTURA, BOLETA, NOTA_VENTA
+      const isCancelled = inv.orderStatus === 'CANCELADO' || (inv as any).status === 'anulado' || inv.status === 'anulado';
+      return isSalesDoc && !isCancelled;
+    });
+
     const salesByYear: Record<string, number> = {};
     const allMonths = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const salesByMonth: Record<string, number> = {};
@@ -296,9 +307,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     const salesByDayOfWeek: Record<number, number> = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0 };
     const daysNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-    // 1. Procesar Ventas del rango
-    currentInvoices.forEach(inv => {
-      if (inv.orderStatus === 'CANCELADO') return;
+    // 1. Procesar Ventas del rango (excluyendo NOTAs DE CRÉDITO y anulaciones)
+    validSalesInvoices.forEach(inv => {
       const d = parseSafeDate(inv.date);
       const year = d.getFullYear().toString();
       const monthIdx = d.getMonth();
@@ -346,14 +356,14 @@ const Dashboard: React.FC<DashboardProps> = ({
       .sort((a, b) => b.value - a.value);
 
     // Tabla comparativa de ventas por años y meses
-    const allYears = Array.from(new Set(currentInvoices.map(inv => parseSafeDate(inv.date).getFullYear()))).sort((a, b) => a - b);
+    const allYears = Array.from(new Set(validSalesInvoices.map(inv => parseSafeDate(inv.date).getFullYear()))).sort((a, b) => a - b);
     const monthsNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     
     const comparisonData = monthsNames.map((m, mIdx) => {
       const row: any = { month: m };
       let rowTotal = 0;
       allYears.forEach(y => {
-        const total = currentInvoices
+        const total = validSalesInvoices
           .filter(inv => {
             const d = parseSafeDate(inv.date);
             return d.getFullYear() === y && d.getMonth() === mIdx;
@@ -367,7 +377,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     }).filter(row => row.totalGeneral > 0);
 
     const yearTotals = allYears.map(y => {
-      const total = currentInvoices
+      const total = validSalesInvoices
         .filter(inv => parseSafeDate(inv.date).getFullYear() === y)
         .reduce((sum, inv) => sum + inv.totals.total, 0);
       return { year: y, total };
@@ -387,7 +397,8 @@ const Dashboard: React.FC<DashboardProps> = ({
       allYears,
       yearTotals,
       winningYear,
-      grandTotal: currentInvoices.reduce((sum, inv) => sum + inv.totals.total, 0)
+      grandTotal: validSalesInvoices.reduce((sum, inv) => sum + inv.totals.total, 0),
+      validSalesInvoices
     };
   }, [currentInvoices, currentPayments, startDate, endDate]);
 
@@ -398,7 +409,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     const payments = financialMetrics.dayPaymentsMap[dayLabel] || [];
     const salesTotal = financialMetrics.dayData.find(d => d.name === dayLabel)?.total || 0;
     const collectedTotal = financialMetrics.collectionData.find(d => d.name === dayLabel)?.total || 0;
-    const matchingInvoices = currentInvoices.filter(inv => getDayLabel(parseSafeDate(inv.date)) === dayLabel);
+    const matchingInvoices = financialMetrics.validSalesInvoices.filter(inv => getDayLabel(parseSafeDate(inv.date)) === dayLabel);
     
     setDrillDownType('NONE');
     setDayDetails({

@@ -266,7 +266,7 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="w-1 h-5 bg-indigo-600 rounded-full" style={{ backgroundColor: brandPrimary }}></div>
-                  <h4 className="font-black text-base text-slate-800 uppercase tracking-tight">Análisis Técnico de Prendas</h4>
+                  <h4 className="font-black text-base text-slate-800 uppercase tracking-tight">Detalle de Prendas</h4>
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
@@ -276,6 +276,7 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
                         <tr className="bg-slate-50/80 border-b border-slate-100">
                           <th className="px-4 py-3 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Prenda / Color</th>
                           <th className="px-4 py-3 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Defectos / Notas</th>
+                          <th className="px-4 py-3 text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">P. Unitario</th>
                           <th className="px-4 py-3 text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">Multim.</th>
                           <th className="px-4 py-3 text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">Entrega</th>
                           <th className="px-4 py-3 text-right text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado</th>
@@ -411,6 +412,9 @@ const OrderItemsDetailModal: React.FC<OrderItemsDetailModalProps> = ({
                                           )}
                                         </div>
                                       )}
+                                    </td>
+                                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                                      <span className="text-[11px] font-semibold text-slate-600">{currency} {(item.price || 0).toFixed(2)}</span>
                                     </td>
                                     <td className="px-4 py-3">
                                       <div className="flex items-center justify-center gap-2">

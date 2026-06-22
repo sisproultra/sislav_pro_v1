@@ -27,8 +27,8 @@ const CashOpeningModal: React.FC<CashOpeningModalProps> = ({ isOpen, onClose, on
       const fetchLastBalance = async () => {
         setIsLoadingBalance(true);
         try {
-          const userId = localStorage.getItem('sislav_active_user_uuid');
-          if (userId && company.id) {
+          if (company.id) {
+            const userId = localStorage.getItem('sislav_active_user_uuid') || '';
             const balance = await dbGetLastAccumulatedBalance(company.id, userId);
             setAmount(balance.toFixed(2));
           }

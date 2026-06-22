@@ -5,7 +5,7 @@ import { Invoice, OrderStatus, Company, Client, PaymentMethodConfig, CartItem, I
 import {
     Search, Clock, CheckCircle2, Package, Trash2, Printer, Camera, X, Calendar,
     AlertTriangle, Phone, Eye, Image as ImageIcon, MessageSquare,
-    ListFilter, Shirt, Check, Store, Truck, Smartphone, Loader2, Navigation,
+    ListFilter, Shirt, Check, CheckCheck, Store, Truck, Smartphone, Loader2, Navigation,
     MoreVertical, PackageCheck, Send, Edit, Waves, Wind, DollarSign, Save, CreditCard, Banknote, QrCode, Landmark, Wallet,
     Square, CheckSquare, Maximize2, MapPin, ExternalLink, Info, History, ArrowLeft, Tag, ArrowRightLeft,
     ChevronLeft, ChevronRight, FileSpreadsheet, Ban, ChevronUp, ChevronDown, ArrowUpDown
@@ -19,7 +19,7 @@ import OrderAuditModal from '../components/OrderAuditModal';
 import LogisticsDispatchModal from '../components/LogisticsDispatchModal';
 import Tracking from './Tracking';
 import { dbUpdateInvoiceDiscount, dbGetInvoicesForReport, dbGetPaymentsForReport } from '../services/dbService';
-import { sendInvoiceViaWhatsApp, generateWhatsAppLink } from '../services/whatsappService';
+import { sendInvoiceViaWhatsApp, generateWhatsAppLink, sendReadyNotification } from '../services/whatsappService';
 import { formatOrderNumber, formatDateSafe, formatTimeSafe, formatDateTimeSafe, getPeruDateTime, getPeruLocalDateString } from '../utils/calculations';
 
 interface MyOrdersProps {
@@ -339,6 +339,12 @@ const MyOrders: React.FC<MyOrdersProps> = ({
     const [sendingWaId, setSendingWaId] = useState<string | null>(null);
     const [sentSuccessIds, setSentSuccessIds] = useState<Set<string>>(new Set());
     const [waCooldowns, setWaCooldowns] = useState<Record<string, number>>({});
+    
+    // Laundry Progress Modal States
+    const [laundryModalInvoice, setLaundryModalInvoice] = useState<Invoice | null>(null);
+    const [updatingItems, setUpdatingItems] = useState<Set<string>>(new Set());
+    const [waLoadingOrderId, setWaLoadingOrderId] = useState<string | null>(null);
+    const [showWaSuccessToast, setShowWaSuccessToast] = useState(false);
 
     // Ticker para actualizar los cooldowns visualmente segundo a segundo
     useEffect(() => {
@@ -761,6 +767,177 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                 [order.id]: Date.now() + 10000
             }));
         }
+    };
+
+    const handleMarkItemAsReady = (order: Invoice, itemId: string) => {
+        if (updatingItems.has(itemId)) return;
+
+        // 1. Optimistic Update of local state immediately to make it instant!
+        if (laundryModalInvoice && laundryModalInvoice.id === order.id) {
+            const updatedItems = laundryModalInvoice.items.map(it => {
+                if (it.id === itemId) {
+                    return { ...it, status: 'LISTO' as OrderStatus, estado: 'LISTO', estado_id: 5 };
+                }
+                return it;
+            });
+            const updatedInvoice = { ...laundryModalInvoice, items: updatedItems };
+            setLaundryModalInvoice(updatedInvoice);
+        }
+
+        // 2. Perform the update in background
+        (async () => {
+            try {
+                setUpdatingItems(prev => {
+                    const next = new Set(prev);
+                    next.add(itemId);
+                    return next;
+                });
+
+                await onUpdateItemStatus(order.id, [itemId], 'LISTO');
+                
+                if (laundryModalInvoice && laundryModalInvoice.id === order.id) {
+                    // Revalidate items readiness
+                    const activeItems = laundryModalInvoice.items.map(it => {
+                        if (it.id === itemId) {
+                            return { ...it, status: 'LISTO' as OrderStatus, estado: 'LISTO', estado_id: 5 };
+                        }
+                        return it;
+                    }).filter(it => !((it as any).estado_id === 9 || (it.status as any) === 'ANULADO' || it.status === 'CANCELADO'));
+                    
+                    const allReady = activeItems.every(it => it.status === 'LISTO' || it.status === 'ENTREGADO');
+                    
+                    if (allReady) {
+                        console.log("🧺 De forma asíncrona, enviando de forma automática la notificación de Listo...");
+                        setWaLoadingOrderId(order.id);
+                        
+                        try {
+                            if (!order.client.phone) {
+                                console.warn("⚠️ Client doesn't have a phone number registered, skipping auto WA notification.");
+                                return;
+                            }
+                            const res = await sendReadyNotification(order, company, order.client.phone);
+                            if (res.success) {
+                                console.log("✅ Notificación enviada de forma automática.");
+                                setLaundryModalInvoice(null);
+                                setShowWaSuccessToast(true);
+                                setTimeout(() => {
+                                    setShowWaSuccessToast(false);
+                                }, 1500);
+                            } else {
+                                console.warn("❌ Fallo notificación automática: " + res.message);
+                            }
+                        } catch (err) {
+                            console.error("❌ Excepción enviando notificación automática:", err);
+                        } finally {
+                            setWaLoadingOrderId(null);
+                        }
+                    }
+                }
+            } catch (e: any) {
+                console.error(e);
+                // Revert state if error
+                if (laundryModalInvoice && laundryModalInvoice.id === order.id) {
+                    const revertedItems = laundryModalInvoice.items.map(it => {
+                        if (it.id === itemId) {
+                            const orig = order.items.find(o => o.id === itemId);
+                            return { ...it, status: (orig?.status || 'PENDIENTE') as OrderStatus, estado: orig?.estado || 'PENDIENTE', estado_id: orig?.estado_id || 2 };
+                        }
+                        return it;
+                    });
+                    setLaundryModalInvoice({ ...laundryModalInvoice, items: revertedItems });
+                }
+                alert("Error al actualizar la prenda: " + (e.message || e));
+            } finally {
+                setUpdatingItems(prev => {
+                    const next = new Set(prev);
+                    next.delete(itemId);
+                    return next;
+                });
+            }
+        })();
+    };
+
+    const handleMarkAllItemsAsReady = (order: Invoice) => {
+        const unreadyItems = order.items.filter(it => {
+            const isCanceled = (it as any).estado_id === 9 || (it.status as any) === 'ANULADO' || it.status === 'CANCELADO';
+            return it.status !== 'LISTO' && it.status !== 'ENTREGADO' && !isCanceled;
+        });
+
+        if (unreadyItems.length === 0) return;
+
+        const unreadyIds = unreadyItems.map(it => it.id);
+        
+        // 1. Optimistic Update of local state immediately to make it instant!
+        if (laundryModalInvoice && laundryModalInvoice.id === order.id) {
+            const updatedItems = laundryModalInvoice.items.map(it => {
+                if (unreadyIds.includes(it.id)) {
+                    return { ...it, status: 'LISTO' as OrderStatus, estado: 'LISTO', estado_id: 5 };
+                }
+                return it;
+            });
+            const updatedInvoice = { ...laundryModalInvoice, items: updatedItems };
+            setLaundryModalInvoice(updatedInvoice);
+        }
+
+        // 2. Perform background update
+        (async () => {
+            try {
+                setUpdatingItems(prev => {
+                    const next = new Set(prev);
+                    unreadyIds.forEach(id => next.add(id));
+                    return next;
+                });
+
+                await onUpdateItemStatus(order.id, unreadyIds, 'LISTO');
+                
+                if (laundryModalInvoice && laundryModalInvoice.id === order.id) {
+                    console.log("🧺 De forma asíncrona, enviando de forma automática la notificación de Listo...");
+                    setWaLoadingOrderId(order.id);
+                    
+                    try {
+                        if (!order.client.phone) {
+                            console.warn("⚠️ Client doesn't have a phone number registered, skipping auto WA notification.");
+                            return;
+                        }
+                        const res = await sendReadyNotification(order, company, order.client.phone);
+                        if (res.success) {
+                            console.log("✅ Notificación enviada de forma automática.");
+                            setLaundryModalInvoice(null);
+                            setShowWaSuccessToast(true);
+                            setTimeout(() => {
+                                setShowWaSuccessToast(false);
+                            }, 1500);
+                        } else {
+                            console.warn("❌ Fallo notificación automática: " + res.message);
+                        }
+                    } catch (err) {
+                        console.error("❌ Excepción enviando notificación automática:", err);
+                    } finally {
+                        setWaLoadingOrderId(null);
+                    }
+                }
+            } catch (e: any) {
+                console.error(e);
+                // Revert state if error
+                if (laundryModalInvoice && laundryModalInvoice.id === order.id) {
+                    const revertedItems = laundryModalInvoice.items.map(it => {
+                        if (unreadyIds.includes(it.id)) {
+                            const orig = order.items.find(o => o.id === it.id);
+                            return { ...it, status: (orig?.status || 'PENDIENTE') as OrderStatus, estado: orig?.estado || 'PENDIENTE', estado_id: orig?.estado_id || 2 };
+                        }
+                        return it;
+                    });
+                    setLaundryModalInvoice({ ...laundryModalInvoice, items: revertedItems });
+                }
+                alert("Error al actualizar las prendas: " + (e.message || e));
+            } finally {
+                setUpdatingItems(prev => {
+                    const next = new Set(prev);
+                    unreadyIds.forEach(id => next.delete(id));
+                    return next;
+                });
+            }
+        })();
     };
 
     const handleDeliverItems = async (itemIds: string[]) => {
@@ -1223,7 +1400,14 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                     {renderPaymentMethodBadge(inv.payments, paymentMethods)}
                                                 </td>
                                                 <td className="px-6 py-5">
-                                                    <div className="flex justify-center items-center">
+                                                    <div 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setLaundryModalInvoice(inv);
+                                                        }}
+                                                        className="flex justify-center items-center cursor-pointer hover:scale-110 active:scale-95 transition-all"
+                                                        title="Ver y Gestionar Progreso de Lavado"
+                                                    >
                                                         <CircularProgress 
                                                             percent={Math.round(((progress.ready + progress.delivered) / totalItemsCount) * 100)} 
                                                             color="#3b82f6"
@@ -1381,7 +1565,14 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                                                 </div>
                                             </div>
                                             <div className="flex gap-2 items-start">
-                                                 <div className="flex flex-col items-center justify-center">
+                                                 <div 
+                                                     onClick={(e) => {
+                                                         e.stopPropagation();
+                                                         setLaundryModalInvoice(inv);
+                                                     }}
+                                                     className="flex flex-col items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all"
+                                                     title="Ver y Gestionar Progreso de Lavado"
+                                                 >
                                                      <CircularProgress percent={readyPercent} color="#3b82f6" />
                                                  </div>
                                                  <div className="flex flex-col items-center justify-center">
@@ -1977,6 +2168,185 @@ const MyOrders: React.FC<MyOrdersProps> = ({
                     </div>
                 )}
             </AnimatePresence>
+            {/* MODAL DE PROGRESO DE LAVADO */}
+            <AnimatePresence>
+                {laundryModalInvoice && (
+                    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm shadow-2xl" id="laundry-progress-modal">
+                        {/* Backdrop */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setLaundryModalInvoice(null)}
+                            className="absolute inset-0 bg-slate-900/40"
+                        />
+                        {/* Modal Container */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                            transition={{ type: 'spring', duration: 0.3 }}
+                            className="relative w-full max-w-lg bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden z-20"
+                        >
+                            {/* Header */}
+                            <div className="p-5 pb-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                <div>
+                                    <h3 className="text-xs font-black text-slate-800 tracking-tight uppercase flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                                        PROGRESO DE PRENDAS
+                                    </h3>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
+                                        Orden {laundryModalInvoice.serie}-{String(laundryModalInvoice.correlativo).padStart(8, '0')} • {laundryModalInvoice.client.name.toUpperCase()}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setLaundryModalInvoice(null)}
+                                    className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all active:scale-95 border border-slate-100 bg-white"
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                                <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex items-center justify-between">
+                                    <div>
+                                        <span className="text-xs font-black text-blue-800 uppercase tracking-wide">Avance de Orden</span>
+                                        <div className="text-[11px] text-slate-500 font-medium">
+                                            {(() => {
+                                                const active = laundryModalInvoice.items.filter(it => !((it as any).estado_id === 9 || it.status === 'CANCELADO' || (it.status as any) === 'ANULADO'));
+                                                const processed = active.filter(it => it.status === 'LISTO' || it.status === 'ENTREGADO').length;
+                                                return `${processed} de ${active.length} prendas listas`;
+                                            })()}
+                                        </div>
+                                    </div>
+                                    {(() => {
+                                        const active = laundryModalInvoice.items.filter(it => !((it as any).estado_id === 9 || it.status === 'CANCELADO' || (it.status as any) === 'ANULADO'));
+                                        const unreadyCount = active.filter(it => it.status !== 'LISTO' && it.status !== 'ENTREGADO').length;
+                                        if (unreadyCount > 0) {
+                                            return (
+                                                <button
+                                                    onClick={() => handleMarkAllItemsAsReady(laundryModalInvoice)}
+                                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/10 transition-all active:scale-95 flex items-center gap-1.5"
+                                                >
+                                                    <CheckCheck size={14} />
+                                                    Listo Todo
+                                                </button>
+                                            );
+                                        } else {
+                                            return (
+                                                <div className="flex items-center gap-1.5 bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-xl text-emerald-800 text-xs font-black uppercase">
+                                                    <Check size={14} />
+                                                    Completado
+                                                </div>
+                                            );
+                                        }
+                                    })()}
+                                </div>
+
+                                <div className="space-y-2">
+                                    {laundryModalInvoice.items
+                                        .filter(it => !((it as any).estado_id === 9 || it.status === 'CANCELADO' || (it.status as any) === 'ANULADO'))
+                                        .map((item) => {
+                                            const isReady = item.status === 'LISTO' || item.status === 'ENTREGADO';
+                                            const isUpdating = updatingItems.has(item.id);
+
+                                            return (
+                                                <div 
+                                                    key={item.id}
+                                                    className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-100 rounded-2xl transition-all"
+                                                >
+                                                    <div className="space-y-0.5">
+                                                        <h4 className="text-xs font-black text-slate-800 leading-tight">
+                                                            {item.name || 'Prenda'}
+                                                        </h4>
+                                                        <p className="text-[10px] text-slate-500 font-mono">
+                                                            Cant: {item.quantity} {item.codigo_unidad} • Status: <span className="font-bold text-blue-600">{item.status || 'PENDIENTE'}</span>
+                                                        </p>
+                                                    </div>
+
+                                                    <div>
+                                                        {isReady ? (
+                                                            <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 border border-emerald-100 text-[10px] font-bold px-2.5 py-1 rounded-xl uppercase">
+                                                                <Check size={12} className="stroke-[3px]" />
+                                                                Listo
+                                                            </div>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => handleMarkItemAsReady(laundryModalInvoice, item.id)}
+                                                                disabled={isUpdating}
+                                                                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-600 rounded-xl text-[11px] font-bold shadow-sm transition-all active:scale-95 disabled:opacity-60 flex items-center gap-1.5"
+                                                            >
+                                                                {isUpdating ? (
+                                                                    <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                                                ) : (
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                                                )}
+                                                                Marcar Listo
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-4 bg-slate-50/50 border-t border-slate-100 flex justify-end">
+                                <button
+                                    onClick={() => setLaundryModalInvoice(null)}
+                                    className="px-4 py-2 bg-slate-800 text-white hover:bg-slate-900 rounded-xl text-xs font-black transition-all active:scale-95"
+                                >
+                                    Cerrar
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* MODAL EXITO NOTIFICACIÓN WHATSAPP */}
+            <AnimatePresence>
+                {showWaSuccessToast && (
+                    <div className="fixed inset-0 z-[700] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm shadow-2xl" id="wa-success-modal">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-slate-900/10"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 15 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 15 }}
+                            transition={{ type: 'spring', duration: 0.35 }}
+                            className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-emerald-100 overflow-hidden z-20 p-6 flex flex-col items-center text-center space-y-4"
+                        >
+                            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center border border-emerald-100 shadow-md shadow-emerald-500/5 animate-bounce">
+                                <MessageSquare size={28} className="stroke-[2.5px]" />
+                            </div>
+                            <div className="space-y-1">
+                                <h3 className="text-sm font-black text-slate-800 tracking-tight uppercase">
+                                    Notificación Enviada
+                                </h3>
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                    Mensaje enviado con éxito por WhatsApp 🧺✨
+                                </p>
+                            </div>
+                            <div className="w-full bg-emerald-100 h-1.5 rounded-full overflow-hidden">
+                                <motion.div 
+                                    initial={{ width: '100%' }}
+                                    animate={{ width: '0%' }}
+                                    transition={{ duration: 1.5, ease: 'linear' }}
+                                    className="bg-emerald-600 h-full"
+                                />
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
             <OrderPrintModal 
                 isOpen={!!selectedOrderToPrint} 
                 onClose={() => setSelectedOrderToPrint(null)} 
