@@ -387,73 +387,169 @@ export default function App() {
     }, [queryClient, activeSucursal]);
 
     useEffect(() => {
-        const initApp = async () => {
-            try {
-                const savedSession = localStorage.getItem('sislav_auth_session');
-                const savedSucursal = localStorage.getItem('sislav_active_sucursal');
-                const savedConfig = localStorage.getItem('sislav_global_config');
+        const initAndResolvePortal = async () => {
+            console.log("🚀 [initAndResolvePortal] Iniciando inicialización unificada de la app...");
+            const timeoutId = setTimeout(() => {
+                if (isResolving) {
+                    console.warn("⚠️ [initAndResolvePortal] La inicialización está tardando demasiado, forzando resolución...");
+                    setIsResolving(false);
+                }
+            }, 8000); // Dar un margen más amplio e inteligente para inicializar de forma segura
 
+            try {
+                // 1. Cargar configuración global en caché para que esté disponible de inmediato
+                const savedConfig = localStorage.getItem('sislav_global_config');
+                if (savedConfig) {
+                    try {
+                        setGlobalConfig(JSON.parse(savedConfig));
+                    } catch (e) {}
+                }
+
+                const params = new URLSearchParams(window.location.search);
+                const slug = params.get('s');
+                const ownerSlug = params.get('o');
+                const tId = params.get('t');
+                const holdingBrandId = params.get('h');
+
+                let resolvedSucursal: any = null;
+
+                // 2. Resolver sucursal priorizando parámetros de URL para evitar cualquier desfase de contexto entre pestañas/sesiones
+                if (holdingBrandId && params.get('mode') === 'logistics') {
+                    console.log(`🔍 [initAndResolvePortal] Resolviendo branding de holding por ID: ${holdingBrandId}`);
+                    const brand = await dbGetHoldingBranding(holdingBrandId).catch(() => null);
+                    if (brand) {
+                        console.log("✅ [initAndResolvePortal] Branding de holding resuelto:", brand.nombre_sucursal);
+                        resolvedSucursal = brand;
+                    }
+                }
+
+                if (tId) {
+                    setTrackingId(tId);
+                }
+
+                if (slug) {
+                    const cleanSlug = slug.trim();
+                    const preloaded = (window as any).__SUCURSAL_BRANDING__;
+                    
+                    if (preloaded && preloaded.slug === cleanSlug) {
+                        console.log("⚡ [initAndResolvePortal] Usando branding pre-cargado:", preloaded.nombre_sucursal);
+                        resolvedSucursal = normalizeSucursal(preloaded);
+                    } else {
+                        const savedSucursal = localStorage.getItem('sislav_active_sucursal');
+                        let savedParsed: any = null;
+                        if (savedSucursal) {
+                            try {
+                                savedParsed = JSON.parse(savedSucursal);
+                            } catch (e) {}
+                        }
+
+                        if (savedParsed && savedParsed.slug === cleanSlug) {
+                            console.log("✅ [initAndResolvePortal] Usando sucursal activa en caché coincidiente:", savedParsed.nombre_sucursal);
+                            resolvedSucursal = savedParsed;
+                        } else {
+                            console.log(`🔍 [initAndResolvePortal] Resolviendo sucursal por slug: ${cleanSlug}`);
+                            const branch = await dbGetSucursalBySlug(cleanSlug).catch((err) => {
+                                console.error("❌ [initAndResolvePortal] Error crítico al obtener sucursal por slug:", err);
+                                return null;
+                            });
+                            
+                            if (branch) {
+                                console.log("✅ [initAndResolvePortal] Sucursal resuelta por slug:", branch.nombre_sucursal);
+                                resolvedSucursal = branch;
+                                localStorage.setItem('sislav_active_sucursal', JSON.stringify(branch));
+                            } else {
+                                console.warn(`⚠️ [initAndResolvePortal] No se pudo resolver la sucursal '${cleanSlug}'.`);
+                                setResolveError(`La sucursal '${cleanSlug}' no está disponible o no existe.`);
+                            }
+                        }
+                    }
+                } else {
+                    // Si no hay slug en URL, recuperar del almacenamiento local
+                    const savedSucursal = localStorage.getItem('sislav_active_sucursal');
+                    if (savedSucursal) {
+                        try {
+                            resolvedSucursal = JSON.parse(savedSucursal);
+                        } catch (e) {}
+                    }
+                }
+
+                // 3. Procesar y asegurar coherencia de la sesión de autenticación
+                const savedSession = localStorage.getItem('sislav_auth_session');
                 if (savedSession) {
                     try {
-                        const parsed = JSON.parse(savedSession);
-                        setAuthSession(parsed);
+                        const parsedSession = JSON.parse(savedSession);
                         
-                        // Verificar integridad de la sesión con Supabase
-                        const { data: { session }, error: verifyError } = await supabase.auth.getSession();
-                        if (verifyError || !session) {
-                            console.warn("⚠️ Sesión de Supabase inválida o expirada, limpiando...");
+                        // CONTROL CRÍTICO DE FILTRADO Y TRASLACIÓN DE SESIONES (Prevenir fugas entre clientes):
+                        // Si la sesión no pertenece a un rol con movilidad global (SAAS_MASTER u OWNER) 
+                        // y hay un cambio de sucursal detectado, o la sesión del empleado pertenece a otra sucursal,
+                        // forzar limpieza inmediata de la sesión para evitar que opere con datos o permisos incorrectos.
+                        const isGlobalUser = parsedSession?.user?.role === UserRole.SAAS_MASTER || parsedSession?.user?.role === UserRole.OWNER;
+                        const sessionSucursalId = parsedSession?.user?.sucursal_id;
+
+                        if (resolvedSucursal && sessionSucursalId && sessionSucursalId !== resolvedSucursal.id && !isGlobalUser) {
+                            console.warn("🚨 [initAndResolvePortal] Mismatch de sucursal detectado. Limpiando sesión del cliente anterior...");
                             localStorage.removeItem('sislav_auth_session');
+                            localStorage.removeItem('sislav_active_branch_uuid');
+                            localStorage.removeItem('sislav_active_holding_uuid');
+                            localStorage.removeItem('sislav_active_user_uuid');
+                            localStorage.removeItem('sislav_current_user_name');
+                            localStorage.removeItem('sislav_current_user_role');
                             setAuthSession(null);
+                        } else {
+                            // Validar sesión con base de datos en segundo plano antes de habitarla
+                            const { data: { session }, error: verifyError } = await supabase.auth.getSession();
+                            if (verifyError || !session) {
+                                console.warn("⚠️ [initAndResolvePortal] Sesión de Supabase inválida o vencida, limpiando...");
+                                localStorage.removeItem('sislav_auth_session');
+                                setAuthSession(null);
+                            } else {
+                                setAuthSession(parsedSession);
+                            }
                         }
                     } catch (e) {
                         localStorage.removeItem('sislav_auth_session');
                     }
                 }
-                if (savedSucursal) {
-                    const sucursal = JSON.parse(savedSucursal);
-                    setActiveSucursal(sucursal);
-                    const session = JSON.parse(localStorage.getItem('sislav_auth_session') || '{}');
-                    setDbBranchContext(sucursal.id, sucursal.empresa_id, session?.user?.id);
+
+                // 4. Instalar contexto definitivo en DB Service
+                if (resolvedSucursal) {
+                    setActiveSucursal(resolvedSucursal);
+                    const currentSession = localStorage.getItem('sislav_auth_session');
+                    let curSessionObj: any = null;
+                    if (currentSession) {
+                        try {
+                            curSessionObj = JSON.parse(currentSession);
+                        } catch (e) {}
+                    }
                     
-                    // REFRESH SILENCIOSO en segundo plano del perfil de sucursal
-                    dbGetSucursalById(sucursal.id).then(data => {
+                    setDbBranchContext(
+                        resolvedSucursal.id, 
+                        resolvedSucursal.empresa_id || resolvedSucursal.empresa_holding_id, 
+                        curSessionObj?.user?.id || undefined
+                    );
+
+                    // Silenciosa actualización no-bloqueante del perfil de la sucursal de fondo
+                    dbGetSucursalById(resolvedSucursal.id).then(data => {
                         if (data) {
                             setActiveSucursal(data);
                             localStorage.setItem('sislav_active_sucursal', JSON.stringify(data));
                         }
                     }).catch(() => {});
                 }
-                if (savedConfig) setGlobalConfig(JSON.parse(savedConfig));
 
-                const params = new URLSearchParams(window.location.search);
-                const hasSlug = !!params.get('s');
-                const hasTracking = !!params.get('t');
-
-                if (hasSlug) {
-                    const slug = params.get('s')!;
-                    const sucursalData = await dbGetSucursalBySlug(slug);
-                    if (sucursalData) {
-                        setActiveSucursal(sucursalData);
-                        const session = JSON.parse(localStorage.getItem('sislav_auth_session') || '{}');
-                        setDbBranchContext(sucursalData.id, sucursalData.empresa_id, session?.user?.id);
-                    }
-                }
-
-                if (hasTracking) {
-                    setTrackingId(params.get('t'));
-                }
-
-                if (!savedSession && !hasSlug && !hasTracking) {
-                    setIsResolving(false);
-                    return;
-                }
             } catch (e) {
-                console.error("Error initializing app:", e);
+                console.error("❌ [initAndResolvePortal] Error crítico en resolución de portal unificada:", e);
+                if (!localStorage.getItem('sislav_global_config')) {
+                    setResolveError("Error al conectar con la red Sislav.");
+                }
             } finally {
+                clearTimeout(timeoutId);
+                console.log("🏁 [initAndResolvePortal] Unificación completada con éxito.");
                 setIsResolving(false);
             }
         };
-        initApp();
+
+        initAndResolvePortal();
     }, []);
 
     const isFetchingProfileRef = useRef(false);
@@ -769,96 +865,7 @@ export default function App() {
         return () => subscription.unsubscribe();
     }, []);
 
-    useEffect(() => {
-        const resolvePortal = async () => {
-            console.log("🚀 Iniciando resolvePortal...");
-            const timeoutId = setTimeout(() => {
-                if (isResolving) {
-                    console.warn("⚠️ resolvePortal tardando demasiado, forzando resolución...");
-                    setIsResolving(false);
-                }
-            }, 5000); // 5s de margen
-
-            try {
-                // OPTIMIZATION: Load cached global config immediately, but do NOT fetch from API until authenticated
-                const cachedConfig = localStorage.getItem('sislav_global_config');
-                if (cachedConfig) {
-                    setGlobalConfig(JSON.parse(cachedConfig));
-                }
-
-                // PERSISTENCE: Session and Sucursal are now handled in useState initializers
-                // but we still check for slug in URL which is a high priority override
-                const params = new URLSearchParams(window.location.search);
-                const slug = params.get('s');
-                const ownerSlug = params.get('o');
-                const tId = params.get('t');
-                const holdingBrandId = params.get('h');
-
-                if (holdingBrandId && params.get('mode') === 'logistics') {
-                    console.log(`🔍 Resolviendo branding de holding por ID: ${holdingBrandId}`);
-                    const brand = await dbGetHoldingBranding(holdingBrandId).catch(() => null);
-                    if (brand) {
-                        console.log("✅ Branding de holding resuelto:", brand.nombre_sucursal);
-                        setActiveSucursal(brand);
-                    }
-                }
-
-                if (ownerSlug && window.location.pathname !== '/owner-login') {
-                    // Eliminamos el replaceState que causaba 404 en refrescos si no estaba configurado en el servidor
-                    // window.history.replaceState({}, '', '/owner-login' + window.location.search);
-                }
-
-                if (tId) {
-                    setTrackingId(tId);
-                }
-
-                if (slug) {
-                    const cleanSlug = slug.trim();
-                    const preloaded = (window as any).__SUCURSAL_BRANDING__;
-                    
-                    if (preloaded && preloaded.slug === cleanSlug) {
-                        console.log("⚡ [resolvePortal] Usando branding pre-cargado:", preloaded.nombre_sucursal);
-                        const branch = normalizeSucursal(preloaded);
-                        setActiveSucursal(branch);
-                        setDbBranchContext(branch.id, branch.empresa_id, authSession?.user?.id);
-                    } else {
-                        const currentSucursal = JSON.parse(localStorage.getItem('sislav_active_sucursal') || 'null');
-                        if (currentSucursal?.slug !== cleanSlug) {
-                            console.log(`🔍 Resolviendo sucursal por slug: ${cleanSlug}`);
-                            const branch = await dbGetSucursalBySlug(cleanSlug).catch((err) => {
-                                console.error("❌ Error crítico en dbGetSucursalBySlug:", err);
-                                return null;
-                            });
-                            
-                            if (branch) {
-                                console.log("✅ Sucursal resuelta:", branch.nombre_sucursal);
-                                setActiveSucursal(branch);
-                                setDbBranchContext(branch.id, branch.empresa_id, authSession?.user?.id);
-                                localStorage.setItem('sislav_active_sucursal', JSON.stringify(branch));
-                            } else {
-                                console.warn(`⚠️ No se pudo resolver la sucursal '${cleanSlug}'. Verifique RLS.`);
-                                setResolveError(`La sucursal '${cleanSlug}' no está disponible o no existe.`);
-                            }
-                        } else if (currentSucursal) {
-                            console.log("✅ Usando sucursal activa de sesión previa:", currentSucursal.nombre_sucursal);
-                            setActiveSucursal(currentSucursal);
-                            setDbBranchContext(currentSucursal.id, currentSucursal.empresa_id, authSession?.user?.id);
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error("❌ Error crítico en resolución inicial:", e);
-                if (!localStorage.getItem('sislav_global_config')) {
-                    setResolveError("Error al conectar con la red Sislav.");
-                }
-            } finally {
-                clearTimeout(timeoutId);
-                console.log("🏁 Finalizando resolvePortal");
-                setIsResolving(false);
-            }
-        };
-        resolvePortal();
-    }, []);
+    // La inicialización unificada 'initAndResolvePortal' maneja ahora la resolución de la sucursal y la sesión de manera segura y síncrona.
 
     // Fetch and load remote global configuration only when the user is fully authenticated to avoid 401 Unauthorized errors on login screen
     useEffect(() => {
@@ -1408,6 +1415,7 @@ export default function App() {
             console.log("APP DEBUG - SESSION:", sessionData);
 
             if (session) {
+                queryClient.clear(); // Limpiar de forma proactiva la caché de react-query al autenticarse para evitar F5
                 setAuthSession(session);
                 localStorage.setItem('sislav_auth_session', JSON.stringify(session));
                 if (session.user.role === UserRole.SAAS_MASTER) {
@@ -2286,6 +2294,7 @@ export default function App() {
                 const holdingId = normalized.empresa_holding_id 
                                || normalized.empresa_id 
                                || b.empresa_id;  // fallback directo al objeto original
+                queryClient.clear(); // Limpiar la caché por completo al cambiar de sucursal para evitar F5
                 setActiveSucursal(normalized); 
                 setDbBranchContext(normalized.id, holdingId); 
                 setCurrentView('view:dashboard'); 
@@ -2319,6 +2328,7 @@ export default function App() {
     }
 
     if (showMasterLogin && !isMasterMode) return <MasterLogin onLoginSuccess={(session) => {
+        queryClient.clear(); // Limpiar caché de react-query al iniciar sesión como master, evitando F5
         setAuthSession(session);
         localStorage.setItem('sislav_auth_session', JSON.stringify(session));
         setIsMasterMode(true);
@@ -2337,6 +2347,7 @@ export default function App() {
             isDarkMode={darkMode} 
             toggleTheme={toggleDarkMode}
             onLogin={(session) => {
+                queryClient.clear(); // Limpiar caché de react-query al iniciar sesión como dueño, evitando F5
                 setAuthSession(session);
                 localStorage.setItem('sislav_auth_session', JSON.stringify(session));
                 setCurrentView('view:owner_dashboard');
@@ -2368,6 +2379,7 @@ export default function App() {
                             );
                         }
 
+                        queryClient.clear(); // Limpiar caché de react-query por completo al cambiar de sucursal
                         setActiveSucursal(normalized);
                         setDbBranchContext(normalized.id, holdingId);
                         setCurrentView('view:dashboard');
@@ -2544,6 +2556,7 @@ export default function App() {
             return <LogisticsLogin 
                 sucursal={activeSucursal}
                 onLogin={(session) => {
+                    queryClient.clear(); // Limpiar caché
                     setAuthSession(session);
                     localStorage.setItem('sislav_auth_session', JSON.stringify(session));
                 }} 
@@ -2556,6 +2569,7 @@ export default function App() {
         }
         if (isOwnerPath) {
             return <OwnerLogin onLogin={(session) => {
+                queryClient.clear(); // Limpiar caché
                 setAuthSession(session);
                 localStorage.setItem('sislav_auth_session', JSON.stringify(session));
             }} isDarkMode={darkMode} toggleTheme={toggleDarkMode} />;
@@ -2613,6 +2627,7 @@ export default function App() {
                                 );
                             }
 
+                            queryClient.clear(); // Limpiar caché al cambiar de sucursal
                             setActiveSucursal(normalized);
                             setDbBranchContext(normalized.id, holdingId);
                             setCurrentView('view:dashboard');

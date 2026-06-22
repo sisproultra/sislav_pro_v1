@@ -2611,34 +2611,34 @@ export const dbGetDashboardReportData = async (startDate: string, endDate: strin
     try {
         const holdingId = await ensureHoldingId(branchId);
         
-        // 1. Obtener Ventas en el rango (usando fecha_recepcion o fecha)
+        // 1. Obtener Ventas en el rango (usando fecha_recepcion o fecha) con zona horaria de Perú (-05:00)
         const { data: ventas, error: vError } = await supabase
             .from('ventas')
             .select('*, clientes(id, nombres, apellidos), items_venta(*)')
             .eq('sucursal_id', branchId)
             .neq('estado', 'CANCELADO')
-            .gte('fecha_recepcion', `${startDate}T00:00:00.000Z`)
-            .lte('fecha_recepcion', `${endDate}T23:59:59.999Z`);
+            .gte('fecha_recepcion', `${startDate}T00:00:00-05:00`)
+            .lte('fecha_recepcion', `${endDate}T23:59:59-05:00`);
 
         if (vError) throw vError;
 
-        // 2. Obtener Pagos de Ventas en el rango (Recaudos) - TABLA pagos_venta
+        // 2. Obtener Pagos de Ventas en el rango (Recaudos) - TABLA pagos_venta con zona horaria de Perú (-05:00)
         const { data: pagos, error: pError } = await supabase
             .from('pagos_venta')
             .select('*, ventas(codigo_orden, cliente_id, clientes(nombres, apellidos)), metodos_pago(nombre)')
             .eq('sucursal_id', branchId)
-            .gte('fecha_pago', `${startDate}T00:00:00.000Z`)
-            .lte('fecha_pago', `${endDate}T23:59:59.999Z`);
+            .gte('fecha_pago', `${startDate}T00:00:00-05:00`)
+            .lte('fecha_pago', `${endDate}T23:59:59-05:00`);
 
         if (pError) throw pError;
 
-        // 3. Obtener Egresos en el rango
+        // 3. Obtener Egresos en el rango con zona horaria de Perú (-05:00)
         const { data: gastos, error: gError } = await supabase
             .from('egresos')
             .select('*')
             .eq('sucursal_id', branchId)
-            .gte('fecha_gasto', `${startDate}T00:00:00.000Z`)
-            .lte('fecha_gasto', `${endDate}T23:59:59.999Z`);
+            .gte('fecha_gasto', `${startDate}T00:00:00-05:00`)
+            .lte('fecha_gasto', `${endDate}T23:59:59-05:00`);
 
         if (gError) throw gError;
 
@@ -2698,10 +2698,12 @@ export const dbGetDashboardReportData = async (startDate: string, endDate: strin
             const c = normalizeRelation(v.clientes);
             return {
                 ...v,
+                type: v.tipo_documento_codigo || v.tipo_comprobante || '80', // FACTURA (01), BOLETA (03) o NOTA DE VENTA (80)
+                orderStatus: v.estado,
                 date: v.fecha_recepcion || v.fecha,
                 client: c ? {
                     ...c,
-                    name: fixEncoding(c.nombres || 'CLIENTE'),
+                    name: fixEncoding(`${c.nombres || ''} ${c.apellidos || ''}`.trim() || 'CLIENTE'),
                 } : null,
                 totals: { total: Number(v.total) },
                 items: (v.items_venta || []).map((it: any) => ({ ...it, category: it.categoria_nombre })),
@@ -2725,6 +2727,7 @@ export const dbGetDashboardReportData = async (startDate: string, endDate: strin
                 total: valTotal,
                 estado: 'ENTREGADO',
                 orderStatus: 'ENTREGADO',
+                type: '80', // NOTA_VENTA o similar por defecto para histórico consolidado
                 client: {
                     id: 'hist-client-id',
                     name: 'HISTÓRICO ANTERIOR'
