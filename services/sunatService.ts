@@ -362,7 +362,7 @@ export const sendBillToVisioner7 = async (invoice: Invoice, company: Company): P
           "txtCOD_TIPO_OPERACION": itemIgvType,
           "txtCODIGO_DET": item.id ? item.id.substring(0, 15) : idx.toString(),
           "txtDESCRIPCION_DET": cleanText(item.name || "PRODUCTO"),
-          "txtPRECIO_SIN_IGV_DET": valorUnitario.toFixed(4),
+          "txtPRECIO_SIN_IGV_DET": valorUnitario.toFixed(10),
           "FLG_ICBPER": 0,
           "IMPUESTO_BP": "0.00",
           "IMPORTE_BP": "0.00"
