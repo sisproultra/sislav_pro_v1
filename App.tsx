@@ -905,7 +905,7 @@ export default function App() {
     const executeBotCheckIn = useCallback(async () => {
         if (!activeSucursal || !globalConfig) return;
         
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getPeruDateTime().date;
         const storageKey = `sislav_bot_notified_${activeSucursal.id}_${todayStr}`;
         
         // 1. Verificar en localStorage primero para rapidez

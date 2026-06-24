@@ -731,19 +731,59 @@ export const dbLogSystemError = async (message: string, details?: any) => {
 };
 
 /**
- * Verifica si ya se notificó el bot_checkin del día usando localStorage para evitar usar la tabla de logs de la BD.
+ * Verifica si ya se notificó el bot_checkin del día usando la tabla asistencia_bot.
+ * Soporta fallback automático a localStorage si la tabla no ha sido creada aún.
  */
 export const dbCheckAndRegisterBotCheckIn = async (branchId: string, todayStr: string): Promise<boolean> => {
     try {
-        const messageKey = `bot_checkin:${branchId}:${todayStr}`;
-        const alreadyNotified = localStorage.getItem(messageKey);
-        if (alreadyNotified) {
-            return true;
+        // 1. Primero consultar si ya existe asistencia para hoy en la base de datos
+        const { data, error } = await supabase
+            .from('asistencia_bot')
+            .select('id')
+            .eq('sucursal_id', branchId)
+            .eq('fecha', todayStr)
+            .maybeSingle();
+
+        if (error) {
+            console.warn("⚠️ Error consultando asistencia_bot:", error.message);
+            // Si la tabla no existe aún, hacemos un fallback seguro a localStorage para no romper nada
+            if (error.code === 'PGRST116' || error.message?.includes('does not exist') || error.message?.includes('no existe')) {
+                const messageKey = `bot_checkin:${branchId}:${todayStr}`;
+                const alreadyNotified = localStorage.getItem(messageKey);
+                if (alreadyNotified) return true;
+                localStorage.setItem(messageKey, 'true');
+                return false;
+            }
         }
-        localStorage.setItem(messageKey, 'true');
-        return false;
+
+        if (data) {
+            return true; // Ya existe, ya fue notificado hoy
+        }
+
+        // 2. Registrar la asistencia para hoy
+        const { error: insertError } = await supabase
+            .from('asistencia_bot')
+            .insert({
+                sucursal_id: branchId,
+                fecha: todayStr
+            });
+
+        if (insertError) {
+            console.warn("⚠️ Error insertando en asistencia_bot:", insertError.message);
+            // Si falla por restricción única (ej. otra pestaña/usuario insertó al mismo tiempo), consideramos que ya se notificó
+            if (insertError.code === '23505') {
+                return true;
+            }
+        }
+
+        return false; // Primera venta del día, no existía y se registró con éxito
     } catch (e) {
         console.error("❌ Excepción en dbCheckAndRegisterBotCheckIn:", e);
+        // Fallback seguro en memoria/localStorage por si acaso
+        const messageKey = `bot_checkin:${branchId}:${todayStr}`;
+        const alreadyNotified = localStorage.getItem(messageKey);
+        if (alreadyNotified) return true;
+        localStorage.setItem(messageKey, 'true');
         return false;
     }
 };

@@ -192,7 +192,7 @@ const OrderPrintModal: React.FC<OrderPrintModalProps> = ({ isOpen, onClose, invo
           .client-name { font-size: 13pt; margin-top: 1mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
           .line-thick { border-top: 3.5pt solid #000; margin: 1.5mm 0; }
           .item-name { font-size: 14pt; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; line-height: 1.1; font-weight: 900; padding: 2mm 0; }
-          .item-details-tag { font-size: 9pt; font-weight: 700; font-style: italic; margin-top: 2px; text-transform: uppercase; }
+          .item-details-tag { font-size: 10pt; font-weight: 900; font-style: normal; margin-top: 3px; text-transform: uppercase; color: #000; }
           .line-dashed { border-top: 1pt dashed #000; margin: 1mm 0; }
           .footer { font-size: 10pt; text-align: center; font-weight: 700; padding-bottom: 2mm; }
         </style>
