@@ -358,7 +358,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                 ${(item.details || item.observaciones || item.color || item.defectos) ? `
                   <tr>
                     <td></td>
-                    <td colspan="2" style="font-size: 9.5pt; font-style: normal; font-weight: bold; color: #000; padding-bottom: 4px;">
+                    <td colspan="2" style="font-size: 8pt; font-style: normal; font-weight: bold; color: #000; padding-bottom: 4px;">
                       - ${formatItemDetails(item, true, 'none')}
                     </td>
                   </tr>
@@ -469,7 +469,7 @@ const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({ invoice, company, onClo
                         <span>${item.name.toUpperCase()}</span>
                         <span>S/ ${(item.price * item.quantity).toFixed(2)}</span>
                       </div>
-                      ${(item.details || item.color || item.defectos || (item.images && item.images.length > 0) || (item as any).url_foto_1 || item.audioNote) ? `<div style="font-size: 9.5pt; font-weight: bold; font-style: normal; color: #000; border: 1.5px solid #000; padding: 6px; margin-top: 5px;">${formatItemDetails(item, true, 'icons')}</div>` : ''}
+                      ${(item.details || item.color || item.defectos || (item.images && item.images.length > 0) || (item as any).url_foto_1 || item.audioNote) ? `<div style="font-size: 8.5pt; font-weight: bold; font-style: normal; color: #000; border: 1.2px solid #000; padding: 5px; margin-top: 5px;">${formatItemDetails(item, true, 'icons')}</div>` : ''}
                     </td>
                   </tr>
                 `).join('')}

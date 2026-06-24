@@ -529,7 +529,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                   <td width="15%">${item.quantity.toFixed(2)}</td>
                   <td style="text-transform: uppercase">
                     <div class="bold" style="font-size: 8pt;">${item.name}</div>
-                    ${(item.details || item.color || item.defectos) ? `<div style="font-size: 9.5pt; font-style: normal; color: #000; margin-top: 2px; font-weight: bold;">- ${formatItemDetails(item, true, 'none')}</div>` : ''}
+                    ${(item.details || item.color || item.defectos) ? `<div style="font-size: 8pt; font-style: normal; color: #000; margin-top: 2px; font-weight: bold;">- ${formatItemDetails(item, true, 'none')}</div>` : ''}
                   </td>
                   <td align="right" width="25%">${(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
@@ -650,7 +650,7 @@ export const printInvoiceDirectly = async (invoice: Invoice, company: Company, p
                         <span>${item.name.toUpperCase()}</span>
                         <span>S/ ${(item.price * item.quantity).toFixed(2)}</span>
                       </div>
-                      ${(item.details || item.color || item.defectos || (item.images && item.images.length > 0) || (item as any).url_foto_1 || item.audioNote) ? `<div style="font-size: 9.5pt; font-weight: bold; font-style: normal; color: #000; border: 1.5px solid #000; padding: 6px; margin-top: 5px;">${formatItemDetails(item, true, 'icons')}</div>` : ''}
+                      ${(item.details || item.color || item.defectos || (item.images && item.images.length > 0) || (item as any).url_foto_1 || item.audioNote) ? `<div style="font-size: 8.5pt; font-weight: bold; font-style: normal; color: #000; border: 1.2px solid #000; padding: 5px; margin-top: 5px;">${formatItemDetails(item, true, 'icons')}</div>` : ''}
                     </td>
                   </tr>
                 `).join('')}
