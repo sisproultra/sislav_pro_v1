@@ -1262,7 +1262,10 @@ export default function App() {
         queryKey: ['categories', activeSucursal?.id],
         queryFn: dbGetCategories,
         enabled: !!activeSucursal?.id && !!authSession,
-        staleTime: 5 * 60 * 1000
+        staleTime: 24 * 60 * 60 * 1000, // 24 horas - catálogos estáticos
+        gcTime: 24 * 60 * 60 * 1000,
+        refetchOnWindowFocus: false,
+        refetchOnMount: false
     });
 
     const { data: machinesData, isLoading: isLoadingMachines } = useQuery({
@@ -1306,14 +1309,17 @@ export default function App() {
         queryKey: ['ticketConfig', activeSucursal?.id],
         queryFn: () => activeSucursal?.id ? dbGetTicketConfig(activeSucursal.id) : null,
         enabled: !!activeSucursal?.id && !!authSession,
-        staleTime: 10 * 60 * 1000
+        staleTime: 60 * 60 * 1000 // 1 hora
     });
 
     const { data: paymentMethodsData, isLoading: isLoadingPaymentMethods } = useQuery({
         queryKey: ['paymentMethods', activeSucursal?.id],
         queryFn: dbGetPaymentMethods,
         enabled: !!activeSucursal?.id && !!authSession,
-        staleTime: 5 * 60 * 1000
+        staleTime: 24 * 60 * 60 * 1000, // 24 horas - catálogos estáticos
+        gcTime: 24 * 60 * 60 * 1000,
+        refetchOnWindowFocus: false,
+        refetchOnMount: false
     });
 
     const { data: pausedSalesData, isLoading: isLoadingPausedSales } = useQuery({

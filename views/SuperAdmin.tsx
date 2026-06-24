@@ -118,23 +118,50 @@ const SystemLogsView: React.FC = () => {
         }
     };
 
+    const clearLogs = async () => {
+        if (!window.confirm("¿Está seguro de que desea eliminar todos los logs del sistema de la base de datos? Esta acción no se puede deshacer.")) return;
+        setLoading(true);
+        try {
+            const { error } = await supabase
+                .from('logs_sistema')
+                .delete()
+                .neq('id', '00000000-0000-0000-0000-000000000000');
+            if (error) throw error;
+            setLogs([]);
+            alert("Logs vaciados con éxito.");
+        } catch (e: any) {
+            console.error("Error clearing logs:", e);
+            alert("Error al vaciar logs: " + (e.message || e));
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         fetchLogs();
     }, []);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex justify-between items-end">
+            <div className="flex justify-between items-end flex-wrap gap-4">
                 <div>
                     <h2 className="text-3xl md:text-4xl font-bold uppercase tracking-tight text-white">Logs del Sistema</h2>
                     <p className="text-slate-500 text-sm font-medium mt-1 uppercase">Monitoreo de errores y actividad crítica.</p>
                 </div>
-                <button 
-                    onClick={fetchLogs}
-                    className="bg-white/5 hover:bg-white/10 text-white px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-all"
-                >
-                    <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Actualizar
-                </button>
+                <div className="flex gap-3">
+                    <button 
+                        onClick={clearLogs}
+                        className="bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-all"
+                    >
+                        <Trash2 size={14} /> Vaciar Logs
+                    </button>
+                    <button 
+                        onClick={fetchLogs}
+                        className="bg-white/5 hover:bg-white/10 text-white px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-all"
+                    >
+                        <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Actualizar
+                    </button>
+                </div>
             </div>
 
             <div className="bg-slate-900/50 border border-white/5 rounded-[2.5rem] overflow-hidden">

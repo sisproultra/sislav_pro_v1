@@ -21,6 +21,26 @@ let cachedGlobalConfig: SaasGlobalConfig | null = null;
 export const getSaasGlobalConfig = async (): Promise<SaasGlobalConfig> => {
     if (cachedGlobalConfig) return cachedGlobalConfig;
 
+    // Intentar leer de localStorage primero para respuesta instantánea y evitar Egress
+    try {
+        const stored = localStorage.getItem('sislav_global_config_v2');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            cachedGlobalConfig = parsed;
+            // Lanzamos la actualización en segundo plano de manera asíncrona sin bloquear
+            setTimeout(() => {
+                fetchFreshSaasGlobalConfig().catch(() => {});
+            }, 1000);
+            return parsed;
+        }
+    } catch (e) {
+        // Ignorar error de localStorage
+    }
+
+    return fetchFreshSaasGlobalConfig();
+};
+
+const fetchFreshSaasGlobalConfig = async (): Promise<SaasGlobalConfig> => {
     const defaultConfig: SaasGlobalConfig = {
         apiToken: '',
         whatsappIconUrl: '',
@@ -113,6 +133,9 @@ export const getSaasGlobalConfig = async (): Promise<SaasGlobalConfig> => {
             apikey_bot: baseConfig?.apikey_bot
         };
         cachedGlobalConfig = configResult;
+        try {
+            localStorage.setItem('sislav_global_config_v2', JSON.stringify(configResult));
+        } catch (e) {}
         return configResult;
     } catch (error) {
         console.error("Error en getSaasGlobalConfig:", error);

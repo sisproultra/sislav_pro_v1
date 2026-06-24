@@ -30,6 +30,30 @@ let activeUserId: string | null = null;
 // --- SISTEMA DE CACHE ---
 const queryCache = new Map<string, { data: any, timestamp: number }>();
 
+// Cache local persistente en memoria para evitar el Egress de catálogos globales que nunca cambian
+let globalCatCategoriasCache: any[] | null = null;
+let globalCatMetodosPagoCache: any[] | null = null;
+let globalCatMaquinasCache: any[] | null = null;
+let globalCatColoresCache: any[] | null = null;
+
+const getLocalGlobalCache = (key: string): any[] | null => {
+    try {
+        const stored = localStorage.getItem(`sislav_cache_${key}`);
+        if (stored) return JSON.parse(stored);
+    } catch (e) {
+        // Ignorar si no está disponible o falla parse
+    }
+    return null;
+};
+
+const setLocalGlobalCache = (key: string, data: any[]) => {
+    try {
+        localStorage.setItem(`sislav_cache_${key}`, JSON.stringify(data));
+    } catch (e) {
+        // Ignorar
+    }
+};
+
 /**
  * Obtiene la fecha y hora actual formateada para Perú (UTC-5)
  * Retorna un string ISO con el offset -05:00 para persistencia exacta
@@ -699,66 +723,25 @@ export const dbGetSucursalById = async (id: string): Promise<any> => {
 };
 
 /**
- * Registra un error del sistema en la base de datos para auditoría y diagnóstico.
+ * Registra un error del sistema en la base de datos para auditoría y diagnóstico (DESACTIVADO por solicitud del usuario).
  */
 export const dbLogSystemError = async (message: string, details?: any) => {
-    try {
-        const branchId = getActiveBranchId();
-        const userId = getActiveUserId();
-        
-        const { error } = await supabase
-            .from('logs_sistema')
-            .insert({
-                sucursal_id: branchId,
-                usuario_id: userId,
-                mensaje: message,
-                detalles: details,
-                fecha: new Date().toISOString()
-            });
-            
-        if (error) console.warn("⚠️ No se pudo persistir el log en DB:", error.message);
-    } catch (e) {
-        // Fallback silencioso para no interrumpir el flujo del usuario
-    }
+    // Desactivado para no llenar ni usar la tabla logs_sistema
+    console.log("📝 Log del Sistema (Consola):", message, details);
 };
 
 /**
- * Verifica si ya se notificó el bot_checkin del día para la sucursal de manera persistente en la BD.
- * Si ya se notificó, devuelve true.
- * Si no se ha notificado, inserta el log para el día de hoy y devuelve false.
+ * Verifica si ya se notificó el bot_checkin del día usando localStorage para evitar usar la tabla de logs de la BD.
  */
 export const dbCheckAndRegisterBotCheckIn = async (branchId: string, todayStr: string): Promise<boolean> => {
     try {
-        const messageKey = `bot_checkin:${todayStr}`;
-        const { data, error } = await supabase
-            .from('logs_sistema')
-            .select('id')
-            .eq('sucursal_id', branchId)
-            .eq('mensaje', messageKey)
-            .limit(1);
-
-        if (error) {
-            console.warn("⚠️ Error verificando bot check-in persistente:", error.message);
-            return false;
+        const messageKey = `bot_checkin:${branchId}:${todayStr}`;
+        const alreadyNotified = localStorage.getItem(messageKey);
+        if (alreadyNotified) {
+            return true;
         }
-
-        if (data && data.length > 0) {
-            return true; // Ya existe en la base de datos hoy
-        }
-
-        // Registrar registro en DB hoy para que no se envíen más alertas hoy en ningún navegador
-        const userId = getActiveUserId();
-        await supabase
-            .from('logs_sistema')
-            .insert({
-                sucursal_id: branchId,
-                usuario_id: userId,
-                mensaje: messageKey,
-                detalles: { notified: true, timestamp: new Date().toISOString() },
-                fecha: new Date().toISOString()
-            });
-
-        return false; // No se había notificado, procede a enviar
+        localStorage.setItem(messageKey, 'true');
+        return false;
     } catch (e) {
         console.error("❌ Excepción en dbCheckAndRegisterBotCheckIn:", e);
         return false;
@@ -1133,8 +1116,14 @@ export const dbGetCategories = async (): Promise<Category[]> => {
     if (error || !cats) return [];
     
     // Fetch images separately to avoid join errors if FK is missing
-    const { data: imgs } = await supabase.from('global_cat_categorias').select('id, url');
-    const imgMap = new Map((imgs || []).map(i => [i.id, i.url]));
+    let imgs = globalCatCategoriasCache || getLocalGlobalCache('categorias');
+    if (!imgs) {
+        const { data } = await supabase.from('global_cat_categorias').select('id, url');
+        imgs = data || [];
+        globalCatCategoriasCache = imgs;
+        setLocalGlobalCache('categorias', imgs);
+    }
+    const imgMap = new Map((imgs || []).map((i: any) => [i.id, i.url]));
     
     const categories = cats.map(c => ({ 
         id: c.id, 
@@ -3381,13 +3370,21 @@ export const checkAndSendMachineMaintenanceAlert = async (machineId: string) => 
 };
 
 export const dbGetMachineImages = async (): Promise<MachineImage[]> => {
-    const { data } = await supabase.from('global_cat_maquinas').select('*').eq('activo', true);
-    return (data || []).map(m => ({ id: m.id, name: m.nombre, url: m.url, type: (m as any).tipo as any }));
+    let cached = globalCatMaquinasCache || getLocalGlobalCache('maquinas');
+    if (!cached) {
+        const { data } = await supabase.from('global_cat_maquinas').select('*').eq('activo', true);
+        cached = data || [];
+        globalCatMaquinasCache = cached;
+        setLocalGlobalCache('maquinas', cached);
+    }
+    return (cached || []).map((m: any) => ({ id: m.id, name: m.nombre, url: m.url, type: (m as any).tipo as any }));
 };
 
 export const dbAddMachineImage = async (img: any) => {
     const { error } = await supabase.from('global_cat_maquinas').insert({ nombre: img.name.toUpperCase(), tipo: img.type, url: img.url, activo: true });
     if (error) throw error;
+    globalCatMaquinasCache = null;
+    try { localStorage.removeItem('sislav_cache_maquinas'); } catch(e){}
 };
 
 export const dbUpdateMachineImage = async (id: string, updates: any) => {
@@ -3396,10 +3393,14 @@ export const dbUpdateMachineImage = async (id: string, updates: any) => {
     if (updates.type) payload.tipo = updates.type;
     if (updates.url) payload.url = updates.url;
     await supabase.from('global_cat_maquinas').update(payload).eq('id', id);
+    globalCatMaquinasCache = null;
+    try { localStorage.removeItem('sislav_cache_maquinas'); } catch(e){}
 };
 
 export const dbDeleteMachineImage = async (id: string) => {
     await supabase.from('global_cat_maquinas').update({ activo: false }).eq('id', id);
+    globalCatMaquinasCache = null;
+    try { localStorage.removeItem('sislav_cache_maquinas'); } catch(e){}
 };
 
 // --- EGRESOS ---
@@ -3554,9 +3555,15 @@ export const dbGetPaymentMethods = async (): Promise<PaymentMethodConfig[]> => {
     if (error || !pms) return [];
     
     // Fetch images separately
-    const { data: imgs } = await supabase.from('global_cat_metodos_pago').select('id, url');
-    const imgMap = new Map((imgs || []).map(i => [i.id, i.url]));
-    const imgColorMap = new Map((imgs || []).map(i => {
+    let imgs = globalCatMetodosPagoCache || getLocalGlobalCache('metodos_pago');
+    if (!imgs) {
+        const { data } = await supabase.from('global_cat_metodos_pago').select('id, url');
+        imgs = data || [];
+        globalCatMetodosPagoCache = imgs;
+        setLocalGlobalCache('metodos_pago', imgs);
+    }
+    const imgMap = new Map((imgs || []).map((i: any) => [i.id, i.url]));
+    const imgColorMap = new Map((imgs || []).map((i: any) => {
         const urlStr = i.url || '';
         const colorMatch = urlStr.match(/#color=([^#]+)/);
         const col = colorMatch ? decodeURIComponent(colorMatch[1]) : null;
@@ -4251,9 +4258,19 @@ export const dbGetInventoryCounts = async (): Promise<InventoryCount[]> => {
 
 export const dbRegisterCatalogImage = async (name: string, url: string, modulo: string) => {
     let table = '';
-    if (modulo === 'CATEGORIA') table = 'global_cat_categorias';
-    else if (modulo === 'METODO_PAGO') table = 'global_cat_metodos_pago';
-    else if (modulo === 'MAQUINA') table = 'global_cat_maquinas';
+    if (modulo === 'CATEGORIA') {
+        table = 'global_cat_categorias';
+        globalCatCategoriasCache = null;
+        try { localStorage.removeItem('sislav_cache_categorias'); } catch(e){}
+    } else if (modulo === 'METODO_PAGO') {
+        table = 'global_cat_metodos_pago';
+        globalCatMetodosPagoCache = null;
+        try { localStorage.removeItem('sislav_cache_metodos_pago'); } catch(e){}
+    } else if (modulo === 'MAQUINA') {
+        table = 'global_cat_maquinas';
+        globalCatMaquinasCache = null;
+        try { localStorage.removeItem('sislav_cache_maquinas'); } catch(e){}
+    }
     if (!table) throw new Error("Módulo de catálogo no válido");
     
     // Usar RPC para evitar problemas de RLS en tablas globales al subir imágenes personalizadas
@@ -4306,9 +4323,15 @@ export const dbCreateCoupon = async (c: any) => {
 };
 
 export const dbGetGlobalColors = async (): Promise<GlobalColor[]> => {
-    const { data, error } = await supabase.from('global_cat_colores').select('*').eq('activo', true);
-    if (error) return [];
-    return (data || []).map(c => ({ id: c.id, nombre: c.nombre, hex: c.hex, url_imagen: c.url_imagen, activo: c.activo }));
+    let cached = globalCatColoresCache || getLocalGlobalCache('colores');
+    if (!cached) {
+        const { data, error } = await supabase.from('global_cat_colores').select('*').eq('activo', true);
+        if (error) return [];
+        cached = data || [];
+        globalCatColoresCache = cached;
+        setLocalGlobalCache('colores', cached);
+    }
+    return (cached || []).map((c: any) => ({ id: c.id, nombre: c.nombre, hex: c.hex, url_imagen: c.url_imagen, activo: c.activo }));
 };
 
 export const dbRemovePayment = async (paymentId: string) => {
