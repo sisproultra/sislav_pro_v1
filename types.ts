@@ -108,6 +108,7 @@ export interface Company extends BaseEntity {
     mostrar_codigo_barras?: boolean;
     doc_enforce_enabled?: boolean;
     doc_enforce_threshold?: number;
+    multicaja?: boolean;
 }
 
 export interface Sucursal extends Company {
@@ -746,6 +747,7 @@ export interface SaasBranch {
     limite_reconteo?: number;
     sucursal_tipo?: SucursalType;
     cash_management_type?: CashManagementType;
+    multicaja?: boolean;
 }
 
 export enum SucursalType {

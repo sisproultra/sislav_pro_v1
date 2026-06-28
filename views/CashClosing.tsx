@@ -372,14 +372,16 @@ const CashClosing: React.FC<CashClosingProps> = ({
   }, [sessionPayments, pendingExpenses, openingBalance, activeCashSession, invoices, lastClosingDate, currentUserName]);
 
   const handleCloseTurn = async () => {
-      const cashCount = parseFloat(actualCash);
-      if (isNaN(cashCount) || cashCount < 0) { 
+      const isAccumulative = (company as any).cash_management_type === 'ACCUMULATIVE';
+      const cashCount = isAccumulative ? summary.expectedCash : parseFloat(actualCash);
+      
+      if (!isAccumulative && (isNaN(cashCount) || cashCount < 0)) { 
           setErrorMessage("Por favor ingrese un monto válido de efectivo en caja (no negativo)."); 
           return; 
       }
       setErrorMessage(null);
       setIsClosing(true);
-      const diff = cashCount - summary.expectedCash;
+      const diff = isAccumulative ? 0 : (cashCount - summary.expectedCash);
       
       const allPayments: any[] = [];
       Object.entries(summary.methodDetails).forEach(([methodName, pList]) => {
@@ -813,17 +815,29 @@ const CashClosing: React.FC<CashClosingProps> = ({
                         <input 
                            type="number"
                            min="0"
-                           value={actualCash}
+                           value={(company as any).cash_management_type === 'ACCUMULATIVE' ? summary.expectedCash.toFixed(2) : actualCash}
                            onChange={e => {
-                             const val = e.target.value;
-                             if (val === '' || parseFloat(val) >= 0) {
-                               setActualCash(val);
+                             if ((company as any).cash_management_type !== 'ACCUMULATIVE') {
+                               const val = e.target.value;
+                               if (val === '' || parseFloat(val) >= 0) {
+                                 setActualCash(val);
+                               }
                              }
                            }}
-                           className="w-full pl-14 pr-6 py-6 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-100 outline-none font-black text-4xl transition-all shadow-inner text-slate-800"
+                           readOnly={(company as any).cash_management_type === 'ACCUMULATIVE'}
+                           className={`w-full pl-14 pr-6 py-6 border-2 rounded-2xl outline-none font-black text-4xl transition-all shadow-inner text-slate-800 ${
+                             (company as any).cash_management_type === 'ACCUMULATIVE' 
+                               ? 'bg-amber-50 border-amber-100 cursor-not-allowed text-amber-900' 
+                               : 'bg-gray-50 border-gray-100 focus:bg-white focus:ring-4 focus:ring-blue-100'
+                           }`}
                            placeholder="0.00"
                         />
                      </div>
+                     {(company as any).cash_management_type === 'ACCUMULATIVE' && (
+                       <p className="text-[10px] font-bold text-amber-600 px-2 italic">
+                         Bloqueado en modo Acumulativo. Se asume el monto esperado de {currency} {summary.expectedCash.toFixed(2)} automáticamente.
+                       </p>
+                     )}
                    </div>
 
                    {(company as any).cash_management_type === 'ACCUMULATIVE' && (
@@ -846,7 +860,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
                           />
                        </div>
                        <p className="text-[10px] font-bold text-gray-400 px-2 italic">
-                         El saldo restante ({currency} {Math.max(0, (parseFloat(actualCash) || 0) - (parseFloat(liquidation) || 0)).toFixed(2)}) se mantendrá como inicio para la próxima caja.
+                         El saldo restante ({currency} {Math.max(0, (((company as any).cash_management_type === 'ACCUMULATIVE' ? summary.expectedCash : parseFloat(actualCash)) || 0) - (parseFloat(liquidation) || 0)).toFixed(2)}) se mantendrá como inicio para la próxima caja.
                        </p>
                      </div>
                    )}
@@ -867,13 +881,13 @@ const CashClosing: React.FC<CashClosingProps> = ({
                    {canManage && (
                      <button 
                        onClick={handleCloseTurn}
-                       disabled={isClosing || actualCash === ''}
+                       disabled={isClosing || ((company as any).cash_management_type !== 'ACCUMULATIVE' && actualCash === '')}
                        className="w-full py-5 rounded-2xl font-black text-lg text-white shadow-[0_20px_40px_-10px_rgba(0,0,0,0.1)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:grayscale disabled:opacity-50"
                        style={{ backgroundColor: company.primaryColor || '#0054A6', boxShadow: `0 20px 40px -10px ${company.primaryColor}40` }}
                      >
                        {isClosing ? <RefreshCw className="animate-spin" size={24} /> : (
                          <>
-                           <span>CONFIRMAR CIERRE Y IMPRIMIR</span>
+                           <span>CONFIRMAR CIERRE DE CAJA</span>
                            <Printer size={22} />
                          </>
                        )}
@@ -991,8 +1005,10 @@ const CashClosing: React.FC<CashClosingProps> = ({
                         <tr className="bg-slate-50/50 border-b border-slate-100">
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100">Fecha y Hora</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100">Turno / Cajero</th>
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Inicio</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Efectivo Real</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Liquidado</th>
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Cierre</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Diferencia</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-center">Acciones</th>
                         </tr>
@@ -1025,12 +1041,22 @@ const CashClosing: React.FC<CashClosingProps> = ({
                               </td>
                               <td className="px-6 py-5 text-right">
                                 <span className="text-sm font-black text-slate-900 tabular-nums">
+                                  {currency} {(report.openingBalance || 0).toFixed(2)}
+                                </span>
+                              </td>
+                              <td className="px-6 py-5 text-right">
+                                <span className="text-sm font-black text-slate-900 tabular-nums">
                                   {currency} {report.actualCash.toFixed(2)}
                                 </span>
                               </td>
                               <td className="px-6 py-5 text-right">
                                 <span className={`text-xs font-bold tabular-nums ${(report.liquidation || 0) > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
                                   {currency} {(report.liquidation || 0).toFixed(2)}
+                                </span>
+                              </td>
+                              <td className="px-6 py-5 text-right">
+                                <span className="text-sm font-black text-slate-900 tabular-nums">
+                                  {currency} {report.actualCash.toFixed(2)}
                                 </span>
                               </td>
                               <td className="px-6 py-5 text-right">

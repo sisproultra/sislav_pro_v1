@@ -656,7 +656,8 @@ export const normalizeSucursal = (s: any): any => {
         custom_nv_name: s.custom_nv_name ?? s.modulos_config?.custom_nv_name ?? 'NOTA DE VENTA',
         doc_enforce_enabled: s.doc_enforce_enabled ?? false,
         doc_enforce_threshold: s.doc_enforce_threshold ?? 700,
-        cash_management_type: s.cash_management_type || 'DAILY'
+        cash_management_type: s.cash_management_type || 'DAILY',
+        multicaja: s.multicaja ?? false
     };
 };
 
@@ -3701,6 +3702,7 @@ export const dbUpdateSucursalConfig = async (id: string, updates: any) => {
     if (updates.doc_enforce_threshold !== undefined) payload.doc_enforce_threshold = updates.doc_enforce_threshold;
     if (updates.cash_management_type !== undefined) payload.cash_management_type = updates.cash_management_type;
     if (updates.cashManagementType !== undefined) payload.cash_management_type = updates.cashManagementType;
+    if (updates.multicaja !== undefined) payload.multicaja = updates.multicaja;
     if (updates.modulos_config !== undefined) payload.modulos_config = updates.modulos_config;
 
     const { error } = await supabase.from('sucursales').update(payload).eq('id', id);
@@ -4468,13 +4470,35 @@ export const dbGetActiveCashClosing = async () => {
     const branchId = getActiveBranchId();
     if (!branchId) return null;
     
-    // Eliminamos el filtro por usuario_id para que la caja sea compartida por la sucursal
-    // tal como solicita el usuario ("el indicador verde de caja abierta se le muestra a todos")
-    const { data, error } = await supabase
+    // Consultar si la sucursal tiene habilitado multicaja
+    let isMulticaja = false;
+    try {
+        const { data: sucursalData } = await supabase
+            .from('sucursales')
+            .select('multicaja')
+            .eq('id', branchId)
+            .maybeSingle();
+        if (sucursalData) {
+            isMulticaja = !!sucursalData.multicaja;
+        }
+    } catch (e) {
+        console.warn("Error leyendo multicaja:", e);
+    }
+
+    let query = supabase
         .from('cierres_caja')
         .select('*')
         .eq('sucursal_id', branchId)
-        .eq('estado', 'ABIERTO')
+        .eq('estado', 'ABIERTO');
+
+    if (isMulticaja) {
+        const userId = getActiveUserId();
+        if (userId) {
+            query = query.eq('usuario_id', userId);
+        }
+    }
+
+    const { data, error } = await query
         .order('fecha_apertura', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -4507,15 +4531,37 @@ export const dbOpenCashClosing = async (openingBalance: number, turno: string, c
 
     const userName = localStorage.getItem('sislav_current_user_name') || 'SISTEMA';
 
-    // Cerrar preventivamente cualquier otra sesión abierta en esta sucursal
+    // Consultar si la sucursal tiene habilitado multicaja
+    let isMulticaja = false;
     try {
-        await supabase.from('cierres_caja')
+        const { data: sucursalData } = await supabase
+            .from('sucursales')
+            .select('multicaja')
+            .eq('id', branchId)
+            .maybeSingle();
+        if (sucursalData) {
+            isMulticaja = !!sucursalData.multicaja;
+        }
+    } catch (e) {
+        console.warn("Error leyendo multicaja:", e);
+    }
+
+    // Cerrar preventivamente la sesión abierta
+    try {
+        let closeQuery = supabase.from('cierres_caja')
             .update({ 
                 estado: 'CERRADO', 
                 fecha_cierre: new Date().toISOString() 
             })
             .eq('sucursal_id', branchId)
             .eq('estado', 'ABIERTO');
+        
+        if (isMulticaja) {
+            // Solo cerrar preventivamente las cajas abiertas por ESTE usuario específico
+            closeQuery = closeQuery.eq('usuario_id', userId);
+        }
+        
+        await closeQuery;
     } catch (e) {
         console.warn("Error preventivo auto-cerrando cajas:", e);
     }
@@ -4591,12 +4637,32 @@ export const dbUpdateCashClosing = async (id: string, c: CashClosing) => {
 };
 
 export const dbGetLastAccumulatedBalance = async (branchId: string, userId?: string): Promise<number> => {
-    // Buscamos el último cierre de caja cerrado para esta sucursal (aislado de holdingId para máxima concordancia con el historial)
-    const { data, error } = await supabase
+    // Consultar si la sucursal tiene habilitado multicaja
+    let isMulticaja = false;
+    try {
+        const { data: sucursalData } = await supabase
+            .from('sucursales')
+            .select('multicaja')
+            .eq('id', branchId)
+            .maybeSingle();
+        if (sucursalData) {
+            isMulticaja = !!sucursalData.multicaja;
+        }
+    } catch (e) {
+        console.warn("Error leyendo multicaja:", e);
+    }
+
+    let query = supabase
         .from('cierres_caja')
         .select('real, monto_liquidacion')
         .eq('sucursal_id', branchId)
-        .eq('estado', 'CERRADO')
+        .eq('estado', 'CERRADO');
+
+    if (isMulticaja && userId) {
+        query = query.eq('usuario_id', userId);
+    }
+
+    const { data, error } = await query
         .order('fecha_cierre', { ascending: false, nullsFirst: false })
         .order('fecha_apertura', { ascending: false })
         .limit(1)

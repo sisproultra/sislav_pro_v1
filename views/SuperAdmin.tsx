@@ -947,6 +947,7 @@ export const SuperAdmin: React.FC<{
     const [brUseOrderReset, setBrUseOrderReset] = useState(false);
     const [brLimiteReconteo, setBrLimiteReconteo] = useState('10000');
     const [brModulosConfig, setBrModulosConfig] = useState<Record<string, any>>({});
+    const [brMulticaja, setBrMulticaja] = useState(false);
     const [editingCatalogId, setEditingCatalogId] = useState<string | null>(null);
     const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
     const [isCatalogDeleteModalOpen, setIsCatalogDeleteModalOpen] = useState(false);
@@ -1117,6 +1118,7 @@ export const SuperAdmin: React.FC<{
         setBrPorcentajeIgv('18.00'); setBrMonedaSimbolo('S/');
         setBrUseOrderReset(false); setBrLimiteReconteo('10000');
         setBrModulosConfig(DEFAULT_MODULES_CONFIG);
+        setBrMulticaja(false);
         setBrCustomNvName('NOTA DE VENTA');
         setBrCorrelativos([]);
         setBrDocEnforceEnabled(false);
@@ -1146,6 +1148,7 @@ export const SuperAdmin: React.FC<{
         setBrUseOrderReset(branch.use_order_reset || false);
         setBrLimiteReconteo(String(branch.limite_reconteo || 10000));
         setBrModulosConfig((branch as any).modulos_config || {});
+        setBrMulticaja(!!branch.multicaja);
         setBrCustomNvName((branch as any).modulos_config?.custom_nv_name || 'NOTA DE VENTA');
         setBrDocEnforceEnabled((branch as any).doc_enforce_enabled || false);
         setBrDocEnforceThreshold(String((branch as any).doc_enforce_threshold || 700));
@@ -1518,6 +1521,7 @@ export const SuperAdmin: React.FC<{
             isActive: brIsActive,
             porcentaje_igv: parseFloat(brPorcentajeIgv),
             moneda_simbolo: brMonedaSimbolo,
+            multicaja: brMulticaja,
             modulos_config: {
                 ...brModulosConfig,
                 custom_nv_name: brCustomNvName || 'NOTA DE VENTA'
@@ -2939,6 +2943,17 @@ export const SuperAdmin: React.FC<{
                                                         </select>
                                                     </div>
                                                 </div>
+
+                                                <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Multicaja</span>
+                                                        <span className="text-[8px] font-bold text-slate-400 uppercase">Habilitar apertura de múltiples sesiones de caja simultáneas por cajero/turno</span>
+                                                    </div>
+                                                    <button type="button" onClick={() => setBrMulticaja(!brMulticaja)} className={`relative w-12 h-6 rounded-full transition-all shrink-0 ${brMulticaja ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                                                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-all ${brMulticaja ? 'translate-x-7' : 'translate-x-1'}`} />
+                                                    </button>
+                                                </div>
+
                                                 <div className="space-y-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Identificador Slug (URL)</label><input disabled={isEditingBranch} value={brSlug} onChange={e => setBrSlug(e.target.value.toLowerCase().replace(/\s+/g, '_'))} className="w-full bg-slate-100 border-2 border-slate-100 rounded-2xl px-5 py-4 text-indigo-600 font-mono text-sm outline-none" placeholder="sede_norte" /></div>
                                             </div>
                                         </div>
