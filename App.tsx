@@ -343,6 +343,17 @@ export default function App() {
         }
     }, [activeCashSession, isLoadingCashSession, isFetchingCashSession, cashSessionStatus, pendingAction, isCashOpeningModalOpen]);
 
+    // Si la caja no está abierta y estamos en la vista de órdenes o pos, abrimos el modal automáticamente
+    useEffect(() => {
+        if (!isLoadingCashSession && !isFetchingCashSession && cashSessionStatus === 'success' && !activeCashSession) {
+            if (currentView === 'view:orders' || currentView === 'view:pos') {
+                if (!isCashOpeningModalOpen) {
+                    setIsCashOpeningModalOpen(true);
+                }
+            }
+        }
+    }, [activeCashSession, isLoadingCashSession, isFetchingCashSession, cashSessionStatus, currentView, isCashOpeningModalOpen]);
+
     const handleConfirmCashOpening = async (amount: number, turno: string) => {
         await dbOpenCashClosing(amount, turno);
         await refetchCashSession();
@@ -2731,6 +2742,16 @@ export default function App() {
             return;
         }
 
+        if (view === 'view:orders') {
+            checkCajaOpen(() => {
+                setInvoicesSearch('');
+                setInvoicesPage(1);
+                setCurrentView('view:orders');
+                window.history.pushState({ view: 'view:orders' }, '');
+            });
+            return;
+        }
+
         if (view !== 'view:clients') {
             setClientsSearch('');
             setClientsPage(1);
@@ -2843,7 +2864,13 @@ export default function App() {
 
             <CashOpeningModal 
                 isOpen={isCashOpeningModalOpen} 
-                onClose={() => { setIsCashOpeningModalOpen(false); setPendingAction(null); }}
+                onClose={() => { 
+                    setIsCashOpeningModalOpen(false); 
+                    setPendingAction(null); 
+                    if (currentView === 'view:orders' || currentView === 'view:pos') {
+                        setCurrentView('view:dashboard');
+                    }
+                }}
                 onConfirm={handleConfirmCashOpening}
                 company={activeSucursal}
             />

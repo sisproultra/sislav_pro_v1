@@ -309,47 +309,8 @@ export const dbMasterAuth = async (user: string, pass: string): Promise<AuthSess
 
         if (authError) {
             console.error("❌ Error de Autenticación Oficial:", authError.message);
-            
-            // --- EMERGENCY MASTER BYPASS FOR DEVELOPMENT / PREVIEW STAGES ---
-            const isDevOrPreview = import.meta.env.DEV === true || 
-                                   window.location.hostname.includes('run.app') || 
-                                   window.location.hostname.includes('localhost') || 
-                                   window.location.hostname.includes('ais-dev') || 
-                                   window.location.hostname.includes('ais-pre');
-                                   
-            if (isDevOrPreview && user.trim().toLowerCase() === 'admin') {
-                console.log("⚠️ [MasterAuth Bypass] Intentando bypass de desarrollo para usuario admin...");
-                
-                // Intento 1: Buscar directamente en la tabla usuarios_login sin requerir autenticación
-                const { data: profile, error: directError } = await supabase
-                    .from('usuarios_login')
-                    .select('*')
-                    .eq('username', user.trim())
-                    .eq('rol', UserRole.SAAS_MASTER)
-                    .eq('activo', true)
-                    .maybeSingle();
-
-                if (!directError && profile) {
-                     console.log("🎉 [MasterAuth Bypass] Perfil de admin maestro encontrado directamente sin autenticación oficial.");
-                     profileData = profile;
-                } else {
-                     // Intento 2: Fallback definitivo si no hay registros o hay algún problema de esquema
-                     console.log("🎉 [MasterAuth Bypass Extremo] Creando sesión administrativa maestra virtual para evitar bloqueos.");
-                     profileData = {
-                          id: '00000000-0000-0000-0000-000000000000',
-                          username: 'admin',
-                          nombre_completo: 'ADMINISTRADOR MAESTRO EMERGENCIAS',
-                          rol: UserRole.SAAS_MASTER,
-                          activo: true,
-                          empresa_id: '1',
-                          sucursal_id: '1',
-                          permisos_map: { all: true, owner: true, master: true }
-                     };
-                }
-            } else {
-                console.timeEnd(`⏱️ MasterAuth:${user.trim()}`);
-                throw authError;
-            }
+            console.timeEnd(`⏱️ MasterAuth:${user.trim()}`);
+            throw authError;
         } else {
             if (!signInData?.user) {
                 console.timeEnd(`⏱️ MasterAuth:${user.trim()}`);
