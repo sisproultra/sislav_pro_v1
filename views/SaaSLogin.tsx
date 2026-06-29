@@ -93,11 +93,11 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
 
       {/* Elementos ambientales de marca */}
       <div
-        className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[150px] opacity-20 animate-pulse"
+        className={`absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[150px] animate-pulse transition-opacity duration-500 ${isDarkMode ? 'opacity-20' : 'opacity-40'}`}
         style={{ background: brandPrimary }}
       ></div>
       <div
-        className="absolute bottom-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[150px] opacity-10"
+        className={`absolute bottom-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[150px] transition-opacity duration-500 ${isDarkMode ? 'opacity-10' : 'opacity-30'}`}
         style={{ background: brandSecondary }}
       ></div>
 
@@ -108,7 +108,7 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
           style={{ background: `linear-gradient(135deg, ${brandPrimary}, ${brandSecondary})` }}
         ></div>
 
-        <div className="bg-bg2/40 backdrop-blur-3xl rounded-[3.5rem] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] relative border border-white/5 group-hover:border-white/10 transition-all duration-700">
+        <div className={`${isDarkMode ? 'bg-bg2/40 border-white/5 group-hover:border-white/10' : 'bg-bg2/15 border-black/5 group-hover:border-black/10'} backdrop-blur-3xl rounded-[3.5rem] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] relative border transition-all duration-700`}>
           {/* Barra de progreso de marca - más sutil */}
           <div
             className="h-1 w-full opacity-50"
