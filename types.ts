@@ -206,6 +206,7 @@ export interface CartItem extends Product {
     quantity: number;
     subtotal: number;
     producto_id?: string;
+    peso?: number;
     color?: string;
     defectos?: string;
     details?: string;

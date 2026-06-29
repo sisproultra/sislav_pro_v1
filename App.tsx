@@ -1186,17 +1186,91 @@ export default function App() {
 
             // Optimistically update to the new value
             if (id) {
-                queryClient.setQueryData(['products', activeSucursal?.id], (old: Product[] | undefined) => {
-                    return old?.map(p => p.id === id ? { ...p, ...updates } : p);
-                });
+                const updatedProducts = (previousProducts || []).map(p => p.id === id ? { ...p, ...updates } : p);
+                queryClient.setQueryData(['products', activeSucursal?.id], updatedProducts);
+                setProducts(updatedProducts);
+            } else {
+                // If creating, add a temporary product with a unique temp ID so it shows immediately
+                const tempId = `temp-${Date.now()}`;
+                const categoryName = categories.find(c => c.id === updates.categoria_id)?.name || 'GENERAL';
+                const tempProduct: Product = {
+                    id: tempId,
+                    sucursal_id: activeSucursal?.id || '',
+                    empresa_holding_id: '',
+                    name: (updates.name || 'NUEVO SERVICIO').toUpperCase(),
+                    price: Number(updates.price) || 0,
+                    category: categoryName,
+                    description: updates.description || '',
+                    activo: true,
+                    unitCode: updates.unitCode || 'ZZ',
+                    um_saas: updates.um_saas || 'UNIDAD',
+                    igvType: updates.igvType || '10',
+                    stock: Number(updates.stock) || 0,
+                    cost: Number(updates.cost) || 0,
+                    estado: 'a',
+                    categoria_id: updates.categoria_id,
+                    pointsPrice: updates.pointsPrice,
+                    showInCatalog: updates.showInCatalog ?? false,
+                    imageUrl: updates.imageUrl,
+                    imagen_id: updates.imagen_id,
+                    peso_estimado: Number(updates.peso_estimado) || 0.400,
+                    recipe: []
+                };
+                const updatedProducts = previousProducts ? [...previousProducts, tempProduct] : [tempProduct];
+                queryClient.setQueryData(['products', activeSucursal?.id], updatedProducts);
+                setProducts(updatedProducts);
             }
 
             return { previousProducts };
+        },
+        onSuccess: (data, variables) => {
+            // If we created a new product and the server returned the real data
+            if (!variables.id && data) {
+                const categoryName = categories.find(c => c.id === data.categoria_id)?.name || 'GENERAL';
+                const savedProduct: Product = {
+                    id: data.id,
+                    sucursal_id: data.sucursal_id,
+                    empresa_holding_id: data.empresa_holding_id,
+                    name: (data.nombre || 'NUEVO SERVICIO').toUpperCase(),
+                    price: Number(data.precio) || 0,
+                    category: categoryName,
+                    description: data.descripcion || '',
+                    activo: data.activo ?? true,
+                    unitCode: data.codigo_unidad || 'ZZ',
+                    um_saas: data.um_saas || 'UNIDAD',
+                    igvType: data.tipo_igv_codigo || '10',
+                    stock: Number(data.stock_actual) || 0,
+                    cost: Number(data.costo) || 0,
+                    estado: data.estado || 'a',
+                    categoria_id: data.categoria_id,
+                    pointsPrice: data.precio_puntos,
+                    showInCatalog: data.mostrar_en_catalogo ?? false,
+                    imageUrl: data.url_imagen,
+                    imagen_id: data.imagen_id,
+                    peso_estimado: data.peso_estimado !== null && data.peso_estimado !== undefined ? Number(data.peso_estimado) : undefined,
+                    recipe: []
+                };
+
+                setProducts(old => {
+                    const filtered = old.filter(p => !p.id.startsWith('temp-'));
+                    return [...filtered, savedProduct];
+                });
+
+                queryClient.setQueryData(['products', activeSucursal?.id], (old: Product[] | undefined) => {
+                    const filtered = old?.filter(p => !p.id.startsWith('temp-')) || [];
+                    return [...filtered, savedProduct];
+                });
+
+                showStatusModal("Servicio creado con éxito", "success");
+            } else if (variables.id) {
+                showStatusModal("Servicio actualizado con éxito", "success");
+            }
         },
         onError: (err, variables, context) => {
             // If the mutation fails, use the context returned from onMutate to roll back
             if (context?.previousProducts) {
                 queryClient.setQueryData(['products', activeSucursal?.id], context.previousProducts);
+                setProducts(context.previousProducts);
             }
         },
         onSettled: () => {
@@ -1211,15 +1285,16 @@ export default function App() {
             await queryClient.cancelQueries({ queryKey: ['products', activeSucursal?.id] });
             const previousProducts = queryClient.getQueryData<Product[]>(['products', activeSucursal?.id]);
 
-            queryClient.setQueryData(['products', activeSucursal?.id], (old: Product[] | undefined) => {
-                return old?.filter(p => p.id !== id);
-            });
+            const updatedProducts = (previousProducts || []).filter(p => p.id !== id);
+            queryClient.setQueryData(['products', activeSucursal?.id], updatedProducts);
+            setProducts(updatedProducts);
 
             return { previousProducts };
         },
         onError: (err, variables, context) => {
             if (context?.previousProducts) {
                 queryClient.setQueryData(['products', activeSucursal?.id], context.previousProducts);
+                setProducts(context.previousProducts);
             }
         },
         onSettled: () => {
@@ -2070,7 +2145,7 @@ export default function App() {
                     })} 
                     removeFromCart={(id) => setCart(prev => prev.filter(i => i.id !== id))} 
                     updateQuantity={(id, q) => setCart(prev => prev.map(i => i.id === id ? (() => {
-                        const isWeightUnit = [UmSaas.KILO, UmSaas.METROS, UmSaas.LITRO].includes(i.um_saas as UmSaas);
+                        const isWeightUnit = [UmSaas.KILO, UmSaas.METROS, UmSaas.LITRO].includes(i.um_saas as any);
                         const disc = i.descuento_unitario || 0;
                         const subtotal = roundToOneDecimal(q * Math.max(0, i.price - disc));
                         const finalQty = isWeightUnit ? q : Math.round(q);
@@ -2084,7 +2159,7 @@ export default function App() {
                         const q = newQty !== undefined ? newQty : i.quantity;
                         const disc = i.descuento_unitario || 0;
                         const subtotal = roundToOneDecimal(q * Math.max(0, i.price - disc));
-                        const isWeightUnit = [UmSaas.KILO, UmSaas.METROS, UmSaas.LITRO].includes(i.um_saas as UmSaas);
+                        const isWeightUnit = [UmSaas.KILO, UmSaas.METROS, UmSaas.LITRO].includes(i.um_saas as any);
                         const finalQty = isWeightUnit ? q : Math.round(q);
                         return { 
                             ...i, 
@@ -2180,7 +2255,7 @@ export default function App() {
                 company={activeSucursal}
                 canManage={canManageApp}
             />;
-            case 'view:expenses': return <Expenses expenses={expenses} company={activeSucursal} paymentMethods={paymentMethods} onSave={async (exp) => { 
+            case 'view:expenses': return <Expenses expenses={expenses} company={activeSucursal} paymentMethods={paymentMethods} activeCashSession={activeCashSession} onSave={async (exp) => { 
                 checkCajaOpen(async () => {
                     const newExpense = await dbSaveExpense({ ...exp, cash_session_id: activeCashSession?.id }); 
                     setExpenses(prev => [newExpense, ...prev]);

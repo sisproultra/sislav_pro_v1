@@ -900,7 +900,7 @@ const Modificaciones: React.FC<ModificacionesProps> = ({ invoices, products, com
                             className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-bold uppercase outline-none focus:ring-2 transition-all cursor-pointer grow sm:grow-0"
                             style={{ '--tw-ring-color': `${primaryColor}40` } as React.CSSProperties}
                           >
-                            {paymentMethods.filter(m => !m.isSuspended).map(m => (
+                            {paymentMethods.filter(m => m.isActive === true && m.isSuspended !== true).map(m => (
                               <option key={m.id} value={m.id}>{m.name}</option>
                             ))}
                           </select>

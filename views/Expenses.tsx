@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Expense, Company, Employee, UserRole, PaymentMethodConfig } from '../types';
-import { dbUploadImage } from '../services/dbService';
+import { dbUploadImage, dbGetPaymentsForSession, dbGetExpensesForSession } from '../services/dbService';
 import { Plus, X, Calendar, DollarSign, Tag, Camera, Trash2, Loader2, ImageIcon, User, ShieldCheck, CheckCircle2, AlertTriangle } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -11,12 +11,13 @@ interface ExpensesProps {
   company: Company;
   currentUser?: Employee | null;
   paymentMethods: PaymentMethodConfig[];
+  activeCashSession?: any;
   onSave: (exp: Omit<Expense, 'id'>) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   canManage?: boolean;
 }
 
-const Expenses: React.FC<ExpensesProps> = ({ expenses, company, currentUser, paymentMethods, onSave, onDelete, canManage = true }) => {
+const Expenses: React.FC<ExpensesProps> = ({ expenses, company, currentUser, paymentMethods, activeCashSession, onSave, onDelete, canManage = true }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -28,11 +29,61 @@ const Expenses: React.FC<ExpensesProps> = ({ expenses, company, currentUser, pay
   const [isCapturing, setIsCapturing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
+  const [sessionCashBalance, setSessionCashBalance] = useState<number | null>(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+
+  useEffect(() => {
+    if (isModalOpen && activeCashSession?.id) {
+      loadCurrentBalance();
+    } else {
+      setSessionCashBalance(null);
+    }
+  }, [isModalOpen, activeCashSession?.id]);
+
+  const loadCurrentBalance = async () => {
+    if (!activeCashSession?.id) return;
+    setIsLoadingBalance(true);
+    try {
+      const [payments, exps] = await Promise.all([
+        dbGetPaymentsForSession(activeCashSession.id, company.id),
+        dbGetExpensesForSession(activeCashSession.id, company.id)
+      ]);
+
+      let totalCashSales = 0;
+      payments.forEach(p => {
+        const method = (p.metodo_pago_name || 'EFECTIVO').toUpperCase();
+        if (method.includes('EFECTIVO')) {
+          totalCashSales += Number(p.monto) || 0;
+        }
+      });
+
+      let totalCashExpenses = 0;
+      exps.forEach(e => {
+        const method = (e.paymentMethod || 'EFECTIVO').toUpperCase();
+        if (method.includes('EFECTIVO')) {
+          totalCashExpenses += Number(e.amount) || 0;
+        }
+      });
+
+      const open = Number(activeCashSession.openingBalance) || 0;
+      const balance = open + totalCashSales - totalCashExpenses;
+      setSessionCashBalance(balance);
+    } catch (err) {
+      console.error("Error calculating current session balance:", err);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  };
+
+  const parsedAmount = parseFloat(amount) || 0;
+  const isEfectivo = paymentMethod.toUpperCase().includes('EFECTIVO');
+  const isOverBalance = isEfectivo && sessionCashBalance !== null && parsedAmount > sessionCashBalance;
+
   const currency = company.currencySymbol || 'S/';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isUploading) return;
+    if (isUploading || isOverBalance) return;
 
     setIsCapturing(true);
     const finalDate = new Date().toISOString();
@@ -159,10 +210,38 @@ const Expenses: React.FC<ExpensesProps> = ({ expenses, company, currentUser, pay
                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Descripción</label>
                          <input required value={description} onChange={e => setDescription(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3.5 text-sm font-bold uppercase outline-none focus:bg-white focus:border-red-500 transition-all shadow-inner" placeholder="PAGO DE LUZ, RECIBO N°..." />
                      </div>
+
+                     {/* Saldo de caja disponible (Efectivo) */}
+                     {activeCashSession && (
+                       <div className={`p-4 rounded-2xl border flex items-center justify-between transition-all duration-200 ${
+                         sessionCashBalance !== null && sessionCashBalance <= 0
+                           ? 'bg-rose-50/50 border-rose-200 text-rose-900' 
+                           : 'bg-emerald-50/30 border-emerald-100 text-emerald-900'
+                       }`}>
+                         <div>
+                           <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Saldo Disponible en Caja (Efectivo)</p>
+                           <p className="text-xl font-black mt-0.5">
+                             {isLoadingBalance ? (
+                               <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500"><Loader2 className="animate-spin text-emerald-600" size={12} /> Calculando saldo actual...</span>
+                             ) : sessionCashBalance !== null ? (
+                               `${currency} ${sessionCashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                             ) : (
+                               'No disponible'
+                             )}
+                           </p>
+                         </div>
+                         <div className={`p-2 rounded-xl ${
+                           sessionCashBalance !== null && sessionCashBalance <= 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100/60 text-emerald-800'
+                         }`}>
+                           <DollarSign size={20} />
+                         </div>
+                       </div>
+                     )}
+
                      <div className="space-y-1">
                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Monto del Egreso</label>
                          <div className="relative">
-                            <span className="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-red-600 text-lg">{currency}</span>
+                            <span className={`absolute left-5 top-1/2 -translate-y-1/2 font-bold text-lg transition-colors duration-200 ${isOverBalance ? 'text-rose-600' : 'text-red-600'}`}>{currency}</span>
                             <input 
                                type="number" 
                                step="0.01" 
@@ -175,10 +254,19 @@ const Expenses: React.FC<ExpensesProps> = ({ expenses, company, currentUser, pay
                                    setAmount(val);
                                  }
                                }} 
-                               className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-4 py-4 text-3xl font-bold outline-none focus:bg-white focus:border-red-500 transition-all text-slate-900 shadow-inner" 
+                               className={`w-full pl-12 pr-4 py-4 text-3xl font-bold outline-none transition-all shadow-inner rounded-2xl border-2 ${
+                                 isOverBalance 
+                                   ? 'bg-rose-50/50 border-rose-300 text-rose-900 focus:bg-white focus:border-rose-500 ring-2 ring-rose-100' 
+                                   : 'bg-slate-50 border-slate-100 text-slate-900 focus:bg-white focus:border-red-500'
+                               }`}
                                placeholder="0.00" 
                             />
                          </div>
+                         {isOverBalance && (
+                           <p className="text-[11px] font-black text-rose-600 px-1 mt-1.5 flex items-center gap-1.5 animate-pulse">
+                             <AlertTriangle size={14} /> El monto excede el saldo de efectivo real en caja ({currency} {sessionCashBalance?.toFixed(2)})
+                           </p>
+                         )}
                      </div>
                      <div className="space-y-4">
                          <div className="space-y-1">
@@ -225,7 +313,7 @@ const Expenses: React.FC<ExpensesProps> = ({ expenses, company, currentUser, pay
 
                      <button 
                         type="submit" 
-                        disabled={isCapturing || isUploading}
+                        disabled={isCapturing || isUploading || isOverBalance}
                         className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-5 rounded-[1.8rem] shadow-2xl shadow-red-600/30 active:scale-95 transition-all flex justify-center items-center gap-3 uppercase tracking-[0.2em] text-xs disabled:opacity-50"
                      >
                         {isCapturing ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle2 size={20} strokeWidth={3} />}

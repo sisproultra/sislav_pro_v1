@@ -1031,6 +1031,7 @@ export const dbGetProducts = async (): Promise<Product[]> => {
                 showInCatalog: p.mostrar_en_catalogo ?? false,
                 imageUrl: p.url_imagen,
                 imagen_id: p.imagen_id,
+                peso_estimado: p.peso_estimado !== null && p.peso_estimado !== undefined ? Number(p.peso_estimado) : undefined,
                 recipe: (p.productos_recetas || []).map((r: any) => ({ supplyId: r.insumo_id, name: r.insumos?.nombre, quantity: Number(r.cantidad_usada), unit: r.insumos?.unidad_medida, cost: 0 })) 
             };
         });
@@ -1073,6 +1074,7 @@ export const dbGetCatalogProductsByBranch = async (branchId: string): Promise<Pr
                 showInCatalog: p.mostrar_en_catalogo ?? false,
                 imageUrl: p.url_imagen,
                 imagen_id: p.imagen_id,
+                peso_estimado: p.peso_estimado !== null && p.peso_estimado !== undefined ? Number(p.peso_estimado) : undefined,
                 recipe: [] 
             };
         });
@@ -1102,6 +1104,7 @@ export const dbSaveProduct = async (product: Omit<Product, 'id'>) => {
         mostrar_en_catalogo: product.showInCatalog ?? false,
         url_imagen: product.imageUrl,
         imagen_id: product.imagen_id,
+        peso_estimado: product.peso_estimado,
         registrado_por: user 
     }).select().single();
     if (error) throw error;
@@ -1128,6 +1131,7 @@ export const dbUpdateProduct = async (id: string, updates: Partial<Product>) => 
     if (updates.showInCatalog !== undefined) payload.mostrar_en_catalogo = updates.showInCatalog;
     if (updates.imageUrl !== undefined) payload.url_imagen = updates.imageUrl;
     if (updates.imagen_id !== undefined) payload.imagen_id = updates.imagen_id;
+    if (updates.peso_estimado !== undefined) payload.peso_estimado = updates.peso_estimado;
     const { error } = await supabase.from('productos').update(payload).eq('id', id);
     if (error) throw error;
     invalidateCache('products');

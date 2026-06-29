@@ -10,7 +10,7 @@ import { Invoice, Product, Client, Company, Expense, Category, PaymentMethodConf
 import { roundToOneDecimal } from '../utils/calculations';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, Cell as BarCell
+  PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, Cell as BarCell, ComposedChart, Legend
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dbGetDashboardReportData } from '../services/dbService';
@@ -132,6 +132,7 @@ const formatPeruDateTime = (dateVal: any) => {
 const Dashboard: React.FC<DashboardProps> = ({ 
   invoices = [], 
   expenses: propExpenses = [],
+  products = [],
   clients = [],
   categories = [],
   paymentMethods = [],
@@ -169,6 +170,8 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   // Modal de detalles por día
   const [showDayDetails, setShowDayDetails] = useState(false);
+  const [selectedProductionDay, setSelectedProductionDay] = useState<any | null>(null);
+  const [expandedTicket, setExpandedTicket] = useState<string | null>(null);
   const [drillDownType, setDrillDownType] = useState<'NONE' | 'SALES' | 'COLLECTED'>('NONE');
   const [dayDetails, setDayDetails] = useState<{
     date: string,
@@ -211,6 +214,93 @@ const Dashboard: React.FC<DashboardProps> = ({
   const today = new Date();
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(today.getDate() - 30);
+
+  // --- MÉTRICAS DE PRODUCCIÓN DIARIA (Órdenes Listas y Peso Procesado) ---
+  const dailyProductionData = useMemo(() => {
+    const productionMap: Record<
+      string, 
+      { 
+        orders: number; 
+        kilos: number; 
+        details: { 
+          code: string; 
+          client: string; 
+          weight: number; 
+          itemsCount: number; 
+          items: { name: string; quantity: number; weight: number; unitWeight: number }[] 
+        }[] 
+      }
+    > = {};
+    
+    // Evitar saltos de día por Timezone al inicializar el rango
+    const start = new Date(startDate + 'T12:00:00');
+    const end = new Date(endDate + 'T12:00:00');
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    for (let i = 0; i <= diffDays; i++) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + i);
+        const dayLabel = getDayLabel(d);
+        productionMap[dayLabel] = { orders: 0, kilos: 0, details: [] };
+    }
+
+    currentInvoices.forEach(inv => {
+      // Filtrar por órdenes que están en estado LISTO o ENTREGADO
+      const isReadyOrDelivered = inv.orderStatus === 'LISTO' || inv.orderStatus === 'ENTREGADO';
+      if (!isReadyOrDelivered) return;
+
+      // Usar listo_at o en su defecto la fecha de recepción de la orden
+      const readyDateStr = inv.listo_at || inv.date;
+      if (!readyDateStr) return;
+
+      const readyDate = parseSafeDate(readyDateStr);
+      const dayLabel = getDayLabel(readyDate);
+
+      if (productionMap[dayLabel]) {
+        let orderWeight = 0;
+        let validItemsCount = 0;
+        const mappedItems: { name: string; quantity: number; weight: number; unitWeight: number }[] = [];
+
+        (inv.items || []).forEach(item => {
+          if (item.isAnulado || item.estado_id === 9) return;
+          validItemsCount++;
+
+          // Buscar peso directo guardado, o calcular en base al peso_estimado del producto o un default de 0.400 kg
+          const directWeight = Number(item.peso);
+          const productWeight = products.find(p => p.id === item.producto_id)?.peso_estimado;
+          const fallbackWeight = productWeight !== undefined ? productWeight : 0.400;
+          
+          const itemWeight = directWeight > 0 ? directWeight : (fallbackWeight * Number(item.quantity || 1));
+          orderWeight += itemWeight;
+
+          mappedItems.push({
+            name: (item as any).descripcion || item.name || 'Prenda sin nombre',
+            quantity: Number(item.quantity || 1),
+            weight: itemWeight,
+            unitWeight: directWeight > 0 ? (directWeight / Number(item.quantity || 1)) : fallbackWeight
+          });
+        });
+
+        productionMap[dayLabel].orders += 1;
+        productionMap[dayLabel].kilos += orderWeight;
+        productionMap[dayLabel].details.push({
+          code: inv.ordenNumber || inv.ticketNumber || `#${inv.correlativo}`,
+          client: inv.client?.name || 'CLIENTE VARIOS',
+          weight: orderWeight,
+          itemsCount: validItemsCount,
+          items: mappedItems
+        });
+      }
+    });
+
+    return Object.entries(productionMap).map(([day, value]) => ({
+      day,
+      orders: value.orders,
+      kilos: Number(value.kilos.toFixed(2)),
+      details: value.details
+    }));
+  }, [currentInvoices, products, startDate, endDate]);
 
   // --- MÉTRICAS OPERATIVAS ---
   const operationalMetrics = useMemo(() => {
@@ -583,6 +673,89 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                 ))}
                 {operationalMetrics.topCategories.length === 0 && <p className="text-center text-slate-400 text-xs py-10">Sin datos</p>}
+              </div>
+            </div>
+
+            {/* Producción Diaria (Órdenes Listas y Peso Procesado) */}
+            <div className="md:col-span-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h4 className="text-[10px] font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2 mb-1">
+                    <CheckCircle className="text-indigo-600" size={14} />
+                    Producción Diaria: Órdenes Listas y Peso Procesado
+                  </h4>
+                  <p className="text-[11px] text-slate-400 font-medium">Mide el volumen de entrega y kilogramos procesados por día en base al estado "LISTO" de las prendas.</p>
+                </div>
+                <div className="flex gap-4">
+                  <div className="bg-indigo-50 border border-indigo-100/50 px-3 py-1.5 rounded-xl flex flex-col">
+                    <span className="text-[9px] font-black text-indigo-400 uppercase tracking-wider">Órdenes Totales</span>
+                    <span className="text-base font-black text-indigo-700">
+                      {dailyProductionData.reduce((acc, curr) => acc + curr.orders, 0)}
+                    </span>
+                  </div>
+                  <div className="bg-emerald-50 border border-emerald-100/50 px-3 py-1.5 rounded-xl flex flex-col">
+                    <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider">Kilogramos Totales</span>
+                    <span className="text-base font-black text-emerald-700">
+                      {dailyProductionData.reduce((acc, curr) => acc + curr.kilos, 0).toFixed(1)} kg
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart 
+                    data={dailyProductionData}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(state) => {
+                      if (state && state.activePayload && state.activePayload.length > 0) {
+                        const clickedData = state.activePayload[0].payload;
+                        setSelectedProductionDay(clickedData);
+                      }
+                    }}
+                  >
+                    <defs>
+                      <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={primaryColor} stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor={primaryColor} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} />
+                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} label={{ value: 'Órdenes Listas', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#475569', fontWeight: 'bold' } }} />
+                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} label={{ value: 'Peso (Kilogramos)', angle: 90, position: 'insideRight', style: { fontSize: 10, fill: '#475569', fontWeight: 'bold' } }} />
+                    <RechartsTooltip 
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)' }}
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-xl max-w-xs">
+                              <p className="text-xs font-black text-slate-900 border-b border-slate-100 pb-1.5 mb-2 uppercase">{data.day}</p>
+                              <div className="space-y-1">
+                                <p className="text-xs font-medium text-slate-600 flex justify-between gap-4">
+                                  <span>📦 Órdenes Listas:</span>
+                                  <span className="font-bold text-indigo-600">{data.orders}</span>
+                                </p>
+                                <p className="text-xs font-medium text-slate-600 flex justify-between gap-4">
+                                  <span>⚖️ Peso Procesado:</span>
+                                  <span className="font-bold text-emerald-600">{data.kilos} kg</span>
+                                </p>
+                              </div>
+                              <p className="text-[9px] font-bold text-indigo-500 mt-2 pt-1 border-t border-slate-100/50 uppercase text-center animate-pulse">
+                                👆 Ver detalle (clic)
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: 11, fontWeight: 'bold' }} />
+                    <Bar yAxisId="left" dataKey="orders" name="Órdenes Listas" fill={primaryColor} radius={[4, 4, 0, 0]} barSize={28} />
+                    <Line yAxisId="right" type="monotone" dataKey="kilos" name="Kilogramos" stroke="#10b981" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
             </div>
 
@@ -1124,6 +1297,159 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
                 <button 
                   onClick={() => setShowDayDetails(false)}
+                  className="px-6 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedProductionDay && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+               initial={{ scale: 0.95, opacity: 0 }}
+               animate={{ scale: 1, opacity: 1 }}
+               exit={{ scale: 0.95, opacity: 0 }}
+               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-slate-100"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Detalle de Producción: {selectedProductionDay.day}</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">Órdenes procesadas y listas de este día</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setSelectedProductionDay(null);
+                    setExpandedTicket(null);
+                  }} 
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-6">
+                {/* Métricas rápidas */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-indigo-50/50 border border-indigo-100/50 p-4 rounded-2xl">
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-wider mb-1">Órdenes Listas</p>
+                    <h4 className="text-2xl font-black text-indigo-700">{selectedProductionDay.orders}</h4>
+                  </div>
+                  <div className="bg-emerald-50/50 border border-emerald-100/50 p-4 rounded-2xl">
+                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-wider mb-1">Peso Total Procesado</p>
+                    <h4 className="text-2xl font-black text-emerald-700">{selectedProductionDay.kilos.toFixed(2)} kg</h4>
+                  </div>
+                </div>
+
+                {/* Listado de tickets */}
+                <div>
+                  <h5 className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <ShoppingCart size={14} className="text-indigo-600" />
+                    Listado de Tickets ({selectedProductionDay.details?.length || 0})
+                  </h5>
+                  
+                  <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
+                    {(selectedProductionDay.details || []).map((det: any, idx: number) => {
+                      const isExpanded = expandedTicket === det.code;
+                      return (
+                        <div 
+                          key={idx} 
+                          className={`border rounded-2xl transition-all overflow-hidden ${
+                            isExpanded 
+                              ? 'border-indigo-200 bg-indigo-50/10 shadow-sm' 
+                              : 'border-slate-100 bg-white hover:bg-slate-50/50'
+                          }`}
+                        >
+                          {/* Cabecera del ticket clickable */}
+                          <div 
+                            onClick={() => setExpandedTicket(isExpanded ? null : det.code)}
+                            className="p-3.5 flex items-center justify-between cursor-pointer select-none"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-black text-slate-900">{det.code}</span>
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 rounded text-slate-600">
+                                  {det.itemsCount} {det.itemsCount === 1 ? 'prenda' : 'prendas'}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 font-bold uppercase mt-1 truncate">
+                                {det.client}
+                              </p>
+                            </div>
+                            
+                            <div className="flex items-center gap-3 shrink-0">
+                              <div className="text-right">
+                                <span className="text-sm font-black text-emerald-600 block">
+                                  {det.weight.toFixed(2)} kg
+                                </span>
+                              </div>
+                              <ChevronRight 
+                                size={16} 
+                                className={`text-slate-400 transition-transform duration-200 ${
+                                  isExpanded ? 'rotate-90 text-indigo-600' : ''
+                                }`} 
+                              />
+                            </div>
+                          </div>
+
+                          {/* Cuerpo expandido con las prendas */}
+                          {isExpanded && (
+                            <div className="px-4 pb-4 pt-1 border-t border-indigo-100/30 bg-slate-50/40">
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">Desglose de Prendas y Pesos</p>
+                              <div className="space-y-2">
+                                {det.items && det.items.length > 0 ? (
+                                  det.items.map((item: any, itemIdx: number) => (
+                                    <div 
+                                      key={itemIdx} 
+                                      className="flex items-center justify-between p-2 bg-white border border-slate-100 rounded-xl"
+                                    >
+                                      <div>
+                                        <p className="text-xs font-bold text-slate-800">
+                                          {item.name}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 font-medium">
+                                          Cant: {item.quantity} u.
+                                        </p>
+                                      </div>
+                                      <div className="text-right">
+                                        <span className="text-xs font-black text-slate-700 block">
+                                          {item.weight.toFixed(2)} kg
+                                        </span>
+                                        <span className="text-[9px] text-slate-400 font-medium block">
+                                          ({item.unitWeight.toFixed(2)} kg c/u)
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-[10px] text-slate-400 text-center py-2">Sin detalles de prendas para este ticket</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {(selectedProductionDay.details || []).length === 0 && (
+                      <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                        <p className="text-xs font-medium text-slate-400">No se encontraron órdenes registradas para este día</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button 
+                  onClick={() => {
+                    setSelectedProductionDay(null);
+                    setExpandedTicket(null);
+                  }}
                   className="px-6 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-colors"
                 >
                   Cerrar
