@@ -2100,6 +2100,31 @@ export const dbGetPaymentsReport = async (startDate: string, endDate: string): P
     }
 };
 
+export const dbGetPaymentsTotalBefore = async (startDate: string): Promise<number> => {
+    const branchId = getActiveBranchId();
+    if (!branchId) return 0;
+    
+    try {
+        const { data, error } = await supabase
+            .from('pagos_venta')
+            .select(`
+                monto,
+                ventas!inner(
+                    sucursal_id
+                )
+            `)
+            .eq('ventas.sucursal_id', branchId)
+            .lt('fecha_pago', `${startDate}T00:00:00-05:00`);
+
+        if (error) throw error;
+
+        return (data || []).reduce((sum, p) => sum + Number(p.monto), 0);
+    } catch (error) {
+        console.error("Error fetching payments total before date:", error);
+        return 0;
+    }
+};
+
 export const dbGetInvoicesForReport = async (filter: 'TO_COLLECT' | 'TO_DELIVER' | 'ALL'): Promise<Invoice[]> => {
     const branchId = getActiveBranchId();
     if (!branchId) return [];

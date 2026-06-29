@@ -503,6 +503,7 @@ export const getSaasBranches = async (empresaId?: string, page: number = 1, page
             use_order_reset: b.use_order_reset,
             limite_reconteo: b.limite_reconteo,
             sucursal_tipo: b.tipo_sucursal || 'ESTANDAR',
+            cash_management_type: b.cash_management_type || 'DAILY',
             modulos_config: b.modulos_config || {},
             doc_enforce_enabled: b.doc_enforce_enabled || false,
             doc_enforce_threshold: b.doc_enforce_threshold || 700

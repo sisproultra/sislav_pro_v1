@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building, Upload, Image as ImageIcon, Save, CheckCircle2, Settings as SettingsIcon, X, Clock, Loader2, FileText, Layout, Sparkles, ShieldCheck, DollarSign } from 'lucide-react';
+import { Building, Upload, Image as ImageIcon, Save, CheckCircle2, Settings as SettingsIcon, X, Clock, Loader2, FileText, Layout, Sparkles, ShieldCheck } from 'lucide-react';
 import { Company, Sucursal, UserRole } from '../types';
 import { dbUploadImage, dbGetTicketConfig, dbSaveTicketConfig, getActiveHoldingId, dbUpdateSucursalConfig, supabase } from '../services/dbService';
 
@@ -223,32 +223,6 @@ const Settings: React.FC<SettingsProps> = ({ company, setCompany, user }) => {
                                   >
                                       <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${ticketConfig.mostrar_codigo_barras ? 'left-8' : 'left-1'}`} />
                                   </button>
-                              </div>
-
-                              <div className="flex items-center justify-between p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                                  <div className="space-y-1">
-                                      <label className="text-[10px] font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                                          <DollarSign size={12} className="text-amber-600"/> Gestión de Caja
-                                      </label>
-                                      <p className="text-[9px] text-slate-400 font-medium italic">DIARIO: El saldo inicial es manual. ACUMULATIVO: El saldo se arrastra del turno anterior automáticamente.</p>
-                                  </div>
-                                  <select 
-                                      value={(company as any).cash_management_type || 'DAILY'}
-                                      onChange={async (e) => {
-                                          const newType = e.target.value;
-                                          try {
-                                              await dbUpdateSucursalConfig(company.id, { cash_management_type: newType });
-                                              setCompany({ ...company, cash_management_type: newType } as any);
-                                          } catch (err) {
-                                              console.error("Error al actualizar tipo de caja:", err);
-                                              alert("No se pudo actualizar el tipo de caja.");
-                                          }
-                                      }}
-                                      className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer"
-                                  >
-                                      <option value="DAILY">DIARIO</option>
-                                      <option value="ACCUMULATIVE">ACUMULATIVO</option>
-                                  </select>
                               </div>
 
                               <div className="space-y-3">

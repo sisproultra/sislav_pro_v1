@@ -19,6 +19,7 @@ interface CashClosingProps {
   canManage?: boolean;
   activeCashSession?: any;
   onSessionClosed?: () => void;
+  onOpenSession?: () => void;
 }
 
 const CashClosing: React.FC<CashClosingProps> = ({ 
@@ -28,7 +29,8 @@ const CashClosing: React.FC<CashClosingProps> = ({
   company, 
   canManage = true,
   activeCashSession,
-  onSessionClosed
+  onSessionClosed,
+  onOpenSession
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -528,7 +530,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
 
   return (
     <div className="p-2 lg:p-6 h-full overflow-y-auto bg-[#f8fafc] relative">
-      <div className="max-w-4xl mx-auto space-y-6 relative">
+      <div className={`${activeView === 'HISTORY' ? 'max-w-none' : 'max-w-4xl'} mx-auto space-y-6 relative transition-all duration-300`}>
         {/* Subtle Floating Clock */}
         <div className="absolute -top-1 right-0 flex flex-col items-end opacity-40 hover:opacity-100 transition-opacity">
             <div className="flex items-center gap-1.5 bg-slate-200/50 backdrop-blur-sm text-slate-500 px-3 py-1.5 rounded-xl border border-slate-300/30">
@@ -574,13 +576,44 @@ const CashClosing: React.FC<CashClosingProps> = ({
 
         <AnimatePresence mode="wait">
           {activeView === 'CURRENT' ? (
-            <motion.div 
-              key="current"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-6"
-            >
+            !activeCashSession ? (
+              <motion.div
+                key="caja-cerrada"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-10 lg:p-16 flex flex-col items-center text-center max-w-xl mx-auto shadow-sm"
+              >
+                <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 text-white shadow-lg animate-bounce" style={{ backgroundColor: company.primaryColor || '#0054A6' }}>
+                  <AlertTriangle size={40} />
+                </div>
+                <h3 className="text-2xl font-black font-manrope text-slate-800 mb-2">La Caja se Encuentra Cerrada</h3>
+                <p className="text-gray-500 text-sm max-w-sm mb-8">
+                  Para registrar ventas, procesar pagos, controlar egresos y realizar el cierre del turno, primero debe realizar la apertura de la caja.
+                </p>
+
+                {onOpenSession ? (
+                  <button
+                    onClick={onOpenSession}
+                    className="px-8 py-4 rounded-xl font-black text-sm text-white shadow-lg hover:scale-105 active:scale-95 transition-all uppercase tracking-wider cursor-pointer"
+                    style={{ backgroundColor: company.primaryColor || '#0054A6' }}
+                  >
+                    Abrir Caja de Sucursal
+                  </button>
+                ) : (
+                  <div className="text-xs font-bold text-slate-400 uppercase">
+                    Consulte con su administrador para realizar la apertura.
+                  </div>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="current"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-6"
+              >
               {/* Main Stats Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
@@ -931,6 +964,7 @@ const CashClosing: React.FC<CashClosingProps> = ({
                 </div>
               </div>
             </motion.div>
+            )
           ) : activeView === 'PROJECTIONS' && isHighRole ? (
             <motion.div
                 key="projections"
