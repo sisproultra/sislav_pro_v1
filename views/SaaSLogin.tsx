@@ -85,7 +85,7 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
       {/* Botón de cambio de tema */}
       <button
         onClick={toggleTheme}
-        className="absolute top-8 right-8 z-50 p-3 rounded-2xl bg-bg2/40 backdrop-blur-xl border border-white/10 text-text hover:scale-110 active:scale-95 transition-all shadow-lg"
+        className={`absolute top-8 right-8 z-50 p-3 rounded-2xl ${isDarkMode ? 'bg-[#13161e]/40 border-white/10' : 'bg-white/40 border-black/5'} backdrop-blur-xl border text-text hover:scale-110 active:scale-95 transition-all shadow-lg`}
         title={isDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
       >
         {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
@@ -93,22 +93,22 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
 
       {/* Elementos ambientales de marca */}
       <div
-        className={`absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[150px] animate-pulse transition-opacity duration-500 ${isDarkMode ? 'opacity-20' : 'opacity-40'}`}
+        className={`absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[150px] animate-pulse transition-opacity duration-500 ${isDarkMode ? 'opacity-20' : 'opacity-55'}`}
         style={{ background: brandPrimary }}
       ></div>
       <div
-        className={`absolute bottom-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[150px] transition-opacity duration-500 ${isDarkMode ? 'opacity-10' : 'opacity-30'}`}
+        className={`absolute bottom-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[150px] transition-opacity duration-500 ${isDarkMode ? 'opacity-10' : 'opacity-45'}`}
         style={{ background: brandSecondary }}
       ></div>
 
       <div className="max-w-md w-full relative z-10 group">
         {/* Glow effect post-hover */}
         <div
-          className="absolute inset-0 rounded-[3.5rem] blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-1000"
+          className={`absolute inset-0 rounded-[3.5rem] blur-3xl transition-opacity duration-1000 ${isDarkMode ? 'opacity-20 group-hover:opacity-40' : 'opacity-40 group-hover:opacity-65'}`}
           style={{ background: `linear-gradient(135deg, ${brandPrimary}, ${brandSecondary})` }}
         ></div>
 
-        <div className={`${isDarkMode ? 'bg-bg2/40 border-white/5 group-hover:border-white/10' : 'bg-bg2/15 border-black/5 group-hover:border-black/10'} backdrop-blur-3xl rounded-[3.5rem] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] relative border transition-all duration-700`}>
+        <div className={`${isDarkMode ? 'bg-[#13161e]/40 border-white/5 group-hover:border-white/10' : 'bg-white/[0.04] border-black/5 group-hover:border-black/10'} backdrop-blur-3xl rounded-[3.5rem] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] relative border transition-all duration-700`}>
           {/* Barra de progreso de marca - más sutil */}
           <div
             className="h-1 w-full opacity-50"
@@ -150,7 +150,7 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
                   placeholder="usuario"
                   value={user}
                   onChange={e => setUser(e.target.value)}
-                  className="w-full bg-bg3/50 border border-text/10 rounded-2xl py-5 pl-14 pr-4 text-text outline-none focus:ring-2 focus:bg-bg2 transition-all font-bold placeholder:text-text3"
+                  className={`w-full ${isDarkMode ? 'bg-[#1a1e28]/50 focus:bg-[#13161e]' : 'bg-slate-200/40 focus:bg-white'} border border-text/10 rounded-2xl py-5 pl-14 pr-4 text-text outline-none focus:ring-2 transition-all font-bold placeholder:text-text3`}
                   style={{ '--tw-ring-color': brandPrimary } as any}
                 />
               </div>
@@ -162,7 +162,7 @@ const SaaSLogin: React.FC<SaaSLoginProps> = ({ onLogin, sucursal, onGoToMasterLo
                   placeholder="Contraseña"
                   value={pass}
                   onChange={e => setPass(e.target.value)}
-                  className="w-full bg-bg3/50 border border-text/10 rounded-2xl py-5 pl-14 pr-4 text-text outline-none focus:ring-2 focus:bg-bg2 transition-all font-bold placeholder:text-text3"
+                  className={`w-full ${isDarkMode ? 'bg-[#1a1e28]/50 focus:bg-[#13161e]' : 'bg-slate-200/40 focus:bg-white'} border border-text/10 rounded-2xl py-5 pl-14 pr-4 text-text outline-none focus:ring-2 transition-all font-bold placeholder:text-text3`}
                   style={{ '--tw-ring-color': brandPrimary } as any}
                 />
               </div>
