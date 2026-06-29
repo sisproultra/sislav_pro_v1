@@ -379,6 +379,12 @@ const CashClosing: React.FC<CashClosingProps> = ({
           setErrorMessage("Por favor ingrese un monto válido de efectivo en caja (no negativo)."); 
           return; 
       }
+
+      if (isAccumulative && (parseFloat(liquidation) || 0) > summary.expectedCash) {
+          setErrorMessage(`El monto a liquidar no puede superar el efectivo real en caja (${currency} ${summary.expectedCash.toFixed(2)}).`);
+          return;
+      }
+      
       setErrorMessage(null);
       setIsClosing(true);
       const diff = isAccumulative ? 0 : (cashCount - summary.expectedCash);
@@ -514,6 +520,11 @@ const CashClosing: React.FC<CashClosingProps> = ({
           printWindow.document.close(); 
       }
   };
+
+  const isAccumulativeMode = (company as any).cash_management_type === 'ACCUMULATIVE';
+  const maxCashLimit = isAccumulativeMode ? (summary?.expectedCash || 0) : (parseFloat(actualCash) || 0);
+  const currentLiquidationValue = parseFloat(liquidation) || 0;
+  const isLiquidationOverLimit = isAccumulativeMode && currentLiquidationValue > maxCashLimit;
 
   return (
     <div className="p-2 lg:p-6 h-full overflow-y-auto bg-[#f8fafc] relative">
@@ -805,13 +816,19 @@ const CashClosing: React.FC<CashClosingProps> = ({
                         </motion.div>
                       )}
                    </AnimatePresence>
-                </div>
+                 </div>
 
-                <div className="w-full max-w-md space-y-5">
-                   <div className="space-y-2">
-                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Efectivo Real en Caja</label>
-                     <div className="relative">
-                        <div className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-gray-400">{currency}</div>
+                 <div className="w-full max-w-md space-y-6">
+                    {/* Tarjeta 1: Efectivo en Caja */}
+                    <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Efectivo Real en Caja</label>
+                        {(company as any).cash_management_type === 'ACCUMULATIVE' && (
+                          <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200/50 font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">Acumulativo</span>
+                        )}
+                      </div>
+                      <div className="relative flex items-center">
+                        <div className="absolute left-4 text-2xl font-black text-slate-400">{currency}</div>
                         <input 
                            type="number"
                            min="0"
@@ -825,26 +842,35 @@ const CashClosing: React.FC<CashClosingProps> = ({
                              }
                            }}
                            readOnly={(company as any).cash_management_type === 'ACCUMULATIVE'}
-                           className={`w-full pl-14 pr-6 py-6 border-2 rounded-2xl outline-none font-black text-4xl transition-all shadow-inner text-slate-800 ${
+                           className={`w-full pl-12 pr-4 py-4 rounded-xl outline-none font-black text-3xl transition-all ${
                              (company as any).cash_management_type === 'ACCUMULATIVE' 
-                               ? 'bg-amber-50 border-amber-100 cursor-not-allowed text-amber-900' 
-                               : 'bg-gray-50 border-gray-100 focus:bg-white focus:ring-4 focus:ring-blue-100'
+                               ? 'bg-amber-50/30 border border-amber-200/40 cursor-not-allowed text-amber-900 shadow-inner' 
+                               : 'bg-white border border-slate-200 focus:ring-4 focus:ring-blue-100 focus:border-blue-400 text-slate-800'
                            }`}
                            placeholder="0.00"
                         />
-                     </div>
-                     {(company as any).cash_management_type === 'ACCUMULATIVE' && (
-                       <p className="text-[10px] font-bold text-amber-600 px-2 italic">
-                         Bloqueado en modo Acumulativo. Se asume el monto esperado de {currency} {summary.expectedCash.toFixed(2)} automáticamente.
-                       </p>
-                     )}
-                   </div>
+                      </div>
+                    </div>
 
-                   {(company as any).cash_management_type === 'ACCUMULATIVE' && (
-                     <div className="space-y-2">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Monto a Liquidar (Entrega al dueño)</label>
-                       <div className="relative">
-                          <div className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-gray-400">{currency}</div>
+                    {/* Tarjeta 2: Monto a Liquidar (Entrega al dueño) */}
+                    {(company as any).cash_management_type === 'ACCUMULATIVE' && (
+                      <div className={`transition-all duration-200 border rounded-2xl p-5 shadow-sm space-y-2 ${
+                        isLiquidationOverLimit 
+                          ? 'bg-rose-50/50 border-rose-200 ring-2 ring-rose-100/50' 
+                          : 'bg-emerald-50/40 border-emerald-100'
+                      }`}>
+                        <div className="flex justify-between items-center">
+                          <label className={`text-[11px] font-black uppercase tracking-widest ${
+                            isLiquidationOverLimit ? 'text-rose-700' : 'text-emerald-700'
+                          }`}>Monto a Liquidar</label>
+                          <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                            isLiquidationOverLimit ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100/60 text-emerald-800'
+                          }`}>{isLiquidationOverLimit ? 'Exceso' : 'Entrega'}</span>
+                        </div>
+                        <div className="relative flex items-center">
+                          <div className={`absolute left-4 text-2xl font-black ${
+                            isLiquidationOverLimit ? 'text-rose-500' : 'text-emerald-500'
+                          }`}>{currency}</div>
                           <input 
                              type="number"
                              min="0"
@@ -855,33 +881,42 @@ const CashClosing: React.FC<CashClosingProps> = ({
                                  setLiquidation(val);
                                }
                              }}
-                             className="w-full pl-14 pr-6 py-6 bg-emerald-50 border-2 border-emerald-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-emerald-100 outline-none font-black text-4xl transition-all shadow-inner text-emerald-800"
+                             className={`w-full pl-12 pr-4 py-4 rounded-xl outline-none font-black text-3xl transition-all ${
+                               isLiquidationOverLimit 
+                                 ? 'bg-white border border-rose-300 focus:ring-4 focus:ring-rose-100 focus:border-rose-400 text-rose-800' 
+                                 : 'bg-white border border-emerald-200 focus:ring-4 focus:ring-emerald-100 focus:border-emerald-400 text-emerald-800'
+                             }`}
                              placeholder="0.00"
                           />
-                       </div>
-                       <p className="text-[10px] font-bold text-gray-400 px-2 italic">
-                         El saldo restante ({currency} {Math.max(0, (((company as any).cash_management_type === 'ACCUMULATIVE' ? summary.expectedCash : parseFloat(actualCash)) || 0) - (parseFloat(liquidation) || 0)).toFixed(2)}) se mantendrá como inicio para la próxima caja.
-                       </p>
-                     </div>
-                   )}
+                        </div>
+                        {isLiquidationOverLimit && (
+                          <p className="text-[11px] font-bold text-rose-600 px-1 mt-1 flex items-center gap-1 animate-pulse">
+                            <AlertTriangle size={12} /> El monto a liquidar no puede superar el efectivo real en caja ({currency} {summary.expectedCash.toFixed(2)})
+                          </p>
+                        )}
+                      </div>
+                    )}
 
-                   <div className="flex gap-4">
-                      <div className="flex-1 space-y-1">
-                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Saldo Inicial</label>
-                        <div className="w-full px-4 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-500">
-                           {currency} {parseFloat(openingBalance).toFixed(2)}
+                    {/* Tarjeta 3: Saldo Restante */}
+                    {(company as any).cash_management_type === 'ACCUMULATIVE' && (
+                      <div className="bg-indigo-50/40 border border-indigo-100 rounded-2xl p-5 shadow-sm space-y-2">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[11px] font-black text-indigo-700 uppercase tracking-widest">Saldo Restante</label>
+                          <span className="text-[9px] bg-indigo-100/60 text-indigo-800 font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">Fondo Próxima Caja</span>
+                        </div>
+                        <div className="flex items-center justify-between bg-white border border-indigo-100 rounded-xl px-5 py-4">
+                          <span className="text-sm font-semibold text-slate-400">Saldo que permanece en caja</span>
+                          <span className="text-3xl font-black text-indigo-700 tabular-nums">
+                            {currency} {Math.max(0, (summary.expectedCash - (parseFloat(liquidation) || 0))).toFixed(2)}
+                          </span>
                         </div>
                       </div>
-                      <div className="flex-1 space-y-1">
-                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Total Movimiento</label>
-                        <div className="w-full px-4 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-500">{currency} {(summary.totalCashSales - summary.totalExpenses).toFixed(2)}</div>
-                      </div>
-                   </div>
+                    )}
 
                    {canManage && (
                      <button 
                        onClick={handleCloseTurn}
-                       disabled={isClosing || ((company as any).cash_management_type !== 'ACCUMULATIVE' && actualCash === '')}
+                       disabled={isClosing || isLiquidationOverLimit || ((company as any).cash_management_type !== 'ACCUMULATIVE' && actualCash === '')}
                        className="w-full py-5 rounded-2xl font-black text-lg text-white shadow-[0_20px_40px_-10px_rgba(0,0,0,0.1)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:grayscale disabled:opacity-50"
                        style={{ backgroundColor: company.primaryColor || '#0054A6', boxShadow: `0 20px 40px -10px ${company.primaryColor}40` }}
                      >
@@ -1006,8 +1041,10 @@ const CashClosing: React.FC<CashClosingProps> = ({
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100">Fecha y Hora</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100">Turno / Cajero</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Inicio</th>
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Ingreso</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Efectivo Real</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Liquidado</th>
+                          <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Egreso</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Cierre</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-right">Diferencia</th>
                           <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] border-b border-slate-100 text-center">Acciones</th>
@@ -1016,60 +1053,72 @@ const CashClosing: React.FC<CashClosingProps> = ({
                       <tbody className="divide-y divide-slate-100">
                         {[...closingHistory]
                           .sort((a, b) => new Date(b.fechaCierre).getTime() - new Date(a.fechaCierre).getTime())
-                          .map((report) => (
-                            <tr key={report.id} className="hover:bg-slate-50/80 transition-colors group">
-                              <td className="px-6 py-5">
-                                <div className="flex flex-col gap-1">
-                                  <span className="font-black text-slate-700 uppercase tracking-tight text-xs">
-                                    {new Date(report.fechaCierre).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}
+                          .map((report) => {
+                            const closureCalculated = report.actualCash - (report.liquidation || 0) - (report.expenses || 0);
+                            return (
+                              <tr key={report.id} className="hover:bg-slate-50/80 transition-colors group">
+                                <td className="px-6 py-5">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="font-black text-slate-700 uppercase tracking-tight text-xs">
+                                      {new Date(report.fechaCierre).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <Clock size={10} className="text-[#0054A6]" style={{ color: company.primaryColor }} />
+                                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                        {new Date(report.fechaCierre).toLocaleTimeString('es-PE', { hour12: false })}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-5">
+                                  <div className="flex flex-col">
+                                     <span className="text-xs font-black text-slate-600 uppercase tracking-tight">{report.cajero}</span>
+                                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                                        {report.turno.includes('MAÑANA') && !report.turno.includes('TURNO') ? `${report.turno} TURNO` : report.turno}
+                                     </span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-5 text-right">
+                                  <span className="text-sm font-black text-slate-900 tabular-nums">
+                                    {currency} {(report.openingBalance || 0).toFixed(2)}
                                   </span>
-                                  <div className="flex items-center gap-2">
-                                    <Clock size={10} className="text-[#0054A6]" style={{ color: company.primaryColor }} />
-                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                      {new Date(report.fechaCierre).toLocaleTimeString('es-PE', { hour12: false })}
+                                </td>
+                                <td className="px-6 py-5 text-right">
+                                  <span className="text-sm font-bold text-emerald-600 tabular-nums">
+                                    {currency} {(report.cashSales || 0).toFixed(2)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-5 text-right">
+                                  <span className="text-sm font-black text-slate-900 tabular-nums">
+                                    {currency} {report.actualCash.toFixed(2)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-5 text-right">
+                                  <span className={`text-xs font-bold tabular-nums ${(report.liquidation || 0) > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                    {currency} {(report.liquidation || 0).toFixed(2)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-5 text-right">
+                                  <span className={`text-xs font-bold tabular-nums ${(report.expenses || 0) > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                                    {currency} {(report.expenses || 0).toFixed(2)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-5 text-right">
+                                  <span className="text-sm font-black text-slate-900 tabular-nums">
+                                    {currency} {closureCalculated.toFixed(2)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-5 text-right">
+                                  <div className="inline-flex flex-col items-end">
+                                    <span className={`text-sm font-black tabular-nums ${report.difference >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                      {report.difference >= 0 ? '+' : ''}{currency} {report.difference.toFixed(2)}
+                                    </span>
+                                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest opacity-60">
+                                      {report.difference >= 0 ? 'Sobrante' : 'Faltante'}
                                     </span>
                                   </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-5">
-                                <div className="flex flex-col">
-                                   <span className="text-xs font-black text-slate-600 uppercase tracking-tight">{report.cajero}</span>
-                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                                      {report.turno.includes('MAÑANA') && !report.turno.includes('TURNO') ? `${report.turno} TURNO` : report.turno}
-                                   </span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-5 text-right">
-                                <span className="text-sm font-black text-slate-900 tabular-nums">
-                                  {currency} {(report.openingBalance || 0).toFixed(2)}
-                                </span>
-                              </td>
-                              <td className="px-6 py-5 text-right">
-                                <span className="text-sm font-black text-slate-900 tabular-nums">
-                                  {currency} {report.actualCash.toFixed(2)}
-                                </span>
-                              </td>
-                              <td className="px-6 py-5 text-right">
-                                <span className={`text-xs font-bold tabular-nums ${(report.liquidation || 0) > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
-                                  {currency} {(report.liquidation || 0).toFixed(2)}
-                                </span>
-                              </td>
-                              <td className="px-6 py-5 text-right">
-                                <span className="text-sm font-black text-slate-900 tabular-nums">
-                                  {currency} {report.actualCash.toFixed(2)}
-                                </span>
-                              </td>
-                              <td className="px-6 py-5 text-right">
-                                <div className="inline-flex flex-col items-end">
-                                  <span className={`text-sm font-black tabular-nums ${report.difference >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                    {report.difference >= 0 ? '+' : ''}{currency} {report.difference.toFixed(2)}
-                                  </span>
-                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest opacity-60">
-                                    {report.difference >= 0 ? 'Sobrante' : 'Faltante'}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-5">
+                                </td>
+                                <td className="px-6 py-5">
                                 <div className="flex justify-center gap-2">
                                   <button 
                                       onClick={() => setSelectedHistoryClosing(report)}
@@ -1088,7 +1137,8 @@ const CashClosing: React.FC<CashClosingProps> = ({
                                 </div>
                               </td>
                             </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
